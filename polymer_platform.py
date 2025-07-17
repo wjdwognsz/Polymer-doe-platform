@@ -248,28 +248,46 @@ class AIOrchestrator:
         return prompt
     
     def get_ai_response(self, prompt, ai_type='openai'):
-        """개별 AI 호출"""
+        """개별 AI 호출 (동기식)"""
         try:
             if ai_type == 'openai' and 'openai' in self.available_ais:
+                import openai
+                openai.api_key = self.api_keys['openai']
+            
                 response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                     max_tokens=2000
                 )
-                return json.loads(response.choices[0].message.content)
+            
+                # JSON 파싱 시도
+                content = response.choices[0].message.content
+                try:
+                    # JSON 블록 찾기
+                    import re
+                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                    if json_match:
+                        return json.loads(json_match.group())
+                    else:
+                        return {"error": "JSON not found", "content": content}
+                except json.JSONDecodeError:
+                    return {"error": "JSON parsing failed", "content": content}
                 
             elif ai_type == 'google' and 'google' in self.available_ais:
                 model = genai.GenerativeModel('gemini-pro')
                 response = model.generate_content(prompt)
+            
                 # JSON 추출
                 text = response.text
                 json_match = re.search(r'\{.*\}', text, re.DOTALL)
                 if json_match:
                     return json.loads(json_match.group())
-                    
+                else:
+                    return {"error": "JSON not found", "content": text}
+                
         except Exception as e:
-            st.error(f"{ai_type} AI 오류: {e}")
+            print(f"{ai_type} AI 오류: {str(e)}")
             return None
     
     def get_consensus_design(self, user_input, user_level, project_info):
