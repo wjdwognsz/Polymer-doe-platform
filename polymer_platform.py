@@ -416,7 +416,7 @@ class APIManager:
         })
     
     def search_literature(self, query, source='openalex', limit=10):
-        """문헌 검색 - 디버깅 추가"""
+        """문헌 검색"""
         try:
             if source == 'openalex':
                 # URL 인코딩
@@ -470,6 +470,38 @@ class APIManager:
                         ]
                 
                     return papers
+                else:
+                    st.error(f"API 응답 오류: {response.status_code}")
+                    return []
+                
+            elif source == 'crossref':
+                url = "https://api.crossref.org/works"
+                params = {
+                    'query': query,
+                    'rows': limit
+                }
+            
+                response = self.session.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    papers = []
+                    for item in data['message']['items']:
+                        papers.append({
+                            'title': item.get('title', ['No title'])[0],
+                            'authors': ', '.join([f"{a.get('given', '')} {a.get('family', '')}" 
+                                                for a in item.get('author', [])[:3]]),
+                            'year': item.get('published-print', {}).get('date-parts', [[None]])[0][0],
+                            'doi': item.get('DOI', ''),
+                            'citations': item.get('is-referenced-by-count', 0),
+                            'abstract': item.get('abstract', 'No abstract available')
+                        })
+                    return papers
+                else:
+                    return []
+                
+        except Exception as e:
+            st.error(f"문헌 검색 오류: {e}")
+            return []
     
     def get_chemical_info(self, compound_name):
         """PubChem에서 화학물질 정보 조회"""
