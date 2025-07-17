@@ -1054,62 +1054,77 @@ JSON 형식으로 응답해주세요.
                         st.session_state.experiment_design = design
                         self.db_manager.update_platform_stats('ai_consultations')
                         st.success("실험 설계가 완료되었습니다!")
-                else:
-# AI 오케스트레이터가 없을 때도 작동하도록 수정
-if self.ai_orchestrator:
-    st.session_state.experiment_design = self.ai_orchestrator._get_fallback_design(
-        user_requirements, 
-        st.session_state.project_info
-    )
 else:
-    # AIOrchestrator 클래스의 정적 메서드처럼 직접 호출
-    st.session_state.experiment_design = {
-        "experiment_title": "고분자 물성 최적화 실험",
-        "design_type": "Full Factorial Design",
-        "reasoning": "AI API가 설정되지 않아 기본 설계를 제공합니다.",
-        "factors": [
-            {
-                "name": "반응온도",
-                "type": "수치형",
-                "levels": ["120", "140", "160"],
-                "unit": "°C",
-                "importance": "High"
-            },
-            {
-                "name": "반응시간",
-                "type": "수치형",
-                "levels": ["30", "60", "90"],
-                "unit": "분",
-                "importance": "High"
-            }
-        ],
-        "responses": [
-            {
-                "name": "수율",
-                "unit": "%",
-                "target": "maximize",
-                "target_value": None
-            }
-        ],
-        "design_matrix": [
-            {"run": 1, "factor1": "Low", "factor2": "Low"},
-            {"run": 2, "factor1": "Low", "factor2": "Medium"},
-            {"run": 3, "factor1": "Low", "factor2": "High"},
-            {"run": 4, "factor1": "Medium", "factor2": "Low"},
-            {"run": 5, "factor1": "Medium", "factor2": "Medium"},
-            {"run": 6, "factor1": "Medium", "factor2": "High"},
-            {"run": 7, "factor1": "High", "factor2": "Low"},
-            {"run": 8, "factor1": "High", "factor2": "Medium"},
-            {"run": 9, "factor1": "High", "factor2": "High"}
-        ],
-        "safety_considerations": [
-            "고온 반응 시 적절한 환기 필요",
-            "보호장비 착용"
-        ],
-        "estimated_cost": "150",
-        "estimated_time": "2주",
-        "next_steps": "초기 스크리닝 후 최적화"
-    }
+                    # 기본 설계 제공
+                    if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                        st.session_state.experiment_design = self.ai_orchestrator._get_fallback_design(
+                            user_requirements, 
+                            st.session_state.project_info
+                        )
+                    else:
+                        # AI 없이 직접 기본 설계 생성
+                        st.session_state.experiment_design = {
+                            "experiment_title": "고분자 물성 최적화 실험",
+                            "design_type": "Full Factorial Design",
+                            "reasoning": "AI API가 설정되지 않아 기본 설계를 제공합니다.",
+                            "factors": [
+                                {
+                                    "name": "반응온도",
+                                    "type": "수치형",
+                                    "levels": ["120", "140", "160"],
+                                    "unit": "°C",
+                                    "importance": "High"
+                                },
+                                {
+                                    "name": "반응시간",
+                                    "type": "수치형",
+                                    "levels": ["30", "60", "90"],
+                                    "unit": "분",
+                                    "importance": "High"
+                                },
+                                {
+                                    "name": "촉매농도",
+                                    "type": "수치형",
+                                    "levels": ["0.5", "1.0", "1.5"],
+                                    "unit": "%",
+                                    "importance": "Medium"
+                                }
+                            ],
+                            "responses": [
+                                {
+                                    "name": "수율",
+                                    "unit": "%",
+                                    "target": "maximize",
+                                    "target_value": None
+                                },
+                                {
+                                    "name": "분자량",
+                                    "unit": "g/mol",
+                                    "target": "target",
+                                    "target_value": 50000
+                                }
+                            ],
+                            "design_matrix": [
+                                {"run": 1, "factor1": "Low", "factor2": "Low", "factor3": "Low"},
+                                {"run": 2, "factor1": "Low", "factor2": "Medium", "factor3": "Medium"},
+                                {"run": 3, "factor1": "Low", "factor2": "High", "factor3": "High"},
+                                {"run": 4, "factor1": "Medium", "factor2": "Low", "factor3": "Medium"},
+                                {"run": 5, "factor1": "Medium", "factor2": "Medium", "factor3": "High"},
+                                {"run": 6, "factor1": "Medium", "factor2": "High", "factor3": "Low"},
+                                {"run": 7, "factor1": "High", "factor2": "Low", "factor3": "High"},
+                                {"run": 8, "factor1": "High", "factor2": "Medium", "factor3": "Low"},
+                                {"run": 9, "factor1": "High", "factor2": "High", "factor3": "Medium"}
+                            ],
+                            "safety_considerations": [
+                                "고온 반응 시 적절한 환기 필요",
+                                "촉매 취급 시 보호장비 착용",
+                                "반응 압력 모니터링 필수"
+                            ],
+                            "estimated_cost": "150",
+                            "estimated_time": "2주",
+                            "next_steps": "초기 스크리닝 후 반응표면법(RSM)으로 최적화"
+                        }
+                    st.success("실험 설계가 완료되었습니다!")
         
         with col2:
             if st.session_state.experiment_design and st.button("♻️ 재설계 요청"):
