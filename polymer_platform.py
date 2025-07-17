@@ -1000,7 +1000,7 @@ class PolymerDOEApp:
         """프로젝트 설정 페이지"""
         st.title("🎯 프로젝트 설정")
         
-        # AI 상담 모드 (레벨 1)
+        # AI 상담 모드
         if st.session_state.user_level == 1:
             st.info("🤖 AI가 프로젝트 설정을 도와드리겠습니다. 자유롭게 설명해주세요.")
             
@@ -1013,69 +1013,57 @@ class PolymerDOEApp:
                 
                 if st.button("AI에게 물어보기"):
                     if user_input:
+                        # AI 사용 가능 여부 확인
                         if self.ai_orchestrator and self.ai_orchestrator.available_ais:
                             with st.spinner("AI가 분석 중입니다..."):
-                                # 간단한 프롬프트로 테스트
-                                prompt = f"""
-고분자 연구 프로젝트 분석:
-사용자 입력: {user_input}
-
-다음을 추천해주세요:
-1. 주요 실험 변수 3-5개
-2. 측정해야 할 반응변수
-3. 추천 실험 설계
-
-간단하게 답변해주세요.
-"""
+                                prompt = f"고분자 연구 프로젝트 분석: {user_input}"
                                 try:
                                     response = self.ai_orchestrator.get_ai_response(prompt, self.ai_orchestrator.available_ais[0])
                                     if response:
                                         st.success("AI 분석이 완료되었습니다!")
                                         st.write(response)
-                                    else:
-                                        st.info("AI 응답을 처리하는 중 문제가 발생했습니다.")
                                 except Exception as e:
-                                    st.error(f"오류: {str(e)}")
-                        else:
-                            # AI 없이 기본 추천
-                            if "염화콜린" in user_input and "구연산" in user_input:
-                                st.success("AI 분석이 완료되었습니다!")
-                                
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.markdown("""
-                                    **추천 프로젝트명**: DES 최적 조성 탐색
-                                    
-                                    **주요 변수**:
-                                    - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
-                                    - 반응 온도 (60°C, 80°C, 100°C)
-                                    - 반응 시간 (30분, 60분, 90분)
-                                    - 수분 함량 (0%, 5%, 10%)
-                                    """)
-                                
-                                with col2:
-                                    st.markdown("""
-                                    **측정 반응변수**:
-                                    - 점도 (mPa·s)
-                                    - 전도도 (mS/cm)
-                                    - pH
-                                    - 열안정성 (분해온도)
-                                    
-                                    **추천 설계**: 부분요인설계 (2^4-1)
-                                    """)
-                            else:
-                                st.info("기본 실험 설계를 제공합니다.")
+                                    st.error(f"AI 오류: {str(e)}")
+                        
+                        # AI가 없거나 오류 시 기본 응답
+                        if "염화콜린" in user_input and "구연산" in user_input:
+                            st.success("AI 분석이 완료되었습니다!")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
                                 st.markdown("""
-                                **주요 변수**:
-                                - 반응 온도
-                                - 반응 시간
-                                - 촉매 농도
+                                **추천 프로젝트명**: DES 최적 조성 탐색
                                 
-                                **측정 반응변수**:
-                                - 수율
-                                - 순도
-                                - 물성
+                                **주요 변수**:
+                                - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
+                                - 반응 온도 (60°C, 80°C, 100°C)
+                                - 반응 시간 (30분, 60분, 90분)
+                                - 수분 함량 (0%, 5%, 10%)
                                 """)
+                            
+                            with col2:
+                                st.markdown("""
+                                **측정 반응변수**:
+                                - 점도 (mPa·s)
+                                - 전도도 (mS/cm)
+                                - pH
+                                - 열안정성 (분해온도)
+                                
+                                **추천 설계**: 부분요인설계 (2^4-1)
+                                """)
+                        elif user_input:
+                            st.info("기본 실험 설계를 제공합니다.")
+                            st.markdown("""
+                            **주요 변수**:
+                            - 반응 온도
+                            - 반응 시간  
+                            - 촉매 농도
+                            
+                            **측정 반응변수**:
+                            - 수율
+                            - 순도
+                            - 물성
+                            """)
                     else:
                         st.warning("연구 내용을 입력해주세요.")
                             
