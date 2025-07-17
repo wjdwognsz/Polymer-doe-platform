@@ -1054,7 +1054,7 @@ JSON 형식으로 응답해주세요.
                         st.session_state.experiment_design = design
                         self.db_manager.update_platform_stats('ai_consultations')
                         st.success("실험 설계가 완료되었습니다!")
-else:
+                    else:
                     # 기본 설계 제공
                     if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
                         st.session_state.experiment_design = self.ai_orchestrator._get_fallback_design(
