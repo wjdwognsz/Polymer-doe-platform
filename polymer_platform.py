@@ -197,30 +197,79 @@ class AIOrchestrator:
             genai.configure(api_key=api_keys['google'])
     
     def create_experiment_prompt(self, user_input, user_level, project_info):
-        """사용자 입력을 반영한 동적 프롬프트 생성"""
+        """사용자 레벨에 맞는 동적 프롬프트 생성"""
+        level_descriptions = {
+            1: "초보자를 위해 모든 단계를 상세히 설명하고, 각 결정의 이유를 명확히 제시해주세요.",
+            2: "학습자를 위해 2-3가지 옵션을 장단점과 함께 제시해주세요.",
+            3: "중급자의 설계를 검토하고 개선점을 제안해주세요.",
+            4: "전문가 수준의 혁신적인 접근법을 제안해주세요."
+        }
+        
         # 사용자 입력에서 변수 추출
         variables_mentioned = []
         if "몰비" in user_input or "비율" in user_input:
-            variables_mentioned.append("몰비 또는 조성비")
+            variables_mentioned.append("조성비 또는 몰비")
         if "온도" in user_input:
             variables_mentioned.append("온도")
         if "시간" in user_input:
             variables_mentioned.append("시간")
         if "압력" in user_input:
             variables_mentioned.append("압력")
-    
+        if "농도" in user_input:
+            variables_mentioned.append("농도")
+        
+        # 특정 물질 추출
+        materials = []
+        if "염화콜린" in user_input:
+            materials.append("염화콜린")
+        if "구연산" in user_input:
+            materials.append("구연산")
+        
         prompt = f"""
-    당신은 고분자 실험 설계 전문가입니다.
+당신은 고분자 실험 설계 전문가입니다.
+사용자 레벨: {user_level} - {level_descriptions.get(user_level, level_descriptions[1])}
 
-    사용자 요청: {user_input}
-    프로젝트 정보: {json.dumps(project_info, ensure_ascii=False)}
+프로젝트 정보:
+{json.dumps(project_info, ensure_ascii=False, indent=2)}
 
-    중요: 사용자가 언급한 다음 변수들을 반드시 포함하세요: {', '.join(variables_mentioned)}
+사용자 요청: {user_input}
 
-    특히 "{user_input}"에서 언급된 구체적인 물질과 조건을 그대로 사용하세요.
+중요 지시사항:
+1. 사용자가 언급한 물질({', '.join(materials)})을 반드시 사용하세요.
+2. 다음 변수들을 포함하세요: {', '.join(variables_mentioned) if variables_mentioned else '온도, 시간, 농도'}
+3. 실제 실험 가능한 현실적인 수준을 제안하세요.
 
-    JSON 형식으로 실험 설계를 제공하세요.
-    """
+다음 JSON 형식으로 실험 설계를 제안해주세요:
+{{
+    "experiment_title": "실험 제목",
+    "design_type": "실험 설계 유형 (예: Full Factorial, RSM, Taguchi)",
+    "reasoning": "이 설계를 선택한 이유 (사용자 레벨에 맞게 설명)",
+    "factors": [
+        {{
+            "name": "요인명",
+            "type": "수치형/범주형",
+            "levels": ["수준1", "수준2", "수준3"],
+            "unit": "단위",
+            "importance": "High/Medium/Low"
+        }}
+    ],
+    "responses": [
+        {{
+            "name": "반응변수명",
+            "unit": "단위",
+            "target": "maximize/minimize/target",
+            "target_value": null
+        }}
+    ],
+    "design_matrix": [
+        {{"run": 1, "factor1": "value1", "factor2": "value2", ...}}
+    ],
+    "safety_considerations": ["안전 고려사항 목록"],
+    "estimated_cost": "예상 비용 (만원)",
+    "estimated_time": "예상 소요 시간",
+    "next_steps": "다음 단계 추천"
+}}
+"""
         return prompt
     
     def get_ai_response(self, prompt, ai_type='openai'):
@@ -965,10 +1014,10 @@ class PolymerDOEApp:
                 if st.button("AI에게 물어보기"):
                     if user_input:
                         if self.ai_orchestrator and self.ai_orchestrator.available_ais:
-                        with st.spinner("AI가 분석 중입니다..."):
-                            # AI 프롬프트 생성
-                            prompt = f"""
-사용자가 다음과 같은 고분자 연구를 계획하고 있습니다:
+                            with st.spinner("AI가 분석 중입니다..."):
+                                # 간단한 프롬프트로 테스트
+                                prompt = f"""
+고분자 연구 프로젝트 분석:
 사용자 입력: {user_input}
 
 다음을 추천해주세요:
@@ -978,44 +1027,57 @@ class PolymerDOEApp:
 
 간단하게 답변해주세요.
 """
-                            try:
-                                response = self.ai_orchestrator.get_ai_response(prompt, self.ai_orchestrator.available_ais[0])
-                                if response:
-                                    st.success("AI 분석이 완료되었습니다!")
-                                    st.write(response)
-                                else:
-                                    st.info("AI 응답을 처리하는 중 문제가 발생했습니다.")
-                            except Exception as e:
-                                st.error(f"오류: {str(e)}")
-                    else:
-                        # AI 없이 기본 추천
-                        if "염화콜린" in user_input and "구연산" in user_input:
-                            st.success("AI 분석이 완료되었습니다!")
-                
-                            col1, col2 = st.columns(2)
-                            with col1:
+                                try:
+                                    response = self.ai_orchestrator.get_ai_response(prompt, self.ai_orchestrator.available_ais[0])
+                                    if response:
+                                        st.success("AI 분석이 완료되었습니다!")
+                                        st.write(response)
+                                    else:
+                                        st.info("AI 응답을 처리하는 중 문제가 발생했습니다.")
+                                except Exception as e:
+                                    st.error(f"오류: {str(e)}")
+                        else:
+                            # AI 없이 기본 추천
+                            if "염화콜린" in user_input and "구연산" in user_input:
+                                st.success("AI 분석이 완료되었습니다!")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown("""
+                                    **추천 프로젝트명**: DES 최적 조성 탐색
+                                    
+                                    **주요 변수**:
+                                    - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
+                                    - 반응 온도 (60°C, 80°C, 100°C)
+                                    - 반응 시간 (30분, 60분, 90분)
+                                    - 수분 함량 (0%, 5%, 10%)
+                                    """)
+                                
+                                with col2:
+                                    st.markdown("""
+                                    **측정 반응변수**:
+                                    - 점도 (mPa·s)
+                                    - 전도도 (mS/cm)
+                                    - pH
+                                    - 열안정성 (분해온도)
+                                    
+                                    **추천 설계**: 부분요인설계 (2^4-1)
+                                    """)
+                            else:
+                                st.info("기본 실험 설계를 제공합니다.")
                                 st.markdown("""
-                                **추천 프로젝트명**: DES 최적 조성 탐색
-                    
                                 **주요 변수**:
-                                - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
-                                - 반응 온도 (60°C, 80°C, 100°C)
-                                - 반응 시간 (30분, 60분, 90분)
-                                - 수분 함량 (0%, 5%, 10%)
-                                """)
-                
-                            with col2:
-                                st.markdown("""
+                                - 반응 온도
+                                - 반응 시간
+                                - 촉매 농도
+                                
                                 **측정 반응변수**:
-                                - 점도 (mPa·s)
-                                - 전도도 (mS/cm)
-                                - pH
-                                - 열안정성 (분해온도)
-                    
-                                **추천 설계**: 부분요인설계 (2^4-1)
+                                - 수율
+                                - 순도
+                                - 물성
                                 """)
-                else:
-                    st.warning("연구 내용을 입력해주세요.")
+                    else:
+                        st.warning("연구 내용을 입력해주세요.")
                             
                             # AI 응답 (간단한 시뮬레이션)
                             if "염화콜린" in user_input and "구연산" in user_input:
@@ -1931,40 +1993,43 @@ Polymer composites have gained significant attention...
                         st.rerun()
             
             # 게시글 목록
-            for i, post in enumerate(reversed(st.session_state.community_posts[-10:])):
-                with st.container():
-                    col1, col2, col3 = st.columns([3, 1, 1])
+            if st.session_state.community_posts:
+                for post in reversed(st.session_state.community_posts[-10:]):  # 최근 10개
+                    with st.container():
+                        col1, col2, col3 = st.columns([3, 1, 1])
                         
-                    with col1:
-                        st.markdown(f"**[{post['category']}] {post['title']}**")
-                        st.caption(f"작성자: {post['author']} | {post['timestamp']}")
+                        with col1:
+                            st.markdown(f"**[{post['category']}] {post['title']}**")
+                            st.caption(f"작성자: {post['author']} | {post['timestamp']}")
                         
-                    with col2:
-                        st.caption(f"조회수: {post['views']}")
+                        with col2:
+                            st.caption(f"조회수: {post['views']}")
                         
-                    with col3:
-                        st.caption(f"답글: {len(post['replies'])}")
+                        with col3:
+                            st.caption(f"답글: {len(post['replies'])}")
                         
-                    if st.button(f"자세히 보기", key=f"view_post_{post['id']}"):
-                        post['views'] += 1
-                        with st.expander("게시글 내용", expanded=True):
-                            st.write(post['content'])
-
-                        # 토글 기능 추가
-                        button_key = f"toggle_post_{post['id']}"
-                        if button_key not in st.session_state:
-                            st.session_state[button_key] = False
-                
-                        if st.button(
-                            "📖 축소" if st.session_state[button_key] else "📖 자세히 보기", 
-                            key=f"btn_{button_key}"
-                        ):
-                            st.session_state[button_key] = not st.session_state[button_key]
-                
-                        if st.session_state[button_key]:
+                        # 토글 기능
+                        post_key = f"show_post_{post['id']}"
+                        if post_key not in st.session_state:
+                            st.session_state[post_key] = False
+                        
+                        button_label = "📖 축소" if st.session_state[post_key] else "📖 자세히 보기"
+                        
+                        if st.button(button_label, key=f"toggle_{post['id']}"):
+                            st.session_state[post_key] = not st.session_state[post_key]
+                            post['views'] += 1
+                        
+                        if st.session_state[post_key]:
                             with st.expander("게시글 내용", expanded=True):
                                 st.write(post['content'])
-                                # ... (답글 기능)
+                                
+                                # 답글 표시
+                                if post['replies']:
+                                    st.divider()
+                                    st.caption("답글")
+                                    for reply in post['replies']:
+                                        st.write(f"**{reply['author']}**: {reply['content']}")
+                                        st.caption(reply['timestamp'])
                                 
                                 # 답글 작성
                                 reply = st.text_input("답글 작성", key=f"reply_{post['id']}")
