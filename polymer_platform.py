@@ -247,7 +247,7 @@ class AIOrchestrator:
 """
         return prompt
     
-    async def get_ai_response(self, prompt, ai_type='openai'):
+    def get_ai_response(self, prompt, ai_type='openai'):
         """개별 AI 호출"""
         try:
             if ai_type == 'openai' and 'openai' in self.available_ais:
@@ -275,8 +275,42 @@ class AIOrchestrator:
     def get_consensus_design(self, user_input, user_level, project_info):
         """다중 AI 합의 도출"""
         prompt = self.create_experiment_prompt(user_input, user_level, project_info)
-        
+    
         if not self.available_ais:
+            return self._get_fallback_design(user_input, project_info)
+    
+        # 단순화된 AI 호출 (병렬 처리 제거)
+        responses = []
+    
+        for ai in self.available_ais:
+            try:
+                result = self.get_ai_response(prompt, ai)
+                if result and isinstance(result, dict):
+                    responses.append(result)
+            except Exception as e:
+                print(f"{ai} 오류: {e}")
+                continue
+    
+        if not responses:
+            return self._get_fallback_design(user_input, project_info)
+    
+        # 응답 통합 (오류 방지)
+        try:
+            # 가장 상세한 응답 선택
+            best_response = responses[0]  # 첫 번째 유효한 응답 사용
+        
+            # 안전성 고려사항 통합
+            all_safety = set()
+            for r in responses:
+                if isinstance(r, dict) and 'safety_considerations' in r:
+                    all_safety.update(r.get('safety_considerations', []))
+        
+            if all_safety:
+                best_response['safety_considerations'] = list(all_safety)
+        
+            return best_response
+        except Exception as e:
+            print(f"응답 통합 오류: {e}")
             return self._get_fallback_design(user_input, project_info)
         
         # 병렬 AI 호출
