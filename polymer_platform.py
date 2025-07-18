@@ -1792,6 +1792,173 @@ class DatabaseManager:
 # DatabaseManager 초기화
 database_manager = DatabaseManager()
 
+# ==================== 번역 서비스 ====================
+class TranslationService:
+    """다국어 번역 서비스"""
+    
+    def __init__(self):
+        self.translator = None
+        self.cache = {}
+        self.max_cache_size = 1000
+        self.available = False
+        self._initialize()
+        
+    def _initialize(self):
+        """번역 서비스 초기화"""
+        try:
+            # deep_translator 사용 (무료)
+            # from deep_translator import GoogleTranslator  # 나중에 주석 해제
+            # self.translator = GoogleTranslator(source='auto', target='ko')
+            # self.available = True
+            
+            # 현재는 AI 기반 번역 사용
+            self.available = True
+            logger.info("Translation service initialized")
+        except Exception as e:
+            logger.error(f"Translation service initialization failed: {e}")
+            self.available = False
+    
+    def translate(self, text: str, target_lang: str = 'ko', source_lang: str = 'auto') -> str:
+        """텍스트 번역"""
+        if not text or not self.available:
+            return text
+        
+        # 캐시 확인
+        cache_key = f"{text[:100]}_{source_lang}_{target_lang}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        try:
+            # 언어 감지
+            if source_lang == 'auto':
+                detected_lang = self._detect_language(text)
+                if detected_lang == target_lang:
+                    return text
+            
+            # 번역 실행
+            if hasattr(self, 'translator') and self.translator:
+                # deep_translator 사용
+                translated = self.translator.translate(text)
+            else:
+                # AI 기반 번역 (Gemini 사용)
+                translated = self._ai_translate(text, target_lang)
+            
+            # 캐시 저장
+            if len(self.cache) >= self.max_cache_size:
+                # 오래된 항목 제거
+                self.cache.pop(next(iter(self.cache)))
+            self.cache[cache_key] = translated
+            
+            return translated
+            
+        except Exception as e:
+            logger.error(f"Translation error: {e}")
+            return text
+    
+    def _detect_language(self, text: str) -> str:
+        """언어 감지"""
+        try:
+            # 간단한 휴리스틱 방법
+            korean_chars = len([c for c in text if ord('가') <= ord(c) <= ord('힣')])
+            english_chars = len([c for c in text if c.isalpha() and c.isascii()])
+            
+            if korean_chars > english_chars * 0.3:
+                return 'ko'
+            else:
+                return 'en'
+        except:
+            return 'en'
+    
+    def _ai_translate(self, text: str, target_lang: str) -> str:
+        """AI를 사용한 번역"""
+        # AI orchestrator 사용 가능 여부 확인
+        if 'ai_orchestrator' in globals():
+            ai_orchestrator = globals()['ai_orchestrator']
+            
+            prompt = f"""
+            다음 텍스트를 {self._get_language_name(target_lang)}로 번역해주세요.
+            학술 용어는 정확하게 번역하고, 전문 용어는 괄호 안에 원어를 병기해주세요.
+            
+            원문:
+            {text}
+            
+            번역:
+            """
+            
+            # Gemini 우선 사용 (한국어 번역에 강함)
+            engine = ai_orchestrator.get_specialized_engine('korean')
+            if engine and engine in ai_orchestrator.available_engines:
+                result = ai_orchestrator.available_engines[engine].generate(prompt)
+                if result.success:
+                    return result.data.strip()
+        
+        # AI 번역 실패 시 원문 반환
+        return text
+    
+    def _get_language_name(self, lang_code: str) -> str:
+        """언어 코드를 언어명으로 변환"""
+        language_names = {
+            'ko': '한국어',
+            'en': '영어',
+            'ja': '일본어',
+            'zh': '중국어',
+            'de': '독일어',
+            'fr': '프랑스어'
+        }
+        return language_names.get(lang_code, lang_code)
+    
+    def translate_batch(self, texts: List[str], target_lang: str = 'ko') -> List[str]:
+        """배치 번역"""
+        return [self.translate(text, target_lang) for text in texts]
+    
+    def translate_dict(self, data: Dict, keys_to_translate: List[str], target_lang: str = 'ko') -> Dict:
+        """딕셔너리의 특정 키들만 번역"""
+        translated_data = data.copy()
+        
+        for key in keys_to_translate:
+            if key in translated_data and isinstance(translated_data[key], str):
+                translated_data[f"{key}_translated"] = self.translate(translated_data[key], target_lang)
+        
+        return translated_data
+    
+    def translate_dataframe(self, df: pd.DataFrame, columns: List[str], target_lang: str = 'ko') -> pd.DataFrame:
+        """데이터프레임의 특정 컬럼 번역"""
+        df_copy = df.copy()
+        
+        for col in columns:
+            if col in df_copy.columns:
+                df_copy[f"{col}_translated"] = df_copy[col].apply(
+                    lambda x: self.translate(str(x), target_lang) if pd.notna(x) else x
+                )
+        
+        return df_copy
+
+# 번역 서비스 초기화
+translation_service = TranslationService()
+
+# ==================== 통합 검색 헬퍼 함수 ====================
+def format_search_result_with_translation(result: Dict, translate: bool = True) -> Dict:
+    """검색 결과 포맷팅 및 선택적 번역"""
+    formatted = result.copy()
+    
+    if translate and translation_service.available:
+        # 번역할 필드 정의
+        fields_to_translate = ['title', 'abstract', 'description', 'summary']
+        
+        for field in fields_to_translate:
+            if field in formatted and formatted[field]:
+                original = formatted[field]
+                translated = translation_service.translate(original)
+                
+                # 원문과 번역 모두 포함
+                formatted[field] = {
+                    'original': original,
+                    'translated': translated,
+                    'display': translated if translated != original else original
+                }
+    
+    return formatted
+
 # ==================== 애플리케이션 초기화 ====================
 def initialize_app():
     """애플리케이션 초기화"""
