@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -19,7 +20,6 @@ import hashlib
 import base64
 import io
 import re
-import os  # os import를 여기로 이동!
 
 # ==================== API Key Manager 정의 (바로 다음) ====================
 # API Key Manager를 가장 먼저 만들기!
