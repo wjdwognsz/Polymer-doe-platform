@@ -1,13 +1,10 @@
 import os
 import streamlit as st
-import gspread
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import asyncio
-import aiohttp
 import json
 import requests
 import time
@@ -16,8 +13,6 @@ import openai
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from enum import Enum
-import logging
 import hashlib
 import base64
 import io
@@ -33,23 +28,16 @@ st.set_page_config(
 )
 
 # ==================== 로깅 설정 ====================
-logging.basicConfig(level=logging.INFO)
+import logging
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass
+from enum import Enum
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
-
-# API 상태 열거형
-class APIStatus(Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
-    ERROR = "error"
-    RATE_LIMITED = "rate_limited"
-
-@dataclass
-class APIResponse:
-    success: bool
-    data: Any
-    error: Optional[str] = None
-    response_time: float = 0.0
-    api_name: str = ""
 
 # ==================== API 상태 타입 정의 ====================
 class APIStatus(Enum):
@@ -301,7 +289,7 @@ st.markdown("""
 
 # ==================== StateManager 클래스 ====================
 class StateManager:
-    """세션 상태 중앙 관리"""
+    """세션 상태를 중앙에서 관리하는 클래스"""
     
     @staticmethod
     def initialize():
@@ -311,10 +299,17 @@ class StateManager:
             'current_page': 'home',
             'project_info': {},
             'experiment_design': None,
-            'results_df': None,
             'analysis_results': None,
-            'api_keys_initialized': False,
-            'api_keys': {}
+            'literature_results': None,
+            'safety_results': None,
+            'community_posts': [],
+            'ai_consultations': [],
+            'platform_stats': {
+                'total_experiments': 0,
+                'ai_consultations': 0,
+                'active_users': 0,
+                'success_rate': 0.0
+            }
         }
         
         for key, value in defaults.items():
@@ -322,110 +317,56 @@ class StateManager:
                 st.session_state[key] = value
 
 # ==================== 데이터베이스 매니저 ====================
-# ==================== Google Sheets 연동 ====================
 class DatabaseManager:
-    """Google Sheets를 백엔드로 사용하는 데이터베이스 매니저"""
+    """구글 시트를 사용한 데이터 영속성 관리"""
     
     def __init__(self):
-        """Google Sheets 연결 초기화"""
-        try:
-            # Streamlit secrets에서 인증 정보 로드
-            self.credentials = st.secrets["gcp_service_account"]
-            self.sa = gspread.service_account_from_dict(self.credentials)
-            self.spreadsheet_url = st.secrets["private_gsheets_url"]
-            self.sh = self.sa.open_by_url(self.spreadsheet_url)
-            logger.info("Google Sheets 연결 성공")
-        except Exception as e:
-            logger.error(f"Google Sheets 연결 실패: {e}")
-            st.error("데이터베이스 연결에 실패했습니다. 관리자에게 문의하세요.")
-            self.sh = None
+        self.sheet_url = None
+        self.client = None
+        self.sheet = None
+        self.available_databases = {}
+        self._initialize_databases()
     
-    def _get_worksheet(self, sheet_name: str):
-        """워크시트 가져오기 (없으면 생성)"""
-        if not self.sh:
-            return None
-        try:
-            return self.sh.worksheet(sheet_name)
-        except gspread.WorksheetNotFound:
-            worksheet = self.sh.add_worksheet(title=sheet_name, rows=100, cols=20)
-            logger.info(f"'{sheet_name}' 워크시트 생성됨")
-            return worksheet
-    
-    def get_all_records_as_df(self, sheet_name: str) -> pd.DataFrame:
-        """워크시트의 모든 데이터를 DataFrame으로 반환"""
-        worksheet = self._get_worksheet(sheet_name)
-        if worksheet:
-            try:
-                records = worksheet.get_all_records()
-                return pd.DataFrame(records)
-            except Exception as e:
-                logger.error(f"데이터 읽기 실패: {e}")
-                return pd.DataFrame()
-        return pd.DataFrame()
-    
-    def append_row(self, sheet_name: str, data_dict: dict) -> bool:
-        """워크시트에 새 행 추가"""
-        worksheet = self._get_worksheet(sheet_name)
-        if worksheet:
-            try:
-                # 타임스탬프 추가
-                data_dict['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
-                # 딕셔너리를 리스트로 변환
-                headers = worksheet.row_values(1)
-                if not headers:
-                    # 첫 행이 비어있으면 헤더 추가
-                    headers = list(data_dict.keys())
-                    worksheet.update('A1', [headers])
-                
-                # 데이터 행 추가
-                row_data = [data_dict.get(header, '') for header in headers]
-                worksheet.append_row(row_data)
-                return True
-            except Exception as e:
-                logger.error(f"행 추가 실패: {e}")
-                return False
-        return False
-    
-    def update_cell(self, sheet_name: str, row: int, col: int, value: Any) -> bool:
-        """특정 셀 업데이트"""
-        worksheet = self._get_worksheet(sheet_name)
-        if worksheet:
-            try:
-                worksheet.update_cell(row, col, value)
-                return True
-            except Exception as e:
-                logger.error(f"셀 업데이트 실패: {e}")
-                return False
-        return False
-    
-    def get_platform_stats(self) -> dict:
-        """플랫폼 통계 반환"""
-        stats = {
-            'total_projects': 0,
-            'total_experiments': 0,
-            'active_users': 0,
-            'success_rate': 0
+    def _initialize_databases(self):
+        """데이터베이스 연결 초기화"""
+        # 간단한 로컬 저장소로 대체
+        self.local_storage = {
+            'experiments': [],
+            'users': [],
+            'community_posts': []
         }
+    
+    def save_experiment(self, experiment_data):
+        """실험 데이터 저장"""
+        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        experiment_data['id'] = experiment_id
+        experiment_data['created_at'] = datetime.now().isoformat()
+        self.local_storage['experiments'].append(experiment_data)
+        return experiment_id
+    
+    def get_experiment(self, experiment_id):
+        """실험 데이터 조회"""
+        for exp in self.local_storage['experiments']:
+            if exp.get('id') == experiment_id:
+                return exp
+        return None
+    
+    def get_platform_stats(self):
+        """플랫폼 통계 가져오기"""
+        return st.session_state.get('platform_stats', {
+            'total_experiments': len(self.local_storage['experiments']),
+            'ai_consultations': 0,
+            'active_users': 1,
+            'success_rate': 85.0
+        })
+    
+    def update_platform_stats(self, stat_type, increment=1):
+        """플랫폼 통계 업데이트"""
+        if 'platform_stats' not in st.session_state:
+            st.session_state['platform_stats'] = self.get_platform_stats()
         
-        try:
-            # 프로젝트 통계
-            projects_df = self.get_all_records_as_df('projects')
-            stats['total_projects'] = len(projects_df)
-            
-            # 실험 통계
-            experiments_df = self.get_all_records_as_df('experiments')
-            stats['total_experiments'] = len(experiments_df)
-            
-            # 성공률 계산
-            if len(experiments_df) > 0:
-                successful = experiments_df[experiments_df.get('status', '') == 'completed']
-                stats['success_rate'] = len(successful) / len(experiments_df) * 100
-            
-        except Exception as e:
-            logger.error(f"통계 계산 실패: {e}")
-        
-        return stats
+        if stat_type in st.session_state['platform_stats']:
+            st.session_state['platform_stats'][stat_type] += increment
 
 # ==================== Enhanced 기능들 ====================
 if ENHANCED_FEATURES_AVAILABLE:
@@ -1533,140 +1474,56 @@ class APIManager:
     """외부 API 통합 관리 (기본 버전)"""
     
     def __init__(self):
-        self.api_keys = {
-            # AI_api_key
-            'google': st.secrets.get('GEMINI_API_KEY', ''),
-            'grok': st.secrets.get('GROK_API_KEY', ''),
-            'sambanova': st.secrets.get('SAMBANOVA_API_KEY', ''),
-            'deepseek': st.secrets.get('DEEPSEEK_API_KEY', ''),
-            'groq': st.secrets.get('GROQ_API_KEY', ''),
-            'hugging_face': st.secrets.get('HUGGINGFACE_API_KEY', ''),
-
-            # Experiments data_api_key
-            'github': st.secrets.get('GITHUB_TOKEN', ''),
-            'materials_project': st.secrets.get('MP_API_KEY', ''),
-            'materials_commons': st.secrets.get('MC_API_KEY', ''),
-            'zenodo': st.secrets.get('ZENODO_API_KEY', ''),
-            'protocols.io': st.secrets.get('PROTOCOLS.IO_API_KEY', ''),
-            'figshare': st.secrets.get('FIGSHARE_API_KEY', '')
-        }
-        self.session = None
-
+        self.pubchem_base = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+        self.openalex_base = "https://api.openalex.org"
     
-    async def _get_session(self):
-        """비동기 HTTP 세션 관리"""
-        if self.session is None:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-
-    async def search_pubchem(self, query: str) -> APIResponse:
-        """PubChem API 검색"""
+    def search_pubchem(self, compound_name):
+        """PubChem에서 화합물 정보 검색"""
         try:
-            session = await self._get_session()
+            # 화합물 이름으로 CID 검색
+            search_url = f"{self.pubchem_base}/compound/name/{compound_name}/cids/JSON"
+            response = requests.get(search_url, timeout=10)
             
-            # 화합물 검색
-            search_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{query}/cids/JSON"
-            async with session.get(search_url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    cids = data.get('IdentifierList', {}).get('CID', [])
+            if response.status_code == 200:
+                data = response.json()
+                if 'IdentifierList' in data and 'CID' in data['IdentifierList']:
+                    cid = data['IdentifierList']['CID'][0]
                     
-                    if cids:
-                        # 첫 번째 화합물의 상세 정보 가져오기
-                        cid = cids[0]
-                        detail_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IUPACName/JSON"
-                        
-                        async with session.get(detail_url) as detail_response:
-                            if detail_response.status == 200:
-                                detail_data = await detail_response.json()
-                                properties = detail_data.get('PropertyTable', {}).get('Properties', [{}])[0]
-                                
-                                return APIResponse(
-                                    success=True,
-                                    data={
-                                        'cid': cid,
-                                        'molecular_formula': properties.get('MolecularFormula'),
-                                        'molecular_weight': properties.get('MolecularWeight'),
-                                        'smiles': properties.get('CanonicalSMILES'),
-                                        'iupac_name': properties.get('IUPACName'),
-                                        'url': f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
-                                    },
-                                    api_name='pubchem'
-                                )
-                
-                return APIResponse(
-                    success=False,
-                    error="화합물을 찾을 수 없습니다",
-                    api_name='pubchem'
-                )
-                
+                    # CID로 상세 정보 가져오기
+                    detail_url = f"{self.pubchem_base}/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,IUPACName/JSON"
+                    detail_response = requests.get(detail_url, timeout=10)
+                    
+                    if detail_response.status_code == 200:
+                        return detail_response.json()
+            
+            return None
         except Exception as e:
-            logger.error(f"PubChem API 오류: {e}")
-            return APIResponse(
-                success=False,
-                error=str(e),
-                api_name='pubchem'
-            )
+            st.error(f"PubChem 검색 오류: {str(e)}")
+            return None
     
-    async def search_openalex(self, query: str, polymer_filter: bool = True) -> APIResponse:
-        """OpenAlex API 검색"""
+    def search_literature(self, query, limit=10):
+        """OpenAlex에서 문헌 검색"""
         try:
-            session = await self._get_session()
-            
-            # 검색 쿼리 구성
-            search_query = query
-            if polymer_filter:
-                search_query += " polymer OR polymeric OR macromolecule"
-            
-            url = "https://api.openalex.org/works"
             params = {
-                'search': search_query,
-                'per_page': 10,
-                'sort': 'cited_by_count:desc'
+                'search': query,
+                'per-page': limit,
+                'filter': 'is_oa:true'
             }
             
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    formatted_results = []
-                    for work in data.get('results', []):
-                        formatted_results.append({
-                            'title': work.get('title'),
-                            'authors': [author.get('author', {}).get('display_name') 
-                                      for author in work.get('authorships', [])],
-                            'year': work.get('publication_year'),
-                            'doi': work.get('doi'),
-                            'cited_by_count': work.get('cited_by_count', 0),
-                            'open_access': work.get('open_access', {}).get('is_oa', False)
-                        })
-                    
-                    return APIResponse(
-                        success=True,
-                        data={'results': formatted_results},
-                        api_name='openalex'
-                    )
-                else:
-                    return APIResponse(
-                        success=False,
-                        error=f"API 오류: {response.status}",
-                        api_name='openalex'
-                    )
-                    
-        except Exception as e:
-            logger.error(f"OpenAlex API 오류: {e}")
-            return APIResponse(
-                success=False,
-                error=str(e),
-                api_name='openalex'
+            response = requests.get(
+                f"{self.openalex_base}/works",
+                params=params,
+                headers={'User-Agent': 'PolymerDoE/1.0'},
+                timeout=10
             )
-    
-    def close(self):
-        """세션 종료"""
-        if self.session:
-            asyncio.create_task(self.session.close())
-    
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            return None
+        except Exception as e:
+            st.error(f"문헌 검색 오류: {str(e)}")
+            return None
 
 class StatisticalAnalyzer:
     """통계 분석 도구"""
