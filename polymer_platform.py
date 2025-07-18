@@ -1247,6 +1247,551 @@ class EnhancedAIOrchestrator:
 # 기존 AIOrchestrator를 대체
 AIOrchestrator = EnhancedAIOrchestrator
 
+# ==================== 데이터베이스 API 클래스들 ====================
+class BaseDBAPI:
+    """모든 데이터베이스 API의 기본 클래스"""
+    
+    def __init__(self, name: str, api_key_id: str = None):
+        self.name = name
+        self.api_key_id = api_key_id
+        self.api_key = None
+        self.base_url = ""
+        self.headers = {}
+        
+    def initialize(self):
+        """API 초기화"""
+        if self.api_key_id:
+            self.api_key = api_key_manager.get_key(self.api_key_id)
+            if not self.api_key:
+                logger.warning(f"{self.name} API key not found")
+                return False
+        return True
+    
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        """비동기 검색 (하위 클래스에서 구현)"""
+        raise NotImplementedError
+    
+    def search(self, query: str, **kwargs) -> APIResponse:
+        """동기 검색 래퍼"""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(self.search_async(query, **kwargs))
+        finally:
+            loop.close()
+
+class OpenAlexAPI(BaseDBAPI):
+    """OpenAlex 학술 데이터베이스 API"""
+    
+    def __init__(self):
+        super().__init__("OpenAlex")
+        self.base_url = "https://api.openalex.org"
+        
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # 검색 파라미터 설정
+            params = {
+                'search': query,
+                'filter': kwargs.get('filter', ''),
+                'per_page': kwargs.get('per_page', 10),
+                'page': kwargs.get('page', 1)
+            }
+            
+            # 고분자 관련 필터 추가
+            if kwargs.get('polymer_filter', True):
+                if params['filter']:
+                    params['filter'] += ','
+                params['filter'] += 'concepts.id:C192854747'  # Polymer Science concept
+            
+            url = f"{self.base_url}/works"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params) as response:
+                    data = await response.json()
+                    
+                    if response.status == 200:
+                        response_time = time.time() - start_time
+                        api_monitor.update_status('openalex', APIStatus.ONLINE, response_time)
+                        
+                        # 결과 포맷팅
+                        formatted_results = []
+                        for work in data.get('results', []):
+                            formatted_results.append({
+                                'title': work.get('title'),
+                                'authors': [author['author']['display_name'] 
+                                           for author in work.get('authorships', [])],
+                                'year': work.get('publication_year'),
+                                'doi': work.get('doi'),
+                                'abstract': work.get('abstract'),
+                                'cited_by_count': work.get('cited_by_count', 0),
+                                'open_access': work.get('open_access', {}).get('is_oa', False),
+                                'pdf_url': work.get('open_access', {}).get('oa_url')
+                            })
+                        
+                        return APIResponse(
+                            success=True,
+                            data={
+                                'results': formatted_results,
+                                'total_count': data.get('meta', {}).get('count', 0)
+                            },
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {response.status}")
+                        
+        except Exception as e:
+            api_monitor.update_status('openalex', APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class CrossRefAPI(BaseDBAPI):
+    """CrossRef 학술 메타데이터 API"""
+    
+    def __init__(self):
+        super().__init__("CrossRef")
+        self.base_url = "https://api.crossref.org"
+        
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # 검색 파라미터
+            params = {
+                'query': query,
+                'rows': kwargs.get('rows', 10),
+                'offset': kwargs.get('offset', 0)
+            }
+            
+            # 고분자 관련 필터
+            if kwargs.get('polymer_filter', True):
+                params['query'] += ' polymer OR polymeric OR macromolecule'
+            
+            url = f"{self.base_url}/works"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params) as response:
+                    data = await response.json()
+                    
+                    if response.status == 200:
+                        response_time = time.time() - start_time
+                        api_monitor.update_status('crossref', APIStatus.ONLINE, response_time)
+                        
+                        # 결과 포맷팅
+                        formatted_results = []
+                        for item in data.get('message', {}).get('items', []):
+                            formatted_results.append({
+                                'title': item.get('title', [''])[0] if item.get('title') else '',
+                                'authors': [f"{author.get('given', '')} {author.get('family', '')}"
+                                           for author in item.get('author', [])],
+                                'year': item.get('published-print', {}).get('date-parts', [[None]])[0][0],
+                                'doi': item.get('DOI'),
+                                'journal': item.get('container-title', [''])[0] if item.get('container-title') else '',
+                                'publisher': item.get('publisher'),
+                                'type': item.get('type')
+                            })
+                        
+                        return APIResponse(
+                            success=True,
+                            data={
+                                'results': formatted_results,
+                                'total_count': data.get('message', {}).get('total-results', 0)
+                            },
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {response.status}")
+                        
+        except Exception as e:
+            api_monitor.update_status('crossref', APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class PubChemAPI(BaseDBAPI):
+    """PubChem 화학물질 데이터베이스 API"""
+    
+    def __init__(self):
+        super().__init__("PubChem")
+        self.base_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+        
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # 검색 타입 결정
+            search_type = kwargs.get('search_type', 'compound')
+            output_format = kwargs.get('format', 'JSON')
+            
+            # 화합물 검색
+            if search_type == 'compound':
+                url = f"{self.base_url}/compound/name/{quote(query)}/property/MolecularFormula,MolecularWeight,CanonicalSMILES/{output_format}"
+            else:
+                # 물질명 검색
+                url = f"{self.base_url}/compound/name/{quote(query)}/{output_format}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        response_time = time.time() - start_time
+                        api_monitor.update_status('pubchem', APIStatus.ONLINE, response_time)
+                        
+                        # 결과 포맷팅
+                        properties = data.get('PropertyTable', {}).get('Properties', [])
+                        
+                        formatted_results = []
+                        for prop in properties:
+                            formatted_results.append({
+                                'cid': prop.get('CID'),
+                                'molecular_formula': prop.get('MolecularFormula'),
+                                'molecular_weight': prop.get('MolecularWeight'),
+                                'smiles': prop.get('CanonicalSMILES'),
+                                'url': f"https://pubchem.ncbi.nlm.nih.gov/compound/{prop.get('CID')}"
+                            })
+                        
+                        return APIResponse(
+                            success=True,
+                            data={'results': formatted_results},
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {response.status}")
+                        
+        except Exception as e:
+            api_monitor.update_status('pubchem', APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class GitHubAPI(BaseDBAPI):
+    """GitHub 코드 저장소 API"""
+    
+    def __init__(self):
+        super().__init__("GitHub", "github")
+        self.client = None
+        
+    def initialize(self):
+        if super().initialize():
+            try:
+                if self.api_key:
+                    self.client = Github(self.api_key)
+                else:
+                    self.client = Github()  # 인증 없이도 제한적 사용 가능
+                return True
+            except Exception as e:
+                logger.error(f"GitHub initialization failed: {e}")
+                return False
+        return False
+    
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # 검색 쿼리 구성
+            search_query = query
+            if kwargs.get('polymer_filter', True):
+                search_query += ' polymer'
+            
+            # 언어 필터
+            language = kwargs.get('language', 'python')
+            if language:
+                search_query += f' language:{language}'
+            
+            # 검색 실행
+            repositories = await asyncio.to_thread(
+                self.client.search_repositories,
+                query=search_query,
+                sort=kwargs.get('sort', 'stars'),
+                order='desc'
+            )
+            
+            # 결과 수집 (최대 10개)
+            formatted_results = []
+            count = 0
+            for repo in repositories:
+                if count >= kwargs.get('limit', 10):
+                    break
+                    
+                formatted_results.append({
+                    'name': repo.full_name,
+                    'description': repo.description,
+                    'stars': repo.stargazers_count,
+                    'language': repo.language,
+                    'url': repo.html_url,
+                    'updated': repo.updated_at.isoformat() if repo.updated_at else None,
+                    'topics': repo.get_topics()
+                })
+                count += 1
+            
+            response_time = time.time() - start_time
+            api_monitor.update_status('github', APIStatus.ONLINE, response_time)
+            
+            return APIResponse(
+                success=True,
+                data={
+                    'results': formatted_results,
+                    'total_count': repositories.totalCount
+                },
+                response_time=response_time,
+                api_name=self.name
+            )
+            
+        except Exception as e:
+            api_monitor.update_status('github', APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class MaterialsProjectAPI(BaseDBAPI):
+    """Materials Project 재료 데이터베이스 API"""
+    
+    def __init__(self):
+        super().__init__("Materials Project", "materials_project")
+        self.base_url = "https://api.materialsproject.org"
+        
+    def initialize(self):
+        if super().initialize():
+            if self.api_key:
+                self.headers = {'X-API-KEY': self.api_key}
+                return True
+            return False
+        return False
+    
+    async def search_async(self, query: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # Materials Project는 주로 무기물이므로 고분자 검색은 제한적
+            # 대신 첨가제나 필러 검색에 유용
+            
+            url = f"{self.base_url}/materials/summary"
+            params = {
+                'formula': query,  # 화학식으로 검색
+                '_limit': kwargs.get('limit', 10)
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers, params=params) as response:
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        response_time = time.time() - start_time
+                        api_monitor.update_status('materials_project', APIStatus.ONLINE, response_time)
+                        
+                        # 결과 포맷팅
+                        formatted_results = []
+                        for material in data.get('data', []):
+                            formatted_results.append({
+                                'material_id': material.get('material_id'),
+                                'formula': material.get('formula_pretty'),
+                                'energy': material.get('energy_per_atom'),
+                                'band_gap': material.get('band_gap'),
+                                'density': material.get('density'),
+                                'crystal_system': material.get('symmetry', {}).get('crystal_system')
+                            })
+                        
+                        return APIResponse(
+                            success=True,
+                            data={'results': formatted_results},
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {response.status}")
+                        
+        except Exception as e:
+            api_monitor.update_status('materials_project', APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+# ==================== 통합 데이터베이스 매니저 ====================
+class DatabaseManager:
+    """모든 데이터베이스 API를 통합 관리하는 클래스"""
+    
+    def __init__(self):
+        # 데이터베이스 API 초기화
+        self.databases = {
+            'openalex': OpenAlexAPI(),
+            'crossref': CrossRefAPI(),
+            'pubchem': PubChemAPI(),
+            'github': GitHubAPI(),
+            'materials_project': MaterialsProjectAPI()
+        }
+        
+        # 사용 가능한 DB 확인
+        self.available_databases = {}
+        self._initialize_databases()
+        
+        # DB 카테고리 정의
+        self.db_categories = {
+            'literature': ['openalex', 'crossref'],
+            'chemical': ['pubchem', 'materials_project'],
+            'code': ['github'],
+            'protocol': ['protocols_io', 'zenodo']  # 추후 구현
+        }
+        
+    def _initialize_databases(self):
+        """사용 가능한 데이터베이스 초기화"""
+        for name, db in self.databases.items():
+            if db.initialize():
+                self.available_databases[name] = db
+                logger.info(f"Database initialized: {name}")
+            else:
+                logger.warning(f"Database not available: {name}")
+    
+    async def search_single(self, db_name: str, query: str, **kwargs) -> APIResponse:
+        """단일 데이터베이스 검색"""
+        db = self.available_databases.get(db_name)
+        if not db:
+            return APIResponse(
+                success=False,
+                data=None,
+                error=f"Database {db_name} not available",
+                api_name=db_name
+            )
+        
+        return await db.search_async(query, **kwargs)
+    
+    async def search_parallel(self, query: str, databases: List[str] = None, **kwargs) -> Dict[str, APIResponse]:
+        """여러 데이터베이스 병렬 검색"""
+        if not databases:
+            databases = list(self.available_databases.keys())
+        
+        # 사용 가능한 DB만 필터링
+        databases = [db for db in databases if db in self.available_databases]
+        
+        if not databases:
+            return {}
+        
+        # 병렬 검색 실행
+        tasks = {}
+        for db_name in databases:
+            tasks[db_name] = self.search_single(db_name, query, **kwargs)
+        
+        results = {}
+        for db_name, task in tasks.items():
+            try:
+                results[db_name] = await task
+            except Exception as e:
+                results[db_name] = APIResponse(
+                    success=False,
+                    data=None,
+                    error=str(e),
+                    api_name=db_name
+                )
+        
+        return results
+    
+    def integrated_search(self, query: str, categories: List[str] = None, **kwargs) -> Dict:
+        """통합 검색 (동기 래퍼)"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self._integrated_search_async(query, categories, **kwargs)
+            )
+        finally:
+            loop.close()
+    
+    async def _integrated_search_async(self, query: str, categories: List[str] = None, **kwargs) -> Dict:
+        """카테고리별 통합 검색"""
+        # 기본적으로 모든 카테고리 검색
+        if not categories:
+            categories = list(self.db_categories.keys())
+        
+        # 검색할 DB 목록 구성
+        databases_to_search = []
+        for category in categories:
+            databases_to_search.extend(self.db_categories.get(category, []))
+        
+        # 중복 제거
+        databases_to_search = list(set(databases_to_search))
+        
+        # 병렬 검색 실행
+        results = await self.search_parallel(query, databases_to_search, **kwargs)
+        
+        # 카테고리별로 결과 정리
+        categorized_results = {}
+        for category in categories:
+            categorized_results[category] = {}
+            for db in self.db_categories.get(category, []):
+                if db in results:
+                    categorized_results[category][db] = results[db]
+        
+        return {
+            'success': True,
+            'query': query,
+            'results_by_category': categorized_results,
+            'total_databases_searched': len(results),
+            'successful_searches': sum(1 for r in results.values() if r.success)
+        }
+    
+    def get_polymer_data(self, polymer_name: str) -> Dict:
+        """특정 고분자에 대한 종합 데이터 수집"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self._get_polymer_data_async(polymer_name)
+            )
+        finally:
+            loop.close()
+    
+    async def _get_polymer_data_async(self, polymer_name: str) -> Dict:
+        """고분자 관련 모든 정보 수집"""
+        tasks = {
+            'literature': self.search_parallel(
+                f"{polymer_name} polymer properties synthesis",
+                ['openalex', 'crossref']
+            ),
+            'chemical': self.search_single('pubchem', polymer_name),
+            'code': self.search_single(
+                'github', 
+                f"{polymer_name} polymer simulation analysis",
+                language='python'
+            )
+        }
+        
+        results = {}
+        for category, task in tasks.items():
+            try:
+                results[category] = await task
+            except Exception as e:
+                logger.error(f"Error in {category} search: {e}")
+                results[category] = None
+        
+        return {
+            'polymer': polymer_name,
+            'timestamp': datetime.now().isoformat(),
+            'data': results
+        }
+
+# DatabaseManager 초기화
+database_manager = DatabaseManager()
+
 # ==================== 애플리케이션 초기화 ====================
 def initialize_app():
     """애플리케이션 초기화"""
