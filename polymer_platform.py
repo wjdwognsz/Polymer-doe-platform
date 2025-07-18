@@ -3151,9 +3151,9 @@ class PolymerDOEApp:
         with tab4:
             self._show_design_validation()
 
-    else:
-        # Enhanced AI가 없으면 기존 방식으로 동작
-        self._show_basic_experiment_design_original()
+        else:
+            # Enhanced AI가 없으면 기존 방식으로 동작
+            self._show_basic_experiment_design_original()
 
 # ==================== 실험 설계 페이지2 ====================
     def _show_basic_experiment_design(self):
