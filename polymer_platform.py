@@ -1068,12 +1068,7 @@ class PolymerDOEApp:
                         st.warning("연구 내용을 입력해주세요.")
                             
                             # AI 응답 (간단한 시뮬레이션)
-                            if st.session_state.user_level == 1:
-                                st.info("🤖 AI가 프로젝트 설정을 도와드리겠습니다.")
-                                
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.markdown("""
+
                                     **추천 프로젝트명**: DES 최적 조성 탐색
                                     
                                     **주요 변수**:
