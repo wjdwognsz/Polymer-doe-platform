@@ -19,9 +19,10 @@ import hashlib
 import base64
 import io
 import re
-import os
+import os  # os import를 여기로 이동!
 
-# API Key Manager 초기화 (이 부분을 맨 위에 추가!)
+# ==================== API Key Manager 정의 (바로 다음) ====================
+# API Key Manager를 가장 먼저 만들기!
 class SimpleAPIKeyManager:
     def get_key(self, key_id):
         return os.getenv(f'{key_id.upper()}_API_KEY', '')
@@ -32,12 +33,63 @@ class SimpleAPIKeyManager:
     def set_key(self, key_id, value):
         os.environ[f'{key_id.upper()}_API_KEY'] = value
 
-# 전역 변수 설정
+# 전역 변수 초기화 (여기가 중요!)
 api_key_manager = SimpleAPIKeyManager()
 enhanced_ai_orchestrator = None
-database_manager = None
+database_manager = None  # 주의: 여기서는 None
 api_monitor = None
 translation_service = None
+
+# ==================== CSS 스타일 정의 ====================
+# Streamlit 페이지 설정
+st.set_page_config(
+    page_title="🧬 고분자 실험 설계 플랫폼",
+    page_icon="🔬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# CSS 스타일 적용
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        padding: 2rem 0;
+    }
+    .info-card {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stButton > button {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 2rem;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==================== Enhanced 컴포넌트 초기화 ====================
 ENHANCED_FEATURES_AVAILABLE = False
@@ -151,57 +203,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ==================== 설정 및 초기화 ====================
-
-# Streamlit 페이지 설정
-st.set_page_config(
-    page_title="🧬 고분자 실험 설계 플랫폼",
-    page_icon="🧬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# CSS 스타일 적용
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 3rem;
-        font-weight: bold;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 2rem 0;
-    }
-    .info-card {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .metric-card {
-        background: white;
-        border-radius: 8px;
-        padding: 1rem;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stButton > button {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 0.5rem 2rem;
-        border-radius: 5px;
-        font-weight: bold;
-        transition: all 0.3s;
-    }
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # ==================== 상태 관리 클래스 ====================
 # ==================== API 키 관리 시스템 ====================
