@@ -317,56 +317,110 @@ class StateManager:
                 st.session_state[key] = value
 
 # ==================== 데이터베이스 매니저 ====================
+# ==================== Google Sheets 연동 ====================
 class DatabaseManager:
-    """구글 시트를 사용한 데이터 영속성 관리"""
+    """Google Sheets를 백엔드로 사용하는 데이터베이스 매니저"""
     
     def __init__(self):
-        self.sheet_url = None
-        self.client = None
-        self.sheet = None
-        self.available_databases = {}
-        self._initialize_databases()
+        """Google Sheets 연결 초기화"""
+        try:
+            # Streamlit secrets에서 인증 정보 로드
+            self.credentials = st.secrets["gcp_service_account"]
+            self.sa = gspread.service_account_from_dict(self.credentials)
+            self.spreadsheet_url = st.secrets["private_gsheets_url"]
+            self.sh = self.sa.open_by_url(self.spreadsheet_url)
+            logger.info("Google Sheets 연결 성공")
+        except Exception as e:
+            logger.error(f"Google Sheets 연결 실패: {e}")
+            st.error("데이터베이스 연결에 실패했습니다. 관리자에게 문의하세요.")
+            self.sh = None
     
-    def _initialize_databases(self):
-        """데이터베이스 연결 초기화"""
-        # 간단한 로컬 저장소로 대체
-        self.local_storage = {
-            'experiments': [],
-            'users': [],
-            'community_posts': []
+    def _get_worksheet(self, sheet_name: str):
+        """워크시트 가져오기 (없으면 생성)"""
+        if not self.sh:
+            return None
+        try:
+            return self.sh.worksheet(sheet_name)
+        except gspread.WorksheetNotFound:
+            worksheet = self.sh.add_worksheet(title=sheet_name, rows=100, cols=20)
+            logger.info(f"'{sheet_name}' 워크시트 생성됨")
+            return worksheet
+    
+    def get_all_records_as_df(self, sheet_name: str) -> pd.DataFrame:
+        """워크시트의 모든 데이터를 DataFrame으로 반환"""
+        worksheet = self._get_worksheet(sheet_name)
+        if worksheet:
+            try:
+                records = worksheet.get_all_records()
+                return pd.DataFrame(records)
+            except Exception as e:
+                logger.error(f"데이터 읽기 실패: {e}")
+                return pd.DataFrame()
+        return pd.DataFrame()
+    
+    def append_row(self, sheet_name: str, data_dict: dict) -> bool:
+        """워크시트에 새 행 추가"""
+        worksheet = self._get_worksheet(sheet_name)
+        if worksheet:
+            try:
+                # 타임스탬프 추가
+                data_dict['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # 딕셔너리를 리스트로 변환
+                headers = worksheet.row_values(1)
+                if not headers:
+                    # 첫 행이 비어있으면 헤더 추가
+                    headers = list(data_dict.keys())
+                    worksheet.update('A1', [headers])
+                
+                # 데이터 행 추가
+                row_data = [data_dict.get(header, '') for header in headers]
+                worksheet.append_row(row_data)
+                return True
+            except Exception as e:
+                logger.error(f"행 추가 실패: {e}")
+                return False
+        return False
+    
+    def update_cell(self, sheet_name: str, row: int, col: int, value: Any) -> bool:
+        """특정 셀 업데이트"""
+        worksheet = self._get_worksheet(sheet_name)
+        if worksheet:
+            try:
+                worksheet.update_cell(row, col, value)
+                return True
+            except Exception as e:
+                logger.error(f"셀 업데이트 실패: {e}")
+                return False
+        return False
+    
+    def get_platform_stats(self) -> dict:
+        """플랫폼 통계 반환"""
+        stats = {
+            'total_projects': 0,
+            'total_experiments': 0,
+            'active_users': 0,
+            'success_rate': 0
         }
-    
-    def save_experiment(self, experiment_data):
-        """실험 데이터 저장"""
-        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        experiment_data['id'] = experiment_id
-        experiment_data['created_at'] = datetime.now().isoformat()
-        self.local_storage['experiments'].append(experiment_data)
-        return experiment_id
-    
-    def get_experiment(self, experiment_id):
-        """실험 데이터 조회"""
-        for exp in self.local_storage['experiments']:
-            if exp.get('id') == experiment_id:
-                return exp
-        return None
-    
-    def get_platform_stats(self):
-        """플랫폼 통계 가져오기"""
-        return st.session_state.get('platform_stats', {
-            'total_experiments': len(self.local_storage['experiments']),
-            'ai_consultations': 0,
-            'active_users': 1,
-            'success_rate': 85.0
-        })
-    
-    def update_platform_stats(self, stat_type, increment=1):
-        """플랫폼 통계 업데이트"""
-        if 'platform_stats' not in st.session_state:
-            st.session_state['platform_stats'] = self.get_platform_stats()
         
-        if stat_type in st.session_state['platform_stats']:
-            st.session_state['platform_stats'][stat_type] += increment
+        try:
+            # 프로젝트 통계
+            projects_df = self.get_all_records_as_df('projects')
+            stats['total_projects'] = len(projects_df)
+            
+            # 실험 통계
+            experiments_df = self.get_all_records_as_df('experiments')
+            stats['total_experiments'] = len(experiments_df)
+            
+            # 성공률 계산
+            if len(experiments_df) > 0:
+                successful = experiments_df[experiments_df.get('status', '') == 'completed']
+                stats['success_rate'] = len(successful) / len(experiments_df) * 100
+            
+        except Exception as e:
+            logger.error(f"통계 계산 실패: {e}")
+        
+        return stats
 
 # ==================== Enhanced 기능들 ====================
 if ENHANCED_FEATURES_AVAILABLE:
