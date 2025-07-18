@@ -238,6 +238,78 @@ class StateManager:
             if key not in st.session_state:
                 st.session_state[key] = value
         pass
+# ==================== DatabaseManager 클래스 (Line 1317 오류 수정) ====================
+class DatabaseManager:
+    """구글 시트를 사용한 데이터 영속성 관리"""
+    
+    def __init__(self):
+        self.sheet_url = "YOUR_GOOGLE_SHEET_URL"
+        self.client = None
+        self.sheet = None
+        self._initialize_connection()
+        
+        if credentials_dict:
+            try:
+                creds = Credentials.from_service_account_info(credentials_dict)
+                self.client = gspread.authorize(creds)
+            except Exception as e:
+                st.warning(f"구글 시트 연결 실패: {e}")
+    
+    def get_platform_stats(self):
+        """플랫폼 통계 가져오기"""
+        if self.client and self.sheet:
+            try:
+                stats_sheet = self.sheet.worksheet('Platform_Stats')
+                values = stats_sheet.get_all_values()
+                if len(values) > 1:
+                    return {
+                        'total_experiments': int(values[1][0]),
+                        'ai_consultations': int(values[1][1]),
+                        'active_users': int(values[1][2]),
+                        'success_rate': float(values[1][3])
+                    }
+            except:
+                pass
+        
+        return st.session_state['platform_stats']
+    
+    def update_platform_stats(self, stat_type, increment=1):
+        """플랫폼 통계 업데이트"""
+        st.session_state['platform_stats'][stat_type] += increment
+        
+        if self.client and self.sheet:
+            try:
+                stats_sheet = self.sheet.worksheet('Platform_Stats')
+                stats = st.session_state['platform_stats']
+                stats_sheet.update('A2:D2', [[
+                    stats['total_experiments'],
+                    stats['ai_consultations'],
+                    stats['active_users'],
+                    stats['success_rate']
+                ]])
+            except:
+                pass
+    
+    def save_experiment(self, experiment_data):
+        """실험 데이터 저장"""
+        timestamp = datetime.now().isoformat()
+        experiment_id = hashlib.md5(f"{timestamp}{json.dumps(experiment_data)}".encode()).hexdigest()[:8]
+        
+        if self.client and self.sheet:
+            try:
+                exp_sheet = self.sheet.worksheet('Experiments')
+                exp_sheet.append_row([
+                    experiment_id,
+                    timestamp,
+                    json.dumps(experiment_data),
+                    st.session_state['user_level']
+                ])
+            except:
+                pass
+        
+        self.update_platform_stats('total_experiments')
+        return experiment_id
+
 
 
 # ==================== 상태 관리 클래스 ====================
@@ -2059,7 +2131,7 @@ def initialize_app():
     
     # API 키가 설정되지 않은 경우 경고
     if not api_key_manager._check_required_keys():
-        st.warning("⚠️ 필수 API 키를 설정해주세요. 사이드바에서 API 키를 입력하거나 Google Colab 코드 셀에서 설정하세요.")
+        st.warning("⚠️ 필수 API 키를 설정해주세요. 사이드바에서 API 키를 입력하거나 streamlit secret 코드 셀에서 설정하세요.")
         st.stop()
     
     # API 모니터 사이드바에 표시
@@ -2073,77 +2145,6 @@ def initialize_app():
         logger.info("Translation service is available")
     else:
         logger.warning("Translation service is not available")
-
-# ==================== 데이터베이스 관리자 ====================
-
-class DatabaseManager:
-    """구글 시트를 사용한 데이터 영속성 관리"""
-    
-    def __init__(self, credentials_dict=None):
-        self.client = None
-        self.sheet = None
-        
-        if credentials_dict:
-            try:
-                creds = Credentials.from_service_account_info(credentials_dict)
-                self.client = gspread.authorize(creds)
-            except Exception as e:
-                st.warning(f"구글 시트 연결 실패: {e}")
-    
-    def get_platform_stats(self):
-        """플랫폼 통계 가져오기"""
-        if self.client and self.sheet:
-            try:
-                stats_sheet = self.sheet.worksheet('Platform_Stats')
-                values = stats_sheet.get_all_values()
-                if len(values) > 1:
-                    return {
-                        'total_experiments': int(values[1][0]),
-                        'ai_consultations': int(values[1][1]),
-                        'active_users': int(values[1][2]),
-                        'success_rate': float(values[1][3])
-                    }
-            except:
-                pass
-        
-        return st.session_state['platform_stats']
-    
-    def update_platform_stats(self, stat_type, increment=1):
-        """플랫폼 통계 업데이트"""
-        st.session_state['platform_stats'][stat_type] += increment
-        
-        if self.client and self.sheet:
-            try:
-                stats_sheet = self.sheet.worksheet('Platform_Stats')
-                stats = st.session_state['platform_stats']
-                stats_sheet.update('A2:D2', [[
-                    stats['total_experiments'],
-                    stats['ai_consultations'],
-                    stats['active_users'],
-                    stats['success_rate']
-                ]])
-            except:
-                pass
-    
-    def save_experiment(self, experiment_data):
-        """실험 데이터 저장"""
-        timestamp = datetime.now().isoformat()
-        experiment_id = hashlib.md5(f"{timestamp}{json.dumps(experiment_data)}".encode()).hexdigest()[:8]
-        
-        if self.client and self.sheet:
-            try:
-                exp_sheet = self.sheet.worksheet('Experiments')
-                exp_sheet.append_row([
-                    experiment_id,
-                    timestamp,
-                    json.dumps(experiment_data),
-                    st.session_state['user_level']
-                ])
-            except:
-                pass
-        
-        self.update_platform_stats('total_experiments')
-        return experiment_id
 
 # ==================== AI 오케스트레이터 ====================
 
