@@ -151,6 +151,305 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==================== 상태 관리 클래스 ====================
+# ==================== API 키 관리 시스템 ====================
+class APIKeyManager:
+    """API 키를 안전하게 관리하는 클래스"""
+    
+    def __init__(self):
+        self.api_configs = {
+            # AI APIs
+            'gemini': {
+                'name': 'Gemini 2.0 Flash',
+                'env_key': 'GEMINI_API_KEY',
+                'required': True,
+                'test_endpoint': 'https://generativelanguage.googleapis.com/v1beta/models',
+                'category': 'ai'
+            },
+            'grok': {
+                'name': 'Grok 3 mini',
+                'env_key': 'GROK_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.x.ai/v1/chat/completions',
+                'category': 'ai'
+            },
+            'sambanova': {
+                'name': 'SambaNova',
+                'env_key': 'SAMBANOVA_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.sambanova.ai/v1/chat/completions',
+                'category': 'ai'
+            },
+            'deepseek': {
+                'name': 'DeepSeek',
+                'env_key': 'DEEPSEEK_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.deepseek.com/v1/chat/completions',
+                'category': 'ai'
+            },
+            'groq': {
+                'name': 'Groq',
+                'env_key': 'GROQ_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.groq.com/openai/v1/chat/completions',
+                'category': 'ai'
+            },
+            'huggingface': {
+                'name': 'HuggingFace',
+                'env_key': 'HUGGINGFACE_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api-inference.huggingface.co/models',
+                'category': 'ai'
+            },
+            
+            # Database APIs
+            'github': {
+                'name': 'GitHub',
+                'env_key': 'GITHUB_TOKEN',
+                'required': False,
+                'test_endpoint': 'https://api.github.com/user',
+                'category': 'database'
+            },
+            'materials_project': {
+                'name': 'Materials Project',
+                'env_key': 'MP_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.materialsproject.org',
+                'category': 'database'
+            }
+        }
+        
+    def initialize_keys(self):
+        """Google Colab 환경에서 API 키 초기화"""
+        if 'api_keys_initialized' not in st.session_state:
+            st.session_state.api_keys_initialized = False
+            st.session_state.api_keys = {}
+            
+        # Google Colab 환경 체크
+        if self._is_colab():
+            self._setup_colab_keys()
+        else:
+            self._setup_streamlit_keys()
+    
+    def _is_colab(self):
+        """Google Colab 환경인지 확인"""
+        try:
+            import google.colab
+            return True
+        except ImportError:
+            return False
+    
+    def _setup_colab_keys(self):
+        """Google Colab에서 getpass로 키 입력받기"""
+        if not st.session_state.api_keys_initialized:
+            st.info("🔐 Google Colab 환경에서 API 키를 설정합니다.")
+            
+            # 필수 API 키만 먼저 요청
+            for key_id, config in self.api_configs.items():
+                if config['required'] and key_id not in st.session_state.api_keys:
+                    if not os.getenv(config['env_key']):
+                        # Colab에서는 코드 셀에서 getpass 실행 필요
+                        st.warning(f"⚠️ {config['name']} API 키가 필요합니다. 코드 셀에서 다음을 실행하세요:")
+                        st.code(f"import os\nfrom getpass import getpass\nos.environ['{config['env_key']}'] = getpass('{config['name']} API Key: ')")
+                    else:
+                        st.session_state.api_keys[key_id] = os.getenv(config['env_key'])
+                        
+    def _setup_streamlit_keys(self):
+        """Streamlit UI에서 키 입력받기"""
+        with st.sidebar.expander("🔑 API 키 설정", expanded=not st.session_state.api_keys_initialized):
+            
+            # AI API 키 섹션
+            st.subheader("AI APIs")
+            ai_cols = st.columns(2)
+            
+            for idx, (key_id, config) in enumerate(
+                [(k, v) for k, v in self.api_configs.items() if v['category'] == 'ai']
+            ):
+                col = ai_cols[idx % 2]
+                with col:
+                    # 환경변수에서 먼저 확인
+                    env_value = os.getenv(config['env_key'])
+                    current_value = st.session_state.api_keys.get(key_id, env_value or "")
+                    
+                    # 마스킹된 입력 필드
+                    new_value = st.text_input(
+                        config['name'],
+                        value=self._mask_key(current_value) if current_value else "",
+                        type="password",
+                        key=f"input_{key_id}",
+                        help=f"{'필수' if config['required'] else '선택'}"
+                    )
+                    
+                    # 새 값이 입력되면 저장
+                    if new_value and new_value != self._mask_key(current_value):
+                        st.session_state.api_keys[key_id] = new_value
+                        os.environ[config['env_key']] = new_value
+            
+            # Database API 키 섹션
+            st.subheader("Database APIs")
+            db_cols = st.columns(2)
+            
+            for idx, (key_id, config) in enumerate(
+                [(k, v) for k, v in self.api_configs.items() if v['category'] == 'database']
+            ):
+                col = db_cols[idx % 2]
+                with col:
+                    env_value = os.getenv(config['env_key'])
+                    current_value = st.session_state.api_keys.get(key_id, env_value or "")
+                    
+                    new_value = st.text_input(
+                        config['name'],
+                        value=self._mask_key(current_value) if current_value else "",
+                        type="password",
+                        key=f"input_{key_id}",
+                        help="선택"
+                    )
+                    
+                    if new_value and new_value != self._mask_key(current_value):
+                        st.session_state.api_keys[key_id] = new_value
+                        os.environ[config['env_key']] = new_value
+            
+            # 키 테스트 버튼
+            if st.button("🔍 API 연결 테스트", use_container_width=True):
+                self._test_all_connections()
+                
+            # 초기화 완료 표시
+            if self._check_required_keys():
+                st.session_state.api_keys_initialized = True
+                st.success("✅ 필수 API 키가 모두 설정되었습니다.")
+    
+    def _mask_key(self, key: str) -> str:
+        """API 키를 마스킹 처리"""
+        if not key:
+            return ""
+        if len(key) <= 8:
+            return "*" * len(key)
+        return key[:4] + "*" * (len(key) - 8) + key[-4:]
+    
+    def _check_required_keys(self) -> bool:
+        """필수 키가 모두 설정되었는지 확인"""
+        for key_id, config in self.api_configs.items():
+            if config['required']:
+                if key_id not in st.session_state.api_keys and not os.getenv(config['env_key']):
+                    return False
+        return True
+    
+    def get_key(self, key_id: str) -> Optional[str]:
+        """API 키 반환"""
+        # 우선순위: session_state > 환경변수
+        if key_id in st.session_state.api_keys:
+            return st.session_state.api_keys[key_id]
+        
+        config = self.api_configs.get(key_id)
+        if config:
+            return os.getenv(config['env_key'])
+        
+        return None
+    
+    def _test_all_connections(self):
+        """모든 API 연결 테스트"""
+        results = {}
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total = len(self.api_configs)
+        for idx, (key_id, config) in enumerate(self.api_configs.items()):
+            status_text.text(f"테스트 중: {config['name']}...")
+            progress_bar.progress((idx + 1) / total)
+            
+            api_key = self.get_key(key_id)
+            if api_key:
+                results[key_id] = self._test_connection(key_id, api_key)
+            else:
+                results[key_id] = {'status': 'no_key', 'message': 'API 키 없음'}
+        
+        # 결과 표시
+        st.subheader("🔍 API 연결 테스트 결과")
+        
+        for category in ['ai', 'database']:
+            st.write(f"**{category.upper()} APIs**")
+            cols = st.columns(3)
+            
+            items = [(k, v) for k, v in self.api_configs.items() if v['category'] == category]
+            for idx, (key_id, config) in enumerate(items):
+                col = cols[idx % 3]
+                with col:
+                    result = results.get(key_id, {})
+                    status = result.get('status', 'no_key')
+                    
+                    if status == 'success':
+                        st.success(f"✅ {config['name']}")
+                    elif status == 'no_key':
+                        st.info(f"🔑 {config['name']}: 키 없음")
+                    else:
+                        st.error(f"❌ {config['name']}: {result.get('message', '오류')}")
+        
+        progress_bar.empty()
+        status_text.empty()
+    
+    @retry(stop_max_attempt_number=3, wait_fixed=2000)
+    def _test_connection(self, key_id: str, api_key: str) -> dict:
+        """개별 API 연결 테스트"""
+        config = self.api_configs[key_id]
+        
+        try:
+            start_time = time.time()
+            
+            if key_id == 'gemini':
+                genai.configure(api_key=api_key)
+                models = genai.list_models()
+                response_time = time.time() - start_time
+                return {'status': 'success', 'response_time': response_time}
+                
+            elif key_id == 'github':
+                g = Github(api_key)
+                user = g.get_user()
+                response_time = time.time() - start_time
+                return {'status': 'success', 'response_time': response_time, 'user': user.login}
+                
+            else:
+                # 기본 HTTP 테스트
+                headers = self._get_auth_headers(key_id, api_key)
+                response = requests.get(
+                    config['test_endpoint'],
+                    headers=headers,
+                    timeout=5
+                )
+                response_time = time.time() - start_time
+                
+                if response.status_code in [200, 401, 403]:  # 인증 오류도 연결은 성공
+                    return {'status': 'success', 'response_time': response_time}
+                else:
+                    return {'status': 'error', 'message': f'HTTP {response.status_code}'}
+                    
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)[:50]}
+    
+    def _get_auth_headers(self, key_id: str, api_key: str) -> dict:
+        """API별 인증 헤더 생성"""
+        if key_id in ['grok', 'sambanova', 'deepseek', 'groq']:
+            return {'Authorization': f'Bearer {api_key}'}
+        elif key_id == 'huggingface':
+            return {'Authorization': f'Bearer {api_key}'}
+        elif key_id == 'materials_project':
+            return {'X-API-KEY': api_key}
+        else:
+            return {}
+
+# API 키 매니저 초기화
+api_key_manager = APIKeyManager()
+
+# ==================== 애플리케이션 초기화 ====================
+def initialize_app():
+    """애플리케이션 초기화"""
+    # 기존 초기화 코드...
+    
+    # API 키 초기화 추가
+    api_key_manager.initialize_keys()
+    
+    # API 키가 설정되지 않은 경우 경고
+    if not api_key_manager._check_required_keys():
+        st.warning("⚠️ 필수 API 키를 설정해주세요. 사이드바에서 API 키를 입력하거나 Google Colab 코드 셀에서 설정하세요.")
+        st.stop()
 
 class StateManager:
     """세션 상태를 중앙에서 관리하는 클래스"""
