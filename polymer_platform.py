@@ -2878,8 +2878,41 @@ class PolymerDOEApp:
             # 다음 단계 안내
             if st.session_state.user_level == 1:
                 st.info("다음 단계: 실험 설계로 이동하여 AI와 함께 최적의 실험을 설계하세요!")
-    
+
+# ==================== 실험 설계 페이지1 ====================
     def _show_experiment_design(self):
+        """실험 설계 페이지 - DB 연동 강화"""
+        st.header("🧪 AI 기반 실험 설계")
+    
+        # API 상태 표시
+        api_monitor.display_status_bar('experiment_design')
+    
+        # 탭 구성
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📋 기본 실험 설계",
+            "🔍 DB 기반 설계",
+            "🤖 AI 상담",
+            "📊 설계 검증"
+        ])
+    
+        # 기본 실험 설계 탭
+        with tab1:
+            self._show_basic_experiment_design()
+    
+        # DB 기반 설계 탭 (새로운 기능)
+        with tab2:
+            self._show_database_driven_design()
+    
+        # AI 상담 탭
+        with tab3:
+            self._show_ai_consultation()
+    
+        # 설계 검증 탭
+        with tab4:
+            self._show_design_validation()
+
+# ==================== 실험 설계 페이지2 ====================
+    def _show_basic_experiment_design(self):
         """실험 설계 페이지"""
         st.title("🧪 실험 설계")
         
@@ -3085,7 +3118,308 @@ class PolymerDOEApp:
             if st.button("💾 실험 설계 저장", type="primary"):
                 exp_id = self.db_manager.save_experiment(design)
                 st.success(f"실험이 저장되었습니다! (ID: {exp_id})")
+
+# ==================== 실험 설계 페이지3 ====================
+    def _show_database_driven_design(self):
+        """DB 정보를 활용한 실험 설계 (새로운 기능)"""
+        st.subheader("🔍 데이터베이스 기반 실험 설계")
     
+        # 실험 목표 입력
+        experiment_goal = st.text_area(
+            "실험 목표를 자세히 설명해주세요",
+            placeholder="예: PMMA의 굴절률을 1.52에서 1.55로 높이면서 투명도 90% 이상 유지",
+            height=100
+        )
+    
+        # 참조할 데이터베이스 선택
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            reference_sources = st.multiselect(
+                "참조할 데이터 소스",
+                options=['literature', 'protocols', 'similar_experiments', 'material_properties'],
+                default=['literature', 'protocols'],
+                format_func=lambda x: {
+                    'literature': '📚 관련 논문',
+                    'protocols': '📋 실험 프로토콜',
+                    'similar_experiments': '🔬 유사 실험',
+                    'material_properties': '📊 물성 데이터'
+                }[x]
+            )
+    
+        with col2:
+            ai_engines = st.multiselect(
+                "사용할 AI 엔진",
+                options=list(getattr(self.ai_orchestrator, 'available_engines', {}).keys()),
+                default=['gemini', 'deepseek'],
+                help="실험 설계에 참여할 AI를 선택하세요"
+            )
+    
+        # 실험 설계 생성
+        if st.button("🚀 DB 기반 실험 설계 생성", use_container_width=True):
+            if not experiment_goal:
+                st.error("실험 목표를 입력해주세요.")
+                return
+        
+            with st.spinner("데이터베이스를 검색하고 최적 실험을 설계하고 있습니다..."):
+            
+                # 1단계: 관련 정보 검색
+                st.info("1단계: 관련 데이터베이스 검색 중...")
+            
+                # 검색 쿼리 생성
+                search_queries = {
+                    'literature': f"{experiment_goal} polymer experiment method",
+                    'protocols': f"{experiment_goal} protocol procedure",
+                    'material_properties': st.session_state.project_info.get('polymer_type', 'polymer')
+                }
+            
+                # DB 검색 실행
+                search_results = {}
+                for source in reference_sources:
+                    if source == 'literature':
+                        results = database_manager.integrated_search(
+                            search_queries['literature'],
+                            categories=['literature'],
+                            limit=5
+                        )
+                        search_results['literature'] = results
+                
+                    elif source == 'protocols':
+                        results = database_manager.integrated_search(
+                            search_queries['protocols'],
+                            categories=['code'],  # GitHub에서 프로토콜 검색
+                            limit=5
+                        )
+                        search_results['protocols'] = results
+                
+                    elif source == 'material_properties':
+                        results = database_manager.integrated_search(
+                            search_queries['material_properties'],
+                            categories=['chemical'],
+                            limit=5
+                        )
+                        search_results['properties'] = results
+            
+                # 2단계: AI 실험 설계
+                st.info("2단계: AI가 검색 결과를 분석하여 실험 설계 중...")
+            
+                # 검색 결과 요약
+                search_summary = self._summarize_search_results(search_results)
+            
+                # AI 프롬프트 구성
+                design_prompt = f"""
+                다음 정보를 바탕으로 최적의 실험 설계를 생성해주세요:
+            
+                실험 목표: {experiment_goal}
+            
+                프로젝트 정보:
+                - 고분자: {st.session_state.project_info.get('polymer_type')}
+                - 응용 분야: {st.session_state.project_info.get('application')}
+            
+                데이터베이스 검색 결과:
+                {search_summary}
+            
+                다음 형식으로 상세한 실험 설계를 작성해주세요:
+            
+                1. 실험 개요
+                2. 필요한 재료 및 시약
+                3. 실험 장비
+                4. 실험 절차 (단계별)
+                5. 주요 실험 변수 및 수준
+                6. 예상 결과 및 분석 방법
+                7. 안전 주의사항
+                8. 참고 문헌
+                """
+            
+                # AI 실험 설계 생성
+                if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                    design_result = self.ai_orchestrator.generate_consensus(
+                        design_prompt,
+                        required_engines=ai_engines
+                    )
+                
+                    if design_result.get('success'):
+                        # 3단계: 결과 표시
+                        st.success("✅ DB 기반 실험 설계 완료!")
+                    
+                        # 실험 설계 표시
+                        st.markdown("### 🧪 생성된 실험 설계")
+                        st.markdown(design_result.get('final_answer', ''))
+                    
+                        # 참조된 데이터 표시
+                        with st.expander("📚 참조된 데이터베이스 정보"):
+                            self._display_reference_data(search_results)
+                    
+                        # AI 기여도 표시
+                        st.caption(f"설계 참여 AI: {', '.join(design_result.get('contributing_engines', []))}")
+                    
+                        # 실험 설계 저장
+                        if st.button("💾 실험 설계 저장"):
+                            self._save_experiment_design(design_result.get('final_answer', ''))
+                            st.success("실험 설계가 저장되었습니다!")
+                    else:
+                        st.error("AI 실험 설계 생성에 실패했습니다.")
+
+    def _show_ai_consultation(self):
+        """AI 상담 기능"""
+        st.subheader("🤖 AI 실험 설계 상담")
+    
+        # 대화형 인터페이스
+        if 'design_chat_history' not in st.session_state:
+            st.session_state.design_chat_history = []
+    
+        # 채팅 히스토리 표시
+        for message in st.session_state.design_chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+    
+        # 사용자 입력
+        if prompt := st.chat_input("실험 설계에 대해 궁금한 점을 물어보세요"):
+            # 사용자 메시지 추가
+            st.session_state.design_chat_history.append({
+                "role": "user",
+                "content": prompt
+            })
+        
+            with st.chat_message("user"):
+                st.markdown(prompt)
+        
+            # AI 응답 생성
+            with st.chat_message("assistant"):
+                with st.spinner("AI가 답변을 생성하고 있습니다..."):
+                
+                    # 컨텍스트 포함 프롬프트
+                    context_prompt = f"""
+                    사용자가 실험 설계에 대해 질문했습니다.
+                
+                    프로젝트 정보:
+                    {json.dumps(st.session_state.get('project_info', {}), ensure_ascii=False, indent=2)}
+                
+                    이전 대화:
+                    {json.dumps(st.session_state.design_chat_history[-5:], ensure_ascii=False, indent=2)}
+                
+                    사용자 질문: {prompt}
+                
+                    실험 설계 전문가로서 구체적이고 실용적인 조언을 제공해주세요.
+                    """
+                
+                    if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                        response = self.ai_orchestrator.get_specialized_engine('korean')
+                        if response:
+                            engine = self.ai_orchestrator.available_engines.get(response)
+                            if engine:
+                                result = engine.generate(context_prompt)
+                            
+                                if result.success:
+                                    st.markdown(result.data)
+                                    st.session_state.design_chat_history.append({
+                                        "role": "assistant",
+                                        "content": result.data
+                                    })
+                                else:
+                                    st.error("AI 응답 생성에 실패했습니다.")
+
+    def _show_design_validation(self):
+        """실험 설계 검증"""
+        st.subheader("📊 실험 설계 검증")
+    
+        # 검증할 실험 설계 입력
+        design_input = st.text_area(
+            "검증할 실험 설계를 입력하세요",
+            height=300,
+            placeholder="실험 설계 내용을 붙여넣으세요..."
+        )
+    
+        if st.button("🔍 실험 설계 검증", use_container_width=True):
+            if not design_input:
+                st.error("검증할 실험 설계를 입력해주세요.")
+                return
+        
+            with st.spinner("AI가 실험 설계를 검증하고 있습니다..."):
+            
+                validation_prompt = f"""
+                다음 실험 설계를 검증하고 개선점을 제안해주세요:
+            
+                {design_input}
+            
+                다음 항목을 평가해주세요:
+                1. 실험 목적과 방법의 일치성
+                2. 실험 변수 설정의 적절성
+                3. 통계적 타당성
+                4. 안전성 고려사항
+                5. 실현 가능성
+                6. 예상되는 문제점
+                7. 개선 제안
+            
+                각 항목에 대해 점수(1-10)와 상세 코멘트를 제공해주세요.
+                """
+            
+                if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                    # DeepSeek으로 과학적 검증
+                    validation_result = self.ai_orchestrator.generate_consensus(
+                        validation_prompt,
+                        required_engines=['deepseek', 'gemini']
+                    )
+                
+                    if validation_result.get('success'):
+                        st.markdown("### 🔍 검증 결과")
+                        st.markdown(validation_result.get('final_answer', ''))
+                    
+                        # 검증 통과 여부
+                        if "개선" in validation_result.get('final_answer', ''):
+                            st.warning("⚠️ 실험 설계에 개선이 필요한 부분이 있습니다.")
+                        else:
+                            st.success("✅ 실험 설계가 적절합니다.")
+
+    def _summarize_search_results(self, results: Dict) -> str:
+        """검색 결과 요약"""
+        summary = []
+    
+        if 'literature' in results:
+            lit_results = results['literature']
+            if lit_results.get('success'):
+                summary.append("관련 논문:")
+                for db_name, db_result in lit_results.get('results_by_category', {}).get('literature', {}).items():
+                    if db_result.success and db_result.data:
+                        papers = db_result.data.get('results', [])[:3]
+                        for paper in papers:
+                            summary.append(f"- {paper.get('title', 'Unknown')}")
+    
+        if 'protocols' in results:
+            protocol_results = results['protocols']
+            if protocol_results.get('success'):
+                summary.append("\n실험 프로토콜:")
+                for db_name, db_result in protocol_results.get('results_by_category', {}).get('code', {}).items():
+                    if db_result.success and db_result.data:
+                        repos = db_result.data.get('results', [])[:3]
+                        for repo in repos:
+                            summary.append(f"- {repo.get('name', 'Unknown')}: {repo.get('description', '')}")
+    
+        return "\n".join(summary)
+
+    def _display_reference_data(self, search_results: Dict):
+        """참조 데이터 표시"""
+        for category, results in search_results.items():
+            if results.get('success'):
+                st.subheader(f"📌 {category.title()}")
+            
+                for db_category, db_results in results.get('results_by_category', {}).items():
+                    for db_name, db_result in db_results.items():
+                        if db_result.success and db_result.data:
+                            st.write(f"**{db_name}**에서 {len(db_result.data.get('results', []))}개 결과")
+
+    def _save_experiment_design(self, design: str):
+        """실험 설계 저장"""
+        if 'experiment_designs' not in st.session_state:
+            st.session_state.experiment_designs = []
+    
+        st.session_state.experiment_designs.append({
+            'design': design,
+            'timestamp': datetime.now(),
+            'project': st.session_state.project_info.get('project_name', 'Unknown')
+        })
+    
+# ==================== 결과 분석 페이지 ====================
     def _show_results_analysis(self):
         """결과 분석 페이지"""
         st.title("📊 결과 분석")
