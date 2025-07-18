@@ -3037,7 +3037,7 @@ class PolymerDOEApp:
                             
                            # with col2:
                              #   st.markdown("""
-                                **측정 반응변수**:
+                            #    **측정 반응변수**:
                               #  - 점도 (mPa·s)
                                # - 전도도 (mS/cm)
                                # - pH
