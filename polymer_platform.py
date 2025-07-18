@@ -21,14 +21,23 @@ import io
 import re
 import os
 
+# API Key Manager 초기화 (이 부분을 맨 위에 추가!)
 class SimpleAPIKeyManager:
     def get_key(self, key_id):
         return os.getenv(f'{key_id.upper()}_API_KEY', '')
     
     def initialize_keys(self):
         pass
+    
+    def set_key(self, key_id, value):
+        os.environ[f'{key_id.upper()}_API_KEY'] = value
 
+# 전역 변수 설정
 api_key_manager = SimpleAPIKeyManager()
+enhanced_ai_orchestrator = None
+database_manager = None
+api_monitor = None
+translation_service = None
 
 # ==================== Enhanced 컴포넌트 초기화 ====================
 ENHANCED_FEATURES_AVAILABLE = False
