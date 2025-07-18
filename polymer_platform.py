@@ -1807,6 +1807,9 @@ def initialize_app():
     
     # API 모니터 사이드바에 표시
     api_monitor.display_detailed_status()
+    
+    # 데이터베이스 매니저 초기화 (자동으로 됨)
+    logger.info(f"Available databases: {list(database_manager.available_databases.keys())}")
 
 class StateManager:
     """세션 상태를 중앙에서 관리하는 클래스"""
