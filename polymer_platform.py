@@ -3003,7 +3003,7 @@ class PolymerDOEApp:
                                 
                                 **추천 설계**: 부분요인설계 (2^4-1)
                                 """)
-                        elif user_input:
+                        else: #user_input:
                             st.info("기본 실험 설계를 제공합니다.")
                             st.markdown("""
                             **주요 변수**:
@@ -3016,35 +3016,35 @@ class PolymerDOEApp:
                             - 순도
                             - 물성
                             """)
-                    #else:
-                        #st.warning("연구 내용을 입력해주세요.")
+                    else:
+                        st.warning("연구 내용을 입력해주세요.")
                             
                             # AI 응답 (간단한 시뮬레이션)
-                        if "염화콜린" in user_input and "구연산" in user_input:
-                            st.success("AI 분석이 완료되었습니다!")
+                        #if "염화콜린" in user_input and "구연산" in user_input:
+                         #   st.success("AI 분석이 완료되었습니다!")
                             
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown("""
+                          #  col1, col2 = st.columns(2)
+                           # with col1:
+                            #    st.markdown("""
                                 **추천 프로젝트명**: DES 최적 조성 탐색
                                 
                                 **주요 변수**:
-                                - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
-                                - 반응 온도 (60°C, 80°C, 100°C)
-                                - 반응 시간 (30분, 60분, 90분)
-                                - 수분 함량 (0%, 5%, 10%)
-                                """)
+                             #   - 염화콜린:구연산 몰비 (1:1, 1:2, 2:1)
+                              #  - 반응 온도 (60°C, 80°C, 100°C)
+                               # - 반응 시간 (30분, 60분, 90분)
+                                #- 수분 함량 (0%, 5%, 10%)
+                               # """)
                             
-                            with col2:
-                                st.markdown("""
+                           # with col2:
+                             #   st.markdown("""
                                 **측정 반응변수**:
-                                - 점도 (mPa·s)
-                                - 전도도 (mS/cm)
-                                - pH
-                                - 열안정성 (분해온도)
+                              #  - 점도 (mPa·s)
+                               # - 전도도 (mS/cm)
+                               # - pH
+                               # - 열안정성 (분해온도)
                                 
-                                **추천 설계**: 부분요인설계 (2^4-1)
-                                """)
+                               # **추천 설계**: #부분요인설계 (2^4-1)
+                                #""")
         
         # 일반 프로젝트 정보 입력
         st.subheader("📝 기본 정보")
