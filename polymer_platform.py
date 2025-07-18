@@ -1951,6 +1951,7 @@ class DatabaseManager:
             'data': results
         }
 
+database_manager = DatabaseManager()
 
 # ==================== 번역 서비스 ====================
 class TranslationService:
