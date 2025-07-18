@@ -3003,7 +3003,7 @@ class PolymerDOEApp:
                                 
                                 **추천 설계**: 부분요인설계 (2^4-1)
                                 """)
-                        else user_input:
+                        else: user_input:
                             st.info("기본 실험 설계를 제공합니다.")
                             st.markdown("""
                             **주요 변수**:
