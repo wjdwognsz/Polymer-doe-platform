@@ -435,8 +435,282 @@ class APIKeyManager:
         else:
             return {}
 
-# API 키 매니저 초기화
-api_key_manager = APIKeyManager()
+# ==================== API 모니터링 시스템 ====================
+class APIMonitor:
+    """API 상태를 실시간으로 모니터링하는 클래스"""
+    
+    def __init__(self):
+        # API 상태 저장
+        if 'api_status' not in st.session_state:
+            st.session_state.api_status = {}
+        if 'api_metrics' not in st.session_state:
+            st.session_state.api_metrics = {}
+            
+        # API 그룹 정의 (기능별 필요 API)
+        self.api_groups = {
+            'experiment_design': {
+                'name': '실험 설계',
+                'apis': ['gemini', 'grok', 'sambanova', 'deepseek', 'groq', 'huggingface'],
+                'icon': '🧪'
+            },
+            'literature_search': {
+                'name': '문헌 검색',
+                'apis': ['openalex', 'crossref', 'pubchem', 'semantic_scholar'],
+                'icon': '📚'
+            },
+            'protocol_search': {
+                'name': '프로토콜 검색',
+                'apis': ['protocols_io', 'github', 'zenodo', 'figshare'],
+                'icon': '📋'
+            },
+            'property_analysis': {
+                'name': '물성 분석',
+                'apis': ['polyinfo', 'materials_project', 'nist'],
+                'icon': '📊'
+            },
+            'integrated_search': {
+                'name': '통합 검색',
+                'apis': ['gemini', 'deepseek', 'openalex', 'github', 'materials_project'],
+                'icon': '🔍'
+            }
+        }
+        
+        # 상태별 색상 및 아이콘
+        self.status_config = {
+            APIStatus.ONLINE: {'color': '#28a745', 'icon': '🟢', 'text': '정상'},
+            APIStatus.SLOW: {'color': '#ffc107', 'icon': '🟡', 'text': '느림'},
+            APIStatus.OFFLINE: {'color': '#dc3545', 'icon': '🔴', 'text': '오프라인'},
+            APIStatus.ERROR: {'color': '#dc3545', 'icon': '❌', 'text': '오류'},
+            APIStatus.UNAUTHORIZED: {'color': '#6c757d', 'icon': '🔒', 'text': '인증 필요'},
+            APIStatus.RATE_LIMITED: {'color': '#ff6b6b', 'icon': '⏳', 'text': '제한됨'}
+        }
+    
+    def update_status(self, api_name: str, status: APIStatus, response_time: float = None, error_msg: str = None):
+        """API 상태 업데이트"""
+        st.session_state.api_status[api_name] = {
+            'status': status,
+            'last_checked': datetime.now(),
+            'response_time': response_time,
+            'error_msg': error_msg
+        }
+        
+        # 메트릭 업데이트
+        if api_name not in st.session_state.api_metrics:
+            st.session_state.api_metrics[api_name] = {
+                'total_calls': 0,
+                'success_calls': 0,
+                'total_response_time': 0,
+                'errors': []
+            }
+        
+        metrics = st.session_state.api_metrics[api_name]
+        metrics['total_calls'] += 1
+        
+        if status == APIStatus.ONLINE:
+            metrics['success_calls'] += 1
+            if response_time:
+                metrics['total_response_time'] += response_time
+        elif error_msg:
+            metrics['errors'].append({
+                'time': datetime.now(),
+                'error': error_msg
+            })
+            # 최근 10개 에러만 유지
+            metrics['errors'] = metrics['errors'][-10:]
+    
+    def get_api_status(self, api_name: str) -> Dict:
+        """특정 API의 현재 상태 반환"""
+        return st.session_state.api_status.get(api_name, {
+            'status': APIStatus.OFFLINE,
+            'last_checked': None,
+            'response_time': None,
+            'error_msg': 'Not checked yet'
+        })
+    
+    def get_context_apis(self, context: str) -> List[str]:
+        """현재 컨텍스트에 필요한 API 목록 반환"""
+        group = self.api_groups.get(context, {})
+        return group.get('apis', [])
+    
+    def display_status_bar(self, context: str):
+        """현재 컨텍스트의 API 상태 표시"""
+        group = self.api_groups.get(context)
+        if not group:
+            return
+            
+        # 상태 바 컨테이너
+        with st.container():
+            st.markdown(f"### {group['icon']} {group['name']} API 상태")
+            
+            cols = st.columns(len(group['apis']))
+            
+            for idx, api_name in enumerate(group['apis']):
+                with cols[idx]:
+                    status_info = self.get_api_status(api_name)
+                    status = status_info['status']
+                    config = self.status_config[status]
+                    
+                    # API 이름과 상태 표시
+                    api_display_name = api_key_manager.api_configs.get(api_name, {}).get('name', api_name)
+                    
+                    # 메트릭 카드 스타일로 표시
+                    st.markdown(f"""
+                        <div style="
+                            background: white;
+                            border-radius: 8px;
+                            padding: 10px;
+                            text-align: center;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            border-left: 4px solid {config['color']};
+                        ">
+                            <div style="font-size: 24px;">{config['icon']}</div>
+                            <div style="font-size: 12px; font-weight: bold;">{api_display_name}</div>
+                            <div style="font-size: 10px; color: {config['color']};">{config['text']}</div>
+                            {f'<div style="font-size: 10px; color: #666;">{status_info["response_time"]:.2f}초</div>' 
+                             if status_info['response_time'] else ''}
+                        </div>
+                    """, unsafe_allow_html=True)
+    
+    def display_detailed_status(self):
+        """상세 API 상태 표시 (사이드바용)"""
+        with st.sidebar.expander("📊 API 상태 모니터링", expanded=False):
+            # 전체 상태 요약
+            total_apis = len(st.session_state.api_status)
+            online_apis = sum(1 for s in st.session_state.api_status.values() 
+                            if s['status'] == APIStatus.ONLINE)
+            
+            if total_apis > 0:
+                success_rate = (online_apis / total_apis) * 100
+                st.metric("전체 API 상태", f"{online_apis}/{total_apis} 온라인", 
+                         f"{success_rate:.0f}% 가동률")
+            
+            # 카테고리별 상태
+            for category in ['ai', 'database']:
+                st.markdown(f"**{category.upper()} APIs**")
+                
+                # 해당 카테고리의 API들
+                category_apis = [
+                    (k, v) for k, v in api_key_manager.api_configs.items() 
+                    if v['category'] == category
+                ]
+                
+                for api_id, api_config in category_apis:
+                    status_info = self.get_api_status(api_id)
+                    status = status_info['status']
+                    config = self.status_config[status]
+                    
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col1:
+                        st.markdown(config['icon'])
+                    with col2:
+                        st.markdown(f"**{api_config['name']}**")
+                    with col3:
+                        if status_info['response_time']:
+                            st.markdown(f"{status_info['response_time']:.2f}s")
+                    
+                    # 에러 메시지 표시
+                    if status == APIStatus.ERROR and status_info.get('error_msg'):
+                        st.caption(f"❗ {status_info['error_msg'][:50]}...")
+                
+                st.markdown("---")
+    
+    def check_api_health(self, api_name: str, api_key: str = None) -> APIResponse:
+        """API 상태 확인"""
+        start_time = time.time()
+        
+        try:
+            # API 키가 없으면 키 매니저에서 가져오기
+            if not api_key:
+                api_key = api_key_manager.get_key(api_name)
+                if not api_key:
+                    self.update_status(api_name, APIStatus.UNAUTHORIZED)
+                    return APIResponse(
+                        success=False,
+                        data=None,
+                        error="API key not found",
+                        api_name=api_name
+                    )
+            
+            # 간단한 헬스 체크 수행
+            if api_name == 'gemini':
+                genai.configure(api_key=api_key)
+                genai.list_models()
+            elif api_name == 'github':
+                g = Github(api_key)
+                g.get_user()
+            else:
+                # 기본 HTTP 체크
+                config = api_key_manager.api_configs.get(api_name, {})
+                if config.get('test_endpoint'):
+                    headers = api_key_manager._get_auth_headers(api_name, api_key)
+                    response = requests.get(
+                        config['test_endpoint'],
+                        headers=headers,
+                        timeout=5
+                    )
+                    if response.status_code >= 400:
+                        raise Exception(f"HTTP {response.status_code}")
+            
+            # 성공
+            response_time = time.time() - start_time
+            
+            # 응답 시간에 따른 상태 결정
+            if response_time > 5:
+                status = APIStatus.SLOW
+            else:
+                status = APIStatus.ONLINE
+                
+            self.update_status(api_name, status, response_time)
+            
+            return APIResponse(
+                success=True,
+                data=None,
+                response_time=response_time,
+                api_name=api_name
+            )
+            
+        except Exception as e:
+            response_time = time.time() - start_time
+            error_msg = str(e)
+            
+            # 에러 타입에 따른 상태 결정
+            if "rate limit" in error_msg.lower():
+                status = APIStatus.RATE_LIMITED
+            elif "unauthorized" in error_msg.lower() or "403" in error_msg:
+                status = APIStatus.UNAUTHORIZED
+            else:
+                status = APIStatus.ERROR
+                
+            self.update_status(api_name, status, response_time, error_msg)
+            
+            return APIResponse(
+                success=False,
+                data=None,
+                error=error_msg,
+                response_time=response_time,
+                api_name=api_name
+            )
+    
+    def auto_health_check(self, context: str):
+        """컨텍스트에 필요한 모든 API 상태 자동 확인"""
+        apis = self.get_context_apis(context)
+        
+        with st.spinner(f"API 상태 확인 중... ({len(apis)}개)"):
+            # ThreadPoolExecutor로 병렬 체크
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {
+                    executor.submit(self.check_api_health, api): api 
+                    for api in apis
+                }
+                
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        logger.error(f"Health check failed: {e}")
+
+# API 모니터 초기화
+api_monitor = APIMonitor()
 
 # ==================== 애플리케이션 초기화 ====================
 def initialize_app():
@@ -450,6 +724,9 @@ def initialize_app():
     if not api_key_manager._check_required_keys():
         st.warning("⚠️ 필수 API 키를 설정해주세요. 사이드바에서 API 키를 입력하거나 Google Colab 코드 셀에서 설정하세요.")
         st.stop()
+    
+    # API 모니터 사이드바에 표시
+    api_monitor.display_detailed_status()
 
 class StateManager:
     """세션 상태를 중앙에서 관리하는 클래스"""
