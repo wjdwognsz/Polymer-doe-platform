@@ -2209,6 +2209,13 @@ class AIOrchestrator:
                 ai_type = 'gemini'
             else:
                 ai_type = 'gemini'  # 기본값
+
+        if ai_type not in self.available_ais:
+            # 사용 가능한 첫 번째 AI로 폴백
+            if self.available_ais:
+                ai_type = self.available_ais[0]
+            else:
+                return self._get_fallback_response("사용 가능한 AI가 없습니다.")
         
         # Enhanced AI 호출
         try:
