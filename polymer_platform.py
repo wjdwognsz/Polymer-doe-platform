@@ -19,6 +19,17 @@ import hashlib
 import base64
 import io
 import re
+import os
+
+class SimpleAPIKeyManager:
+    def get_key(self, key_id):
+        return os.getenv(f'{key_id.upper()}_API_KEY', '')
+    
+    def initialize_keys(self):
+        pass
+
+api_key_manager = SimpleAPIKeyManager()
+
 # ==================== Enhanced 컴포넌트 초기화 ====================
 ENHANCED_FEATURES_AVAILABLE = False
 
@@ -185,13 +196,8 @@ st.markdown("""
 
 # ==================== 상태 관리 클래스 ====================
 # ==================== API 키 관리 시스템 ====================
-class SimpleAPIKeyManager:
+class APIKeyManager:
     """API 키를 안전하게 관리하는 클래스"""
-    def get_key(self, key_id):
-        return os.getenv(f'{key_id.upper()}_API_KEY', '')
-
-    def initialize_keys(self):
-        pass
     
     def __init__(self):
         self.api_configs = {
