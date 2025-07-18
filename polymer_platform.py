@@ -19,6 +19,39 @@ import hashlib
 import base64
 import io
 import re
+# ==================== Enhanced 컴포넌트 초기화 ====================
+ENHANCED_FEATURES_AVAILABLE = False
+
+try:
+    # Enhanced 컴포넌트들이 정의되어 있는지 확인
+    # API 키 매니저
+    api_key_manager = APIKeyManager()
+    
+    # API 모니터
+    api_monitor = APIMonitor()
+    
+    # Enhanced AI 오케스트레이터
+    enhanced_ai_orchestrator = EnhancedAIOrchestrator()
+    
+    # 데이터베이스 매니저
+    database_manager = DatabaseManager()
+    
+    # 번역 서비스
+    translation_service = TranslationService()
+    
+    ENHANCED_FEATURES_AVAILABLE = True
+    print("✅ Enhanced 기능이 활성화되었습니다.")
+    
+except Exception as e:
+    print(f"⚠️ Enhanced 기능 초기화 실패: {e}")
+    print("기본 모드로 실행됩니다.")
+    
+    # 더미 객체 생성 (에러 방지)
+    api_key_manager = None
+    api_monitor = None
+    enhanced_ai_orchestrator = None
+    database_manager = None
+    translation_service = None
 
 # 새로운 AI API 라이브러리
 import google.generativeai as genai  # Gemini
@@ -2672,37 +2705,35 @@ class PolymerDOEApp:
     def __init__(self):
         StateManager.initialize()
         self.db_manager = DatabaseManager()
-        self.ai_orchestrator = None
-        self.api_manager = APIManager()
-        self.stat_analyzer = StatisticalAnalyzer()
-        self.report_generator = ReportGenerator()
-
-        # 새로운 Enhanced 컴포넌트들 추가
-        try:
-            # 새로운 AI Orchestrator (기존과 별도)
-            self.enhanced_ai_orchestrator = EnhancedAIOrchestrator()
-            
-            # 새로운 Database Manager (API 기반)
-            self.api_db_manager = database_manager  # 전역 인스턴스
-            
-            # 번역 서비스
-            self.translation_service = translation_service
-            
-            # AI 사용 가능 플래그
-            self.enhanced_ai_available = len(self.enhanced_ai_orchestrator.available_engines) > 0
-        except Exception as e:
-            logger.warning(f"Enhanced components initialization failed: {e}")
-            self.enhanced_ai_available = False
         
+        # Enhanced 기능 통합
+        if ENHANCED_FEATURES_AVAILABLE:
+            try:
+                # API 키 초기화
+                api_key_manager.initialize_keys()
+                
+                # Enhanced AI 시스템 사용
+                self.ai_orchestrator = AIOrchestrator()  # 이미 Enhanced 버전으로 수정됨
+                
+                # 새로운 컴포넌트들
+                self.api_db_manager = database_manager
+                self.translation_service = translation_service
+                self.enhanced_features = True
+                
+                print("✅ Enhanced AI 시스템이 연결되었습니다.")
+            except Exception as e:
+                print(f"⚠️ Enhanced 기능 연결 실패: {e}")
+                self.enhanced_features = False
+                self.ai_orchestrator = None
+        else:
+            # 기본 모드
+            self.ai_orchestrator = None
+            self.enhanced_features = False
+            
         # 기존 컴포넌트들
-        self.ai_orchestrator = None  # 기존 AI (OpenAI/Google 기반)
         self.api_manager = APIManager()
         self.stat_analyzer = StatisticalAnalyzer()
         self.report_generator = ReportGenerator()
-        
-        # API 키 설정
-        if st.session_state.api_keys.get('openai') or st.session_state.api_keys.get('google'):
-            self.ai_orchestrator = AIOrchestrator(st.session_state.api_keys)
     
     def run(self):
         """애플리케이션 실행"""
@@ -2734,7 +2765,7 @@ class PolymerDOEApp:
             st.divider()
 
             # API 상태 모니터 추가 (새로운 기능)
-            if hasattr(self, 'enhanced_ai_available') and self.enhanced_ai_available:
+            if hasattr(self, 'enhanced_ai_available') and self.enhanced_features and api_monitor:
                 api_monitor.display_detailed_status()
                 st.divider()
             
@@ -3083,13 +3114,18 @@ class PolymerDOEApp:
         """실험 설계 페이지 - DB 연동 강화"""
         st.header("🧪 AI 기반 실험 설계")
 
-        # Enhanced AI 사용 가능 여부 확인
-        if hasattr(self, 'enhanced_ai_available') and self.enhanced_ai_available:
-            # API 상태 표시
-            api_monitor.display_status_bar('experiment_design')
+        if not st.session_state.project_info:
+            st.warning("먼저 프로젝트 설정을 완료해주세요.")
+            if st.button("프로젝트 설정으로 이동"):
+                st.session_state.current_page = 'project_setup'
+                st.rerun()
+            return
         
-        # API 상태 표시
-        api_monitor.display_status_bar('experiment_design')
+        # Enhanced 기능이 있으면 탭으로 표시
+        if hasattr(self, 'enhanced_features') and self.enhanced_features:
+            # API 상태 표시
+            if api_monitor:
+                api_monitor.display_status_bar('experiment_design')
     
         # 탭 구성
         tab1, tab2, tab3, tab4 = st.tabs([
@@ -5136,13 +5172,14 @@ Polymer composites have gained significant attention...
 
 def main():
     """메인 함수"""
-    # API 키 초기화 (새로운 시스템)
-    api_key_manager.initialize_keys()
-    
-    # 필수 키 체크
-    if not api_key_manager._check_required_keys():
-        st.warning("⚠️ 필수 API 키를 설정해주세요.")
-        # 기본 기능은 계속 사용 가능하도록 함
+    # Enhanced 기능 상태 확인
+    if ENHANCED_FEATURES_AVAILABLE:
+        print("🚀 Enhanced 기능이 활성화된 상태로 앱을 시작합니다.")
+        print(f"  - AI 엔진: {list(enhanced_ai_orchestrator.available_engines.keys()) if enhanced_ai_orchestrator else []}")
+        print(f"  - DB 연결: {list(database_manager.available_databases.keys()) if database_manager else []}")
+    else:
+        print("⚠️ 기본 모드로 앱을 시작합니다.")
+        print("  - Enhanced AI와 DB 기능이 비활성화되었습니다.")
     
     # 앱 실행
     app = PolymerDOEApp()
