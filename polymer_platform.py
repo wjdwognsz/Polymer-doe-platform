@@ -1951,8 +1951,6 @@ class DatabaseManager:
             'data': results
         }
 
-# DatabaseManager 초기화
-database_manager = DatabaseManager()
 
 # ==================== 번역 서비스 ====================
 class TranslationService:
