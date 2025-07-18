@@ -3210,92 +3210,309 @@ class PolymerDOEApp:
                 st.error(f"파일 처리 중 오류가 발생했습니다: {e}")
     
     def _show_literature_search(self):
-        """문헌 검색 페이지"""
-        st.title("📚 문헌 검색")
-        
-        st.info("최신 연구 동향을 파악하고 관련 문헌을 검색합니다.")
-        
-        # 검색 옵션
+        """문헌 검색 페이지 - 통합 검색 시스템"""
+        st.header("📚 통합 문헌 검색 시스템")
+    
+        # API 상태 표시
+        api_monitor.display_status_bar('literature_search')
+    
+        # 검색 인터페이스
         col1, col2 = st.columns([3, 1])
-        
+    
         with col1:
             search_query = st.text_input(
-                "검색어 입력",
-                placeholder="예: polymer composite mechanical properties optimization"
+                "🔍 키워드 혹은 문장으로 검색하세요",
+                placeholder="예: PET 필름의 투명도를 유지하면서 인장강도를 높이는 방법",
+                help="질문이나 키워드를 자유롭게 입력하세요. AI가 최적의 검색어로 변환합니다."
             )
-        
+    
         with col2:
-            search_source = st.selectbox(
-                "데이터베이스",
-                ["openalex", "crossref"]
-            )
-        
-        # 고급 검색 옵션
-        with st.expander("🔍 고급 검색 옵션"):
+            search_button = st.button("🚀 통합 검색", use_container_width=True)
+    
+        # 고급 옵션
+        with st.expander("⚙️ 고급 검색 옵션"):
             col1, col2, col3 = st.columns(3)
-            
+        
             with col1:
-                year_from = st.number_input("출판년도 (시작)", 2000, 2024, 2020)
-            
+                search_categories = st.multiselect(
+                    "검색 대상",
+                    options=['literature', 'chemical', 'code'],
+                    default=['literature'],
+                    format_func=lambda x: {
+                        'literature': '📚 학술 문헌',
+                        'chemical': '🧪 화학 정보',
+                        'code': '💻 코드/스크립트'
+                    }[x]
+                )
+        
             with col2:
-                year_to = st.number_input("출판년도 (끝)", 2000, 2024, 2024)
+                max_results = st.slider("결과 개수", 5, 50, 10)
             
             with col3:
-                max_results = st.number_input("최대 결과 수", 10, 100, 20)
+                translate_results = st.checkbox("🌏 한글 번역", value=True)
         
         # 검색 실행
-        if st.button("🔍 검색 실행", type="primary"):
-            if search_query:
-                with st.spinner("문헌을 검색하고 있습니다..."):
-                    papers = self.api_manager.search_literature(
-                        search_query, 
-                        source=search_source,
-                        limit=max_results
+        if search_button and search_query:
+            with st.spinner("🤖 AI가 검색을 준비하고 있습니다..."):
+            
+                # 1. AI 쿼리 분석
+                st.info("1단계: AI 쿼리 분석 중...")
+            
+                analysis_prompt = f"""
+                다음 검색 요청을 분석하여 최적의 검색어를 생성해주세요:
+            
+                사용자 요청: {search_query}
+            
+                다음 형식으로 응답해주세요:
+                1. 핵심 키워드 (영어): 
+                2. 학술 검색용 쿼리:
+                3. 화학물질 검색용 쿼리:
+                4. 코드 검색용 쿼리:
+                5. 검색 의도 요약:
+                """
+            
+                # AI 분석 실행
+                if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                    ai_response = self.ai_orchestrator.generate_consensus(
+                        analysis_prompt,
+                        required_engines=['gemini', 'deepseek']
                     )
+                
+                    if ai_response.get('success'):
+                        st.success("✅ AI 분석 완료!")
                     
-                    if papers:
-                        st.session_state.literature_results = papers
-                        st.success(f"{len(papers)}개의 문헌을 찾았습니다!")
+                        # 분석 결과 표시
+                        with st.expander("🔍 AI 분석 결과", expanded=True):
+                            st.text(ai_response.get('final_answer', ''))
                     else:
-                        st.warning("검색 결과가 없습니다.")
+                        st.warning("AI 분석 실패. 원본 쿼리로 검색합니다.")
+            
+                # 2. 병렬 데이터베이스 검색
+                st.info("2단계: 여러 데이터베이스 동시 검색 중...")
+            
+                # 진행률 표시
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+            
+                # 통합 검색 실행
+                search_results = database_manager.integrated_search(
+                    search_query,
+                    categories=search_categories,
+                    limit=max_results
+                )
+            
+                # 3. 결과 표시
+                if search_results.get('success'):
+                    st.success(f"✅ 검색 완료! {search_results['successful_searches']}개 데이터베이스에서 결과를 찾았습니다.")
+                
+                    # 탭으로 결과 구분
+                    tab_names = []
+                    if 'literature' in search_categories:
+                        tab_names.append("📚 학술 문헌")
+                    if 'chemical' in search_categories:
+                        tab_names.append("🧪 화학 정보")
+                    if 'code' in search_categories:
+                        tab_names.append("💻 코드/스크립트")
+                    tab_names.append("📊 통합 요약")
+                
+                    tabs = st.tabs(tab_names)
+                    tab_index = 0
+                
+                    # 문헌 탭
+                    if 'literature' in search_categories:
+                        with tabs[tab_index]:
+                            self._display_literature_results(
+                                search_results['results_by_category'].get('literature', {}),
+                                translate_results
+                            )
+                        tab_index += 1
+                
+                    # 화학 정보 탭
+                    if 'chemical' in search_categories:
+                        with tabs[tab_index]:
+                            self._display_chemical_results(
+                                search_results['results_by_category'].get('chemical', {}),
+                                translate_results
+                            )
+                        tab_index += 1
+                
+                    # 코드 탭
+                    if 'code' in search_categories:
+                        with tabs[tab_index]:
+                            self._display_code_results(
+                                search_results['results_by_category'].get('code', {}),
+                                translate_results
+                            )
+                        tab_index += 1
+                
+                    # 통합 요약 탭
+                    with tabs[-1]:
+                        self._display_integrated_summary(search_results, search_query)
+                
+                progress_bar.empty()
+                status_text.empty()
+    
+        # 검색 이력 표시
+        with st.sidebar:
+            st.subheader("🕒 최근 검색")
+            if 'search_history' not in st.session_state:
+                st.session_state.search_history = []
         
-        # 검색 결과 표시
-        if st.session_state.get('literature_results'):
-            st.subheader("📖 검색 결과")
+            for idx, history in enumerate(st.session_state.search_history[-5:]):
+                if st.button(f"📌 {history['query'][:30]}...", key=f"history_{idx}"):
+                    st.rerun()
+
+    def _display_literature_results(self, literature_results: Dict, translate: bool):
+        """학술 문헌 결과 표시"""
+    
+        # OpenAlex 결과
+        if 'openalex' in literature_results:
+            openalex_result = literature_results['openalex']
+            if openalex_result.success and openalex_result.data:
+                st.subheader("📖 OpenAlex 검색 결과")
             
-            # 정렬 옵션
-            sort_by = st.selectbox(
-                "정렬 기준",
-                ["관련도", "최신순", "인용수"]
-            )
+                results = openalex_result.data.get('results', [])
+                st.info(f"총 {openalex_result.data.get('total_count', 0)}개 문헌 발견")
             
-            papers = st.session_state.literature_results
-            
-            # 정렬
-            if sort_by == "최신순":
-                papers = sorted(papers, key=lambda x: x.get('year', 0), reverse=True)
-            elif sort_by == "인용수":
-                papers = sorted(papers, key=lambda x: x.get('citations', 0), reverse=True)
-            
-            # 논문 표시
-            for i, paper in enumerate(papers):
-                with st.expander(f"{i+1}. {paper['title'][:100]}..."):
-                    col1, col2 = st.columns([3, 1])
+                for idx, paper in enumerate(results[:10]):
+                    with st.expander(f"📄 {paper['title'][:100]}..."):
+                        col1, col2 = st.columns([3, 1])
                     
-                    with col1:
-                        st.markdown(f"**저자**: {paper['authors']}")
-                        st.markdown(f"**연도**: {paper['year']}")
-                        st.markdown(f"**DOI**: {paper['doi']}")
+                        with col1:
+                            st.markdown(f"**제목**: {paper['title']}")
+                            st.markdown(f"**저자**: {', '.join(paper['authors'][:3])}{'...' if len(paper['authors']) > 3 else ''}")
+                            st.markdown(f"**연도**: {paper['year']}")
+                            st.markdown(f"**인용수**: {paper['cited_by_count']}")
                         
-                        if paper.get('abstract'):
-                            st.markdown("**초록**:")
-                            st.write(paper['abstract'][:500] + "...")
+                            if paper.get('abstract') and translate:
+                                # 번역 기능 (추후 구현)
+                                st.markdown(f"**초록**: {paper['abstract'][:500]}...")
                     
-                    with col2:
-                        st.metric("인용수", paper.get('citations', 0))
+                        with col2:
+                            if paper.get('doi'):
+                                st.link_button("📄 DOI", f"https://doi.org/{paper['doi']}")
+                            if paper.get('pdf_url'):
+                                st.link_button("📥 PDF", paper['pdf_url'])
+    
+        # CrossRef 결과
+        if 'crossref' in literature_results:
+            crossref_result = literature_results['crossref']
+            if crossref_result.success and crossref_result.data:
+                st.subheader("📖 CrossRef 검색 결과")
+            
+                results = crossref_result.data.get('results', [])
+            
+                for paper in results[:5]:
+                    with st.expander(f"📄 {paper['title'][:100]}..."):
+                        st.markdown(f"**제목**: {paper['title']}")
+                        st.markdown(f"**저자**: {', '.join(paper['authors'][:3])}")
+                        st.markdown(f"**저널**: {paper.get('journal', 'N/A')}")
+                        st.markdown(f"**출판사**: {paper.get('publisher', 'N/A')}")
+                    
+                        if paper.get('doi'):
+                            st.link_button("📄 DOI", f"https://doi.org/{paper['doi']}")
+
+    def _display_chemical_results(self, chemical_results: Dict, translate: bool):
+        """화학 정보 결과 표시"""
+    
+        if 'pubchem' in chemical_results:
+            pubchem_result = chemical_results['pubchem']
+            if pubchem_result.success and pubchem_result.data:
+                st.subheader("🧪 PubChem 검색 결과")
+            
+                results = pubchem_result.data.get('results', [])
+            
+                for compound in results:
+                    with st.expander(f"🧬 CID: {compound['cid']}"):
+                        col1, col2 = st.columns(2)
+                    
+                        with col1:
+                            st.markdown(f"**분자식**: {compound['molecular_formula']}")
+                            st.markdown(f"**분자량**: {compound['molecular_weight']}")
+                    
+                        with col2:
+                            st.markdown(f"**SMILES**: `{compound['smiles']}`")
+                            st.link_button("🔗 PubChem", compound['url'])
+
+    def _display_code_results(self, code_results: Dict, translate: bool):
+        """코드 검색 결과 표시"""
+    
+        if 'github' in code_results:
+            github_result = code_results['github']
+            if github_result.success and github_result.data:
+                st.subheader("💻 GitHub 검색 결과")
+            
+                results = github_result.data.get('results', [])
+                st.info(f"총 {github_result.data.get('total_count', 0)}개 저장소 발견")
+            
+                for repo in results:
+                    with st.expander(f"📦 {repo['name']}"):
+                        col1, col2 = st.columns([3, 1])
+                    
+                        with col1:
+                            st.markdown(f"**설명**: {repo['description'] or '설명 없음'}")
+                            st.markdown(f"**언어**: {repo['language'] or 'N/A'}")
+                            st.markdown(f"**최종 업데이트**: {repo['updated']}")
                         
-                        if paper['doi']:
-                            st.markdown(f"[📄 원문 보기](https://doi.org/{paper['doi']})")
+                            if repo.get('topics'):
+                                st.markdown(f"**토픽**: {', '.join(repo['topics'])}")
+                    
+                        with col2:
+                            st.metric("⭐ Stars", repo['stars'])
+                            st.link_button("🔗 GitHub", repo['url'])
+
+    def _display_integrated_summary(self, search_results: Dict, query: str):
+        """통합 검색 요약"""
+        st.subheader("📊 통합 검색 요약")
+    
+        # AI 요약 생성
+        if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+            with st.spinner("AI가 검색 결과를 분석하고 있습니다..."):
+            
+                summary_prompt = f"""
+                다음 검색 결과를 종합하여 사용자 질문에 대한 통합 답변을 작성해주세요:
+            
+                사용자 질문: {query}
+            
+                검색 결과 요약:
+                - 학술 문헌: {search_results['results_by_category'].get('literature', {}).keys()} 에서 결과 발견
+                - 데이터베이스 검색 성공: {search_results['successful_searches']}개
+            
+                핵심 인사이트를 도출하고, 실용적인 제안을 해주세요.
+                """
+            
+                ai_summary = self.ai_orchestrator.generate_consensus(
+                    summary_prompt,
+                    required_engines=['gemini', 'grok']
+                )
+            
+                if ai_summary.get('success'):
+                    st.markdown("### 🤖 AI 통합 분석")
+                    st.markdown(ai_summary.get('final_answer', ''))
+                
+                    # 기여 AI 표시
+                    st.caption(f"분석 참여 AI: {', '.join(ai_summary.get('contributing_engines', []))}")
+    
+        # 검색 통계
+        st.markdown("### 📈 검색 통계")
+        col1, col2, col3 = st.columns(3)
+    
+        with col1:
+            st.metric("검색된 DB", search_results['total_databases_searched'])
+        with col2:
+            st.metric("성공률", f"{(search_results['successful_searches'] / search_results['total_databases_searched'] * 100):.0f}%")
+        with col3:
+            st.metric("검색 시간", f"{sum(r.response_time for r in search_results.get('results_by_category', {}).get('literature', {}).values() if hasattr(r, 'response_time')):.2f}초")
+    
+        # 검색 이력 저장
+        if 'search_history' not in st.session_state:
+            st.session_state.search_history = []
+    
+        st.session_state.search_history.append({
+            'query': query,
+            'timestamp': datetime.now(),
+            'results': search_results['successful_searches']
+        })
         
         # 연구 동향 분석
         st.subheader("📈 연구 동향 분석")
