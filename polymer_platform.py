@@ -1977,6 +1977,12 @@ def initialize_app():
     
     # 데이터베이스 매니저 초기화 (자동으로 됨)
     logger.info(f"Available databases: {list(database_manager.available_databases.keys())}")
+    
+    # 번역 서비스 상태 확인
+    if translation_service.available:
+        logger.info("Translation service is available")
+    else:
+        logger.warning("Translation service is not available")
 
 class StateManager:
     """세션 상태를 중앙에서 관리하는 클래스"""
@@ -3876,24 +3882,54 @@ class PolymerDOEApp:
                 st.info(f"총 {openalex_result.data.get('total_count', 0)}개 문헌 발견")
             
                 for idx, paper in enumerate(results[:10]):
-                    with st.expander(f"📄 {paper['title'][:100]}..."):
+                    # 번역 처리
+                    if translate:
+                        paper = format_search_result_with_translation(paper, translate=True)
+                
+                    # 제목 표시 (번역된 경우 원문도 함께)
+                    title_display = paper['title']
+                    if isinstance(paper.get('title'), dict):
+                        title_display = paper['title']['display']
+                    
+                    with st.expander(f"📄 {title_display[:100]}..."):
                         col1, col2 = st.columns([3, 1])
                     
                         with col1:
-                            st.markdown(f"**제목**: {paper['title']}")
+                            # 제목
+                            if isinstance(paper.get('title'), dict):
+                                st.markdown(f"**제목**: {paper['title']['translated']}")
+                                st.caption(f"원제: {paper['title']['original']}")
+                            else:
+                                st.markdown(f"**제목**: {paper['title']}")
+                        
+                            # 저자
                             st.markdown(f"**저자**: {', '.join(paper['authors'][:3])}{'...' if len(paper['authors']) > 3 else ''}")
                             st.markdown(f"**연도**: {paper['year']}")
                             st.markdown(f"**인용수**: {paper['cited_by_count']}")
                         
-                            if paper.get('abstract') and translate:
-                                # 번역 기능 (추후 구현)
-                                st.markdown(f"**초록**: {paper['abstract'][:500]}...")
+                            # 초록
+                            if paper.get('abstract'):
+                                if isinstance(paper['abstract'], dict):
+                                    st.markdown("**초록**:")
+                                    st.write(paper['abstract']['translated'][:500] + "...")
+                                
+                                    # 원문 보기 옵션
+                                    with st.expander("원문 보기"):
+                                        st.write(paper['abstract']['original'][:500] + "...")
+                                else:
+                                    st.markdown(f"**초록**: {paper['abstract'][:500]}...")
                     
                         with col2:
                             if paper.get('doi'):
                                 st.link_button("📄 DOI", f"https://doi.org/{paper['doi']}")
                             if paper.get('pdf_url'):
                                 st.link_button("📥 PDF", paper['pdf_url'])
+                        
+                            # 번역 품질 피드백
+                            if translate and isinstance(paper.get('title'), dict):
+                                if st.button("🔄 재번역", key=f"retrans_{idx}"):
+                                    # 재번역 로직
+                                    st.rerun()
     
         # CrossRef 결과
         if 'crossref' in literature_results:
