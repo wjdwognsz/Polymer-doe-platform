@@ -712,6 +712,541 @@ class APIMonitor:
 # API 모니터 초기화
 api_monitor = APIMonitor()
 
+# ==================== AI 엔진 클래스들 ====================
+class BaseAIEngine:
+    """모든 AI 엔진의 기본 클래스"""
+    
+    def __init__(self, name: str, api_key_id: str):
+        self.name = name
+        self.api_key_id = api_key_id
+        self.api_key = None
+        self.is_available = False
+        
+    def initialize(self):
+        """API 키 확인 및 초기화"""
+        self.api_key = api_key_manager.get_key(self.api_key_id)
+        self.is_available = bool(self.api_key)
+        return self.is_available
+    
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        """비동기 생성 (하위 클래스에서 구현)"""
+        raise NotImplementedError
+    
+    def generate(self, prompt: str, **kwargs) -> APIResponse:
+        """동기 생성 래퍼"""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(self.generate_async(prompt, **kwargs))
+        finally:
+            loop.close()
+
+class GeminiEngine(BaseAIEngine):
+    """Gemini AI 엔진"""
+    
+    def __init__(self):
+        super().__init__("Gemini 2.0 Flash", "gemini")
+        self.model = None
+        
+    def initialize(self):
+        if super().initialize():
+            try:
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                return True
+            except Exception as e:
+                logger.error(f"Gemini initialization failed: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # Gemini 특화 설정
+            generation_config = {
+                "temperature": kwargs.get("temperature", 0.7),
+                "top_p": kwargs.get("top_p", 0.95),
+                "max_output_tokens": kwargs.get("max_tokens", 2048),
+            }
+            
+            response = await asyncio.to_thread(
+                self.model.generate_content,
+                prompt,
+                generation_config=generation_config
+            )
+            
+            response_time = time.time() - start_time
+            api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+            
+            return APIResponse(
+                success=True,
+                data=response.text,
+                response_time=response_time,
+                api_name=self.name
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class GrokEngine(BaseAIEngine):
+    """Grok AI 엔진"""
+    
+    def __init__(self):
+        super().__init__("Grok 3 mini", "grok")
+        self.endpoint = "https://api.x.ai/v1/chat/completions"
+        
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "grok-beta",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 2048)
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.endpoint, headers=headers, json=data) as response:
+                    result = await response.json()
+                    
+                    if response.status == 200:
+                        response_time = time.time() - start_time
+                        api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+                        
+                        return APIResponse(
+                            success=True,
+                            data=result['choices'][0]['message']['content'],
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {result}")
+                        
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class SambaNovaEngine(BaseAIEngine):
+    """SambaNova AI 엔진"""
+    
+    def __init__(self):
+        super().__init__("SambaNova", "sambanova")
+        self.endpoint = "https://api.sambanova.ai/v1/chat/completions"
+        
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "Meta-Llama-3.1-8B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 2048)
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.endpoint, headers=headers, json=data) as response:
+                    result = await response.json()
+                    
+                    if response.status == 200:
+                        response_time = time.time() - start_time
+                        api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+                        
+                        return APIResponse(
+                            success=True,
+                            data=result['choices'][0]['message']['content'],
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {result}")
+                        
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class DeepSeekEngine(BaseAIEngine):
+    """DeepSeek AI 엔진"""
+    
+    def __init__(self):
+        super().__init__("DeepSeek", "deepseek")
+        self.endpoint = "https://api.deepseek.com/v1/chat/completions"
+        
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # DeepSeek은 수학/과학에 특화
+            system_prompt = kwargs.get("system_prompt", "You are a helpful assistant specialized in scientific calculations and chemical analysis.")
+            
+            data = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": kwargs.get("temperature", 0.3),  # 더 정확한 계산을 위해 낮은 온도
+                "max_tokens": kwargs.get("max_tokens", 2048)
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.endpoint, headers=headers, json=data) as response:
+                    result = await response.json()
+                    
+                    if response.status == 200:
+                        response_time = time.time() - start_time
+                        api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+                        
+                        return APIResponse(
+                            success=True,
+                            data=result['choices'][0]['message']['content'],
+                            response_time=response_time,
+                            api_name=self.name
+                        )
+                    else:
+                        raise Exception(f"API error: {result}")
+                        
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class GroqEngine(BaseAIEngine):
+    """Groq AI 엔진 (초고속)"""
+    
+    def __init__(self):
+        super().__init__("Groq", "groq")
+        self.client = None
+        
+    def initialize(self):
+        if super().initialize():
+            try:
+                # from groq import Groq  # 나중에 주석 해제
+                # self.client = Groq(api_key=self.api_key)
+                return True
+            except Exception as e:
+                logger.error(f"Groq initialization failed: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # Groq는 현재 주석 처리 (패키지 설치 후 활성화)
+            """
+            response = await asyncio.to_thread(
+                self.client.chat.completions.create,
+                model="llama3-70b-8192",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", 2048)
+            )
+            
+            response_time = time.time() - start_time
+            api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+            
+            return APIResponse(
+                success=True,
+                data=response.choices[0].message.content,
+                response_time=response_time,
+                api_name=self.name
+            )
+            """
+            
+            # 임시 응답
+            return APIResponse(
+                success=False,
+                data=None,
+                error="Groq not yet implemented",
+                api_name=self.name
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+class HuggingFaceEngine(BaseAIEngine):
+    """HuggingFace AI 엔진"""
+    
+    def __init__(self):
+        super().__init__("HuggingFace", "huggingface")
+        self.client = None
+        
+    def initialize(self):
+        if super().initialize():
+            try:
+                self.client = InferenceClient(token=self.api_key)
+                return True
+            except Exception as e:
+                logger.error(f"HuggingFace initialization failed: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+        try:
+            start_time = time.time()
+            
+            # 모델 선택 (무료 티어용)
+            model = kwargs.get("model", "meta-llama/Llama-2-7b-chat-hf")
+            
+            response = await asyncio.to_thread(
+                self.client.text_generation,
+                prompt,
+                model=model,
+                max_new_tokens=kwargs.get("max_tokens", 512),  # 무료 티어 제한
+                temperature=kwargs.get("temperature", 0.7)
+            )
+            
+            response_time = time.time() - start_time
+            api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+            
+            return APIResponse(
+                success=True,
+                data=response,
+                response_time=response_time,
+                api_name=self.name
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return APIResponse(
+                success=False,
+                data=None,
+                error=str(e),
+                api_name=self.name
+            )
+
+# ==================== 확장된 AI 오케스트레이터 ====================
+class EnhancedAIOrchestrator:
+    """6개 AI를 통합 관리하는 오케스트레이터"""
+    
+    def __init__(self):
+        # AI 엔진 초기화
+        self.engines = {
+            'gemini': GeminiEngine(),
+            'grok': GrokEngine(),
+            'sambanova': SambaNovaEngine(),
+            'deepseek': DeepSeekEngine(),
+            'groq': GroqEngine(),
+            'huggingface': HuggingFaceEngine()
+        }
+        
+        # 사용 가능한 엔진 확인
+        self.available_engines = {}
+        self._initialize_engines()
+        
+        # AI 역할 정의
+        self.ai_roles = {
+            'gemini': {'strength': '과학적 분석, 한국어 처리', 'priority': 1},
+            'grok': {'strength': '최신 정보, 창의적 접근', 'priority': 2},
+            'sambanova': {'strength': '대규모 데이터 처리', 'priority': 3},
+            'deepseek': {'strength': '수식/계산, 화학 분석', 'priority': 1},
+            'groq': {'strength': '초고속 응답', 'priority': 2},
+            'huggingface': {'strength': '특수 모델', 'priority': 4}
+        }
+        
+    def _initialize_engines(self):
+        """사용 가능한 엔진 초기화"""
+        for name, engine in self.engines.items():
+            if engine.initialize():
+                self.available_engines[name] = engine
+                logger.info(f"AI Engine initialized: {name}")
+            else:
+                logger.warning(f"AI Engine not available: {name}")
+    
+    async def generate_single(self, engine_name: str, prompt: str, **kwargs) -> APIResponse:
+        """단일 AI 엔진으로 생성"""
+        engine = self.available_engines.get(engine_name)
+        if not engine:
+            return APIResponse(
+                success=False,
+                data=None,
+                error=f"Engine {engine_name} not available",
+                api_name=engine_name
+            )
+        
+        return await engine.generate_async(prompt, **kwargs)
+    
+    async def generate_parallel(self, prompt: str, engines: List[str] = None, **kwargs) -> Dict[str, APIResponse]:
+        """여러 AI 엔진으로 병렬 생성"""
+        if not engines:
+            engines = list(self.available_engines.keys())
+        
+        # 사용 가능한 엔진만 필터링
+        engines = [e for e in engines if e in self.available_engines]
+        
+        if not engines:
+            return {}
+        
+        # 병렬 실행
+        tasks = {
+            engine: self.generate_single(engine, prompt, **kwargs)
+            for engine in engines
+        }
+        
+        results = {}
+        for engine, task in tasks.items():
+            try:
+                results[engine] = await task
+            except Exception as e:
+                results[engine] = APIResponse(
+                    success=False,
+                    data=None,
+                    error=str(e),
+                    api_name=engine
+                )
+        
+        return results
+    
+    def generate_consensus(self, prompt: str, required_engines: List[str] = None, **kwargs) -> Dict:
+        """합의 기반 생성 (동기 래퍼)"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                self._generate_consensus_async(prompt, required_engines, **kwargs)
+            )
+        finally:
+            loop.close()
+    
+    async def _generate_consensus_async(self, prompt: str, required_engines: List[str] = None, **kwargs) -> Dict:
+        """여러 AI의 합의를 통한 최적 답변 생성"""
+        # 기본적으로 상위 3개 엔진 사용
+        if not required_engines:
+            required_engines = ['gemini', 'deepseek', 'grok']
+        
+        # 병렬로 응답 생성
+        results = await self.generate_parallel(prompt, required_engines, **kwargs)
+        
+        # 성공한 응답만 추출
+        successful_responses = {
+            engine: result.data 
+            for engine, result in results.items() 
+            if result.success and result.data
+        }
+        
+        if not successful_responses:
+            return {
+                'success': False,
+                'error': 'No successful responses from any AI engine',
+                'responses': results
+            }
+        
+        # 단일 응답인 경우
+        if len(successful_responses) == 1:
+            engine, response = next(iter(successful_responses.items()))
+            return {
+                'success': True,
+                'final_answer': response,
+                'consensus_type': 'single',
+                'contributing_engines': [engine],
+                'responses': results
+            }
+        
+        # 합의 도출
+        consensus_prompt = f"""
+        다음은 동일한 질문에 대한 여러 AI의 답변입니다:
+        
+        원래 질문: {prompt}
+        
+        답변들:
+        {json.dumps(successful_responses, ensure_ascii=False, indent=2)}
+        
+        위 답변들을 종합하여 가장 정확하고 유용한 통합 답변을 만들어주세요.
+        각 AI의 장점을 살려 최적의 답변을 도출하되, 중복은 제거하고 핵심만 정리해주세요.
+        """
+        
+        # Gemini로 최종 통합 (가장 신뢰할 수 있는 엔진)
+        if 'gemini' in self.available_engines:
+            final_result = await self.generate_single('gemini', consensus_prompt, temperature=0.3)
+            if final_result.success:
+                return {
+                    'success': True,
+                    'final_answer': final_result.data,
+                    'consensus_type': 'integrated',
+                    'contributing_engines': list(successful_responses.keys()),
+                    'responses': results
+                }
+        
+        # Gemini 실패 시 가장 긴 응답 반환
+        longest_response = max(successful_responses.items(), key=lambda x: len(x[1]))
+        return {
+            'success': True,
+            'final_answer': longest_response[1],
+            'consensus_type': 'longest',
+            'contributing_engines': [longest_response[0]],
+            'responses': results
+        }
+    
+    def get_specialized_engine(self, task_type: str) -> str:
+        """작업 유형에 따른 최적 엔진 선택"""
+        task_engine_map = {
+            'calculation': 'deepseek',
+            'korean': 'gemini',
+            'creative': 'grok',
+            'fast': 'groq',
+            'large_data': 'sambanova',
+            'specialized': 'huggingface'
+        }
+        
+        engine = task_engine_map.get(task_type, 'gemini')
+        
+        # 사용 가능한지 확인
+        if engine in self.available_engines:
+            return engine
+        
+        # 대체 엔진 찾기
+        for alt_engine in self.available_engines.keys():
+            return alt_engine
+        
+        return None
+
+# 기존 AIOrchestrator를 대체
+AIOrchestrator = EnhancedAIOrchestrator
+
 # ==================== 애플리케이션 초기화 ====================
 def initialize_app():
     """애플리케이션 초기화"""
