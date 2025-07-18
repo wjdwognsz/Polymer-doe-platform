@@ -327,7 +327,7 @@ class DatabaseManager:
             # Streamlit secrets에서 인증 정보 로드
             self.credentials = st.secrets["gcp_service_account"]
             self.sa = gspread.service_account_from_dict(self.credentials)
-            self.spreadsheet_url = st.secrets["https://docs.google.com/spreadsheets/d/13v0j0mFEROjLNXA4EGK_F1Pofj_CQOfzwK0MRvF1YG8/edit?gid=0#gid=0"]
+            self.spreadsheet_url = st.secrets["private_gsheets_url"]
             self.sh = self.sa.open_by_url(self.spreadsheet_url)
             logger.info("Google Sheets 연결 성공")
         except Exception as e:
