@@ -1528,8 +1528,24 @@ class APIManager:
     """외부 API 통합 관리 (기본 버전)"""
     
     def __init__(self):
-        self.pubchem_base = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-        self.openalex_base = "https://api.openalex.org"
+        self.api_keys = {
+            # AI_api_key
+            'google': st.secrets.get('GEMINI_API_KEY', ''),
+            'grok': st.secrets.get('GROK_API_KEY', ''),
+            'sambanova': st.secrets.get('SAMBANOVA_API_KEY', ''),
+            'deepseek': st.secrets.get('DEEPSEEK_API_KEY', ''),
+            'groq': st.secrets.get('GROQ_API_KEY', ''),
+            'hugging_face': st.secrets.get('HUGGINGFACE_API_KEY', ''),
+
+            # Experiments data_api_key
+            'github': st.secrets.get('GITHUB_TOKEN', ''),
+            'materials_project': st.secrets.get('MP_API_KEY', ''),
+            'materials_commons': st.secrets.get('MC_API_KEY', ''),
+            'zenodo': st.secrets.get('ZENODO_API_KEY', ''),
+            'protocols.io': st.secrets.get('PROTOCOLS.IO_API_KEY', ''),
+            'figshare': st.secrets.get('FIGSHARE_API_KEY', '')
+        }
+        self.session = None
     
     def search_pubchem(self, compound_name):
         """PubChem에서 화합물 정보 검색"""
