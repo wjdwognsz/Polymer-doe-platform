@@ -20,6 +20,84 @@ import base64
 import io
 import re
 
+# 새로운 AI API 라이브러리
+import google.generativeai as genai  # Gemini
+from groq import Groq  # Groq
+import requests  # Grok, SambaNova, DeepSeek API 호출용
+from huggingface_hub import InferenceClient  # HuggingFace
+
+# 데이터베이스 API 라이브러리
+import httpx  # 비동기 HTTP 요청
+from github import Github  # GitHub API
+import xml.etree.ElementTree as ET  # PubChem XML 파싱
+
+# 보안 및 환경 관리
+import os
+from getpass import getpass
+import hashlib
+from cryptography.fernet import Fernet  # API 키 암호화
+
+# 병렬 처리 및 성능
+import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+from queue import Queue
+
+# 캐싱 및 상태 관리
+from functools import lru_cache
+import pickle
+from datetime import datetime, timedelta
+import tempfile
+
+# 모니터링 및 로깅
+import logging
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass
+from enum import Enum
+
+# 번역 및 텍스트 처리
+import langdetect
+from deep_translator import GoogleTranslator
+
+# 추가 유틸리티
+import json
+import re
+from urllib.parse import quote, urlencode
+import time
+from retrying import retry
+
+# 데이터 시각화 (API 상태 표시용)
+import plotly.graph_objects as go
+from streamlit_extras.metric_cards import style_metric_cards
+from streamlit_extras.colored_header import colored_header
+
+# API 상태 모니터링을 위한 커스텀 타입
+class APIStatus(Enum):
+    """API 상태 열거형"""
+    ONLINE = "online"
+    OFFLINE = "offline"
+    SLOW = "slow"
+    ERROR = "error"
+    UNAUTHORIZED = "unauthorized"
+    RATE_LIMITED = "rate_limited"
+
+@dataclass
+class APIResponse:
+    """API 응답 데이터 클래스"""
+    success: bool
+    data: Any
+    error: Optional[str] = None
+    response_time: float = 0.0
+    api_name: str = ""
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # ==================== 설정 및 초기화 ====================
 
 # Streamlit 페이지 설정
@@ -273,46 +351,31 @@ class AIOrchestrator:
         return prompt
     
     def get_ai_response(self, prompt, ai_type='openai'):
-        """개별 AI 호출 (동기식)"""
+        """개별 AI 호출 (실제 작동 버전)"""
         try:
             if ai_type == 'openai' and 'openai' in self.available_ais:
                 import openai
                 openai.api_key = self.api_keys['openai']
             
+                # GPT-3.5 또는 GPT-4 호출
                 response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[
+                        {"role": "system", "content": "당신은 고분자 실험 설계 전문가입니다. 사용자의 구체적인 연구 내용에 맞춰 맞춤형 조언을 제공하세요."},
+                        {"role": "user", "content": prompt}
+                    ],
                     temperature=0.7,
-                    max_tokens=2000
+                    max_tokens=1000
                 )
+                return response.choices[0].message.content
             
-                # JSON 파싱 시도
-                content = response.choices[0].message.content
-                try:
-                    # JSON 블록 찾기
-                    import re
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        return json.loads(json_match.group())
-                    else:
-                        return {"error": "JSON not found", "content": content}
-                except json.JSONDecodeError:
-                    return {"error": "JSON parsing failed", "content": content}
-                
             elif ai_type == 'google' and 'google' in self.available_ais:
                 model = genai.GenerativeModel('gemini-pro')
                 response = model.generate_content(prompt)
+                return response.text
             
-                # JSON 추출
-                text = response.text
-                json_match = re.search(r'\{.*\}', text, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group())
-                else:
-                    return {"error": "JSON not found", "content": text}
-                
         except Exception as e:
-            print(f"{ai_type} AI 오류: {str(e)}")
+            print(f"{ai_type} API 오류: {str(e)}")
             return None
     
     def get_consensus_design(self, user_input, user_level, project_info):
