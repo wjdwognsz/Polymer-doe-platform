@@ -203,6 +203,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ==================== StateManager 클래스 ====================
+class StateManager:
+    """세션 상태를 중앙에서 관리하는 클래스"""
+    
+    @staticmethod
+    def initialize():
+        """초기 세션 상태 설정"""
+        defaults = {
+            'user_level': 1,
+            'current_page': 'home',
+            'project_info': {},
+            'experiment_design': None,
+            'analysis_results': None,
+            'literature_results': None,
+            'safety_results': None,
+            'community_posts': [],
+            'ai_consultations': [],
+            'platform_stats': {
+                'total_experiments': 0,
+                'ai_consultations': 0,
+                'active_users': 0,
+                'success_rate': 0.0
+            },
+            'api_keys': {
+                'openai': '',
+                'google': '',
+                'pubchem': 'free',
+                'openalex': 'free'
+            }
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+        pass
+
 
 # ==================== 상태 관리 클래스 ====================
 # ==================== API 키 관리 시스템 ====================
@@ -2037,40 +2073,6 @@ def initialize_app():
         logger.info("Translation service is available")
     else:
         logger.warning("Translation service is not available")
-
-class StateManager:
-    """세션 상태를 중앙에서 관리하는 클래스"""
-    
-    @staticmethod
-    def initialize():
-        """초기 세션 상태 설정"""
-        defaults = {
-            'user_level': 1,
-            'current_page': 'home',
-            'project_info': {},
-            'experiment_design': None,
-            'analysis_results': None,
-            'literature_results': None,
-            'safety_results': None,
-            'community_posts': [],
-            'ai_consultations': [],
-            'platform_stats': {
-                'total_experiments': 0,
-                'ai_consultations': 0,
-                'active_users': 0,
-                'success_rate': 0.0
-            },
-            'api_keys': {
-                'openai': '',
-                'google': '',
-                'pubchem': 'free',
-                'openalex': 'free'
-            }
-        }
-        
-        for key, value in defaults.items():
-            if key not in st.session_state:
-                st.session_state[key] = value
 
 # ==================== 데이터베이스 관리자 ====================
 
