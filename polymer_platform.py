@@ -3101,29 +3101,29 @@ class PolymerDOEApp:
             if api_monitor:
                 api_monitor.display_status_bar('experiment_design')
     
-        # 탭 구성
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📋 기본 실험 설계",
-            "🔍 DB 기반 설계",
-            "🤖 AI 상담",
-            "📊 설계 검증"
-        ])
+            # 탭 구성
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "📋 기본 실험 설계",
+                "🔍 DB 기반 설계",
+                "🤖 AI 상담",
+                "📊 설계 검증"
+            ])
     
-        # 기본 실험 설계 탭
-        with tab1:
-            self._show_basic_experiment_design()
+            # 기본 실험 설계 탭
+            with tab1:
+                self._show_basic_experiment_design()
     
-        # DB 기반 설계 탭 (새로운 기능)
-        with tab2:
-            self._show_database_driven_design()
+            # DB 기반 설계 탭 (새로운 기능)
+            with tab2:
+                self._show_database_driven_design()
     
-        # AI 상담 탭
-        with tab3:
-            self._show_ai_consultation()
+            # AI 상담 탭
+            with tab3:
+                self._show_ai_consultation()
     
-        # 설계 검증 탭
-        with tab4:
-            self._show_design_validation()
+            # 설계 검증 탭
+            with tab4:
+                self._show_design_validation()
 
         else:
             # Enhanced AI가 없으면 기존 방식으로 동작
