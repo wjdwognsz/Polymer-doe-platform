@@ -3594,128 +3594,593 @@ class PolymerDOEApp:
     
 # ==================== 결과 분석 페이지 ====================
     def _show_results_analysis(self):
-        """결과 분석 페이지"""
+        """결과 분석 페이지 - DB 비교 및 AI 해석 추가"""
         st.title("📊 결과 분석")
-        
+    
+        # API 상태 표시
+        api_monitor.display_status_bar('property_analysis')
+    
         if not st.session_state.experiment_design:
             st.warning("먼저 실험을 설계해주세요.")
             if st.button("실험 설계로 이동"):
                 st.session_state.current_page = 'experiment_design'
                 st.rerun()
             return
-        
-        st.info("실험 결과를 입력하고 통계 분석을 수행합니다.")
-        
+    
+        # 탭 구성
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📁 데이터 업로드",
+            "📈 통계 분석",
+            "🔍 DB 비교 분석",
+            "🤖 AI 해석"
+        ])
+    
+        # 데이터 업로드 탭
+        with tab1:
+            self._show_data_upload()
+    
+        # 통계 분석 탭
+        with tab2:
+            if 'results_df' in st.session_state:
+                self._show_statistical_analysis()
+            else:
+                st.info("먼저 데이터를 업로드해주세요.")
+    
+        # DB 비교 분석 탭 (새로운 기능)
+        with tab3:
+            if 'results_df' in st.session_state:
+                self._show_database_comparison()
+            else:
+                st.info("먼저 데이터를 업로드해주세요.")
+    
+        # AI 해석 탭 (새로운 기능)
+        with tab4:
+            if 'results_df' in st.session_state:
+                self._show_ai_interpretation()
+            else:
+                st.info("먼저 데이터를 업로드해주세요.")
+
+    def _show_data_upload(self):
+        """데이터 업로드 섹션"""
+        st.subheader("📁 실험 결과 데이터 업로드")
+    
         # 파일 업로드
-        st.subheader("📁 데이터 업로드")
-        
         uploaded_file = st.file_uploader(
             "실험 결과 CSV 파일을 업로드하세요",
             type=['csv', 'xlsx'],
             help="첫 번째 열은 실험 번호, 나머지 열은 반응변수여야 합니다."
         )
+    
+        # 수동 입력 옵션
+        if st.checkbox("📝 수동으로 데이터 입력"):
+            design_matrix = pd.DataFrame(st.session_state.experiment_design['design_matrix'])
         
+            # 반응변수 컬럼 추가
+            responses = st.session_state.experiment_design.get('responses', [])
+            for response in responses:
+                design_matrix[response['name']] = 0.0
+        
+            # 데이터 에디터
+            edited_df = st.data_editor(
+                design_matrix,
+                use_container_width=True,
+                num_rows="fixed"
+            )
+        
+            if st.button("데이터 저장", type="primary"):
+                st.session_state.results_df = edited_df
+                st.success("데이터가 저장되었습니다!")
+    
+        # 파일 처리
         if uploaded_file:
             try:
-                # 파일 읽기 (UTF-8 BOM 처리)
+                # 파일 읽기
                 if uploaded_file.name.endswith('.csv'):
                     results_df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
                 else:
                     results_df = pd.read_excel(uploaded_file)
-                
+            
                 st.success("파일이 성공적으로 로드되었습니다!")
-                
+            
                 # 데이터 미리보기
                 st.subheader("📋 데이터 미리보기")
                 st.dataframe(results_df.head(10), use_container_width=True)
-                
-                # 기본 통계
-                st.subheader("📈 기본 통계")
-                st.dataframe(results_df.describe(), use_container_width=True)
-                
-                # 설계 매트릭스와 결합
-                design_matrix = pd.DataFrame(st.session_state.experiment_design['design_matrix'])
-                
-                # 통계 분석 수행
-                if st.button("🔍 통계 분석 실행"):
-                    with st.spinner("분석 중..."):
-                        analysis = self.stat_analyzer.analyze_doe_results(design_matrix, results_df)
-                        st.session_state.analysis_results = analysis
-                        
-                        # 결과 표시
-                        st.subheader("📊 분석 결과")
-                        
-                        # 기본 통계
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("**기본 통계**")
-                            for var, stats in analysis['basic_stats'].items():
-                                with st.expander(f"{var} 통계"):
-                                    st.metric("평균", f"{stats['mean']:.2f}")
-                                    st.metric("표준편차", f"{stats['std']:.2f}")
-                                    st.metric("CV(%)", f"{stats['cv']:.1f}")
-                        
-                        with col2:
-                            st.markdown("**주효과**")
-                            for factor, effects in analysis['effects'].items():
-                                with st.expander(f"{factor} 효과"):
-                                    for response, effect in effects.items():
-                                        st.metric(response, f"{effect:.2f}")
-                        
-                        # 시각화
-                        st.subheader("📈 시각화")
-                        
-                        # 반응변수 선택
-                        response_cols = [col for col in results_df.columns if col != 'run']
-                        selected_response = st.selectbox("분석할 반응변수 선택", response_cols)
-                        
-                        if selected_response:
-                            # 주효과 플롯
-                            factors = [col for col in design_matrix.columns if col != 'run']
-                            
-                            fig = go.Figure()
-                            
-                            for factor in factors[:3]:  # 최대 3개 요인만 표시
-                                levels = design_matrix[factor].unique()
-                                means = []
-                                
-                                for level in levels:
-                                    mask = design_matrix[factor] == level
-                                    if mask.any():
-                                        mean_val = results_df.loc[mask, selected_response].mean()
-                                        means.append(mean_val)
-                                
-                                fig.add_trace(go.Scatter(
-                                    x=levels,
-                                    y=means,
-                                    mode='lines+markers',
-                                    name=factor,
-                                    line=dict(width=3),
-                                    marker=dict(size=10)
-                                ))
-                            
-                            fig.update_layout(
-                                title=f'{selected_response} 주효과 플롯',
-                                xaxis_title='수준',
-                                yaxis_title=selected_response,
-                                height=500,
-                                hovermode='x unified'
-                            )
-                            
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # 3D 반응표면 (2개 요인 이상일 때)
-                            if len(factors) >= 2:
-                                opt_plot = self.stat_analyzer.generate_optimization_plot(
-                                    design_matrix, results_df, selected_response
-                                )
-                                if opt_plot:
-                                    st.plotly_chart(opt_plot, use_container_width=True)
-                
+            
+                # 데이터 검증
+                if st.button("데이터 검증 및 저장"):
+                    # 기본 검증
+                    if len(results_df) == 0:
+                        st.error("데이터가 비어있습니다.")
+                    else:
+                        st.session_state.results_df = results_df
+                        st.success("데이터가 검증되고 저장되었습니다!")
+                    
+                        # 기본 통계 표시
+                        st.subheader("📈 기본 통계")
+                        st.dataframe(results_df.describe(), use_container_width=True)
+                    
             except Exception as e:
                 st.error(f"파일 처리 중 오류가 발생했습니다: {e}")
+
+    def _show_statistical_analysis(self):
+        """통계 분석 섹션 (기존 + 개선)"""
+        st.subheader("📈 통계 분석")
     
+        results_df = st.session_state.results_df
+        design_matrix = pd.DataFrame(st.session_state.experiment_design['design_matrix'])
+    
+        # 반응변수 선택
+        response_cols = [col for col in results_df.columns if col not in ['run', 'Run', 'RUN']]
+        selected_response = st.selectbox("분석할 반응변수 선택", response_cols)
+    
+        if selected_response:
+            col1, col2 = st.columns(2)
+        
+            with col1:
+                # 기본 통계
+                st.metric("평균", f"{results_df[selected_response].mean():.2f}")
+                st.metric("표준편차", f"{results_df[selected_response].std():.2f}")
+                st.metric("CV(%)", f"{(results_df[selected_response].std() / results_df[selected_response].mean() * 100):.1f}")
+        
+            with col2:
+                st.metric("최대값", f"{results_df[selected_response].max():.2f}")
+                st.metric("최소값", f"{results_df[selected_response].min():.2f}")
+                st.metric("범위", f"{results_df[selected_response].max() - results_df[selected_response].min():.2f}")
+        
+            # 주효과 분석
+            if hasattr(self, 'stat_analyzer'):
+                with st.spinner("통계 분석 중..."):
+                    analysis = self.stat_analyzer.analyze_doe_results(design_matrix, results_df)
+                    st.session_state.analysis_results = analysis
+                
+                    # 주효과 플롯
+                    self._create_main_effects_plot(design_matrix, results_df, selected_response)
+                
+                    # 상호작용 플롯
+                    if st.checkbox("상호작용 효과 보기"):
+                        self._create_interaction_plot(design_matrix, results_df, selected_response)
+
+    def _show_database_comparison(self):
+        """DB 비교 분석 섹션 (새로운 기능)"""
+        st.subheader("🔍 데이터베이스 비교 분석")
+    
+        # 비교할 물성 선택
+        results_df = st.session_state.results_df
+        response_cols = [col for col in results_df.columns if col not in ['run', 'Run', 'RUN']]
+    
+        selected_property = st.selectbox(
+            "비교할 물성 선택",
+            response_cols,
+            key="comparison_property"
+        )
+    
+        if selected_property:
+            # 고분자 정보
+            polymer_name = st.session_state.project_info.get('polymer_type', 'polymer')
+        
+            col1, col2 = st.columns([2, 1])
+        
+            with col1:
+                comparison_query = st.text_input(
+                    "비교 검색어 (선택사항)",
+                    value=f"{polymer_name} {selected_property}",
+                    help="더 정확한 비교를 위해 검색어를 수정할 수 있습니다."
+                )
+        
+            with col2:
+                search_button = st.button("🔍 DB에서 비교 데이터 검색", use_container_width=True)
+        
+            if search_button:
+                with st.spinner("데이터베이스에서 비교 데이터를 검색하고 있습니다..."):
+                
+                    # 1. 문헌에서 물성 데이터 검색
+                    literature_results = database_manager.integrated_search(
+                        f"{comparison_query} properties values data",
+                        categories=['literature'],
+                        limit=10
+                    )
+                
+                    # 2. 화학 DB에서 표준값 검색
+                    chemical_results = database_manager.integrated_search(
+                        polymer_name,
+                        categories=['chemical'],
+                        limit=5
+                    )
+                
+                    # 결과 표시
+                    col1, col2 = st.columns(2)
+                
+                    with col1:
+                        st.markdown("### 📊 실험 결과")
+                    
+                        # 실험 결과 통계
+                        exp_mean = results_df[selected_property].mean()
+                        exp_std = results_df[selected_property].std()
+                        exp_min = results_df[selected_property].min()
+                        exp_max = results_df[selected_property].max()
+                    
+                        st.metric("평균값", f"{exp_mean:.2f}")
+                        st.metric("표준편차", f"{exp_std:.2f}")
+                        st.metric("범위", f"{exp_min:.2f} - {exp_max:.2f}")
+                    
+                        # 히스토그램
+                        fig = go.Figure()
+                        fig.add_trace(go.Histogram(
+                            x=results_df[selected_property],
+                            name="실험 결과",
+                            nbinsx=10,
+                            marker_color='blue',
+                            opacity=0.7
+                        ))
+                        fig.update_layout(
+                            title=f"{selected_property} 분포",
+                            xaxis_title=selected_property,
+                            yaxis_title="빈도",
+                            height=300
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                    with col2:
+                        st.markdown("### 📚 문헌/DB 참조값")
+                    
+                        # AI로 문헌에서 수치 추출
+                        if literature_results.get('success'):
+                            reference_values = self._extract_property_values(
+                                literature_results,
+                                selected_property,
+                                polymer_name
+                            )
+                        
+                            if reference_values:
+                                ref_df = pd.DataFrame(reference_values)
+                                st.dataframe(ref_df, use_container_width=True)
+                            
+                                # 비교 차트
+                                fig = go.Figure()
+                            
+                                # 실험 결과 (박스 플롯)
+                                fig.add_trace(go.Box(
+                                    y=results_df[selected_property],
+                                    name="실험 결과",
+                                    boxpoints='all',
+                                    jitter=0.3,
+                                    pointpos=-1.8,
+                                    marker_color='blue'
+                                ))
+                            
+                                # 참조값들 (산점도)
+                                if 'value' in ref_df.columns:
+                                    fig.add_trace(go.Scatter(
+                                        x=['참조값'] * len(ref_df),
+                                        y=ref_df['value'],
+                                        mode='markers',
+                                        name="문헌값",
+                                        marker=dict(
+                                            size=10,
+                                            color='red',
+                                            symbol='diamond'
+                                        )
+                                    ))
+                            
+                                fig.update_layout(
+                                    title="실험 결과 vs 문헌값",
+                                    yaxis_title=selected_property,
+                                    showlegend=True,
+                                    height=400
+                                )
+                            
+                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.info("문헌에서 구체적인 수치를 찾을 수 없습니다.")
+                        else:
+                            st.warning("데이터베이스 검색에 실패했습니다.")
+                
+                    # 비교 요약
+                    st.markdown("### 📝 비교 요약")
+                    self._generate_comparison_summary(
+                        exp_mean, exp_std, reference_values if 'reference_values' in locals() else []
+                    )
+
+    def _show_ai_interpretation(self):
+        """AI 해석 섹션 (새로운 기능)"""
+        st.subheader("🤖 AI 기반 결과 해석")
+    
+        results_df = st.session_state.results_df
+        design_matrix = pd.DataFrame(st.session_state.experiment_design['design_matrix'])
+    
+        # 해석 옵션
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            interpretation_type = st.selectbox(
+                "해석 유형",
+                ["종합 해석", "최적화 제안", "문제점 진단", "다음 실험 제안"]
+            )
+    
+        with col2:
+            ai_engines = st.multiselect(
+                "사용할 AI",
+                list(getattr(self.ai_orchestrator, 'available_engines', {}).keys()),
+                default=['gemini', 'deepseek']
+            )
+    
+        if st.button("🤖 AI 해석 생성", type="primary", use_container_width=True):
+            with st.spinner("AI가 실험 결과를 분석하고 있습니다..."):
+            
+                # 실험 데이터 요약
+                data_summary = {
+                    'experiment_info': st.session_state.project_info,
+                    'design': st.session_state.experiment_design,
+                    'results_statistics': results_df.describe().to_dict(),
+                    'factors': design_matrix.columns.tolist(),
+                    'responses': results_df.columns.tolist()
+                }
+            
+                # 해석 프롬프트 생성
+                interpretation_prompt = self._create_interpretation_prompt(
+                    interpretation_type,
+                    data_summary,
+                    results_df,
+                    design_matrix
+                )
+            
+                # AI 해석 생성
+                if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+                    interpretation_result = self.ai_orchestrator.generate_consensus(
+                        interpretation_prompt,
+                        required_engines=ai_engines
+                    )
+                
+                    if interpretation_result.get('success'):
+                        st.markdown("### 🤖 AI 해석 결과")
+                        st.markdown(interpretation_result.get('final_answer', ''))
+                    
+                        # 기여 AI 표시
+                        st.caption(f"해석 참여 AI: {', '.join(interpretation_result.get('contributing_engines', []))}")
+                    
+                        # 해석 저장
+                        if st.button("💾 해석 결과 저장"):
+                            self._save_interpretation(
+                                interpretation_type,
+                                interpretation_result.get('final_answer', '')
+                            )
+                            st.success("해석 결과가 저장되었습니다!")
+                    else:
+                        st.error("AI 해석 생성에 실패했습니다.")
+
+    def _extract_property_values(self, search_results: Dict, property_name: str, polymer_name: str) -> List[Dict]:
+        """문헌에서 물성값 추출 (AI 활용)"""
+        extracted_values = []
+    
+        # AI를 사용하여 문헌에서 수치 추출
+        if hasattr(self, 'ai_orchestrator') and self.ai_orchestrator:
+            extraction_prompt = f"""
+            다음 문헌 검색 결과에서 {polymer_name}의 {property_name}에 대한 구체적인 수치값을 추출해주세요.
+        
+            검색 결과: {json.dumps(search_results, ensure_ascii=False)[:2000]}
+        
+            다음 형식으로 응답해주세요:
+            값: [수치]
+            단위: [단위]
+            출처: [문헌 제목 또는 저자]
+            조건: [측정 조건 - 있는 경우]
+        
+            찾은 모든 값을 나열해주세요.
+            """
+        
+            result = self.ai_orchestrator.get_specialized_engine('calculation')
+            if result:
+                engine = self.ai_orchestrator.available_engines.get(result)
+                if engine:
+                    extraction = engine.generate(extraction_prompt)
+                    if extraction.success:
+                        # 추출된 텍스트 파싱
+                        # (실제 구현에서는 더 정교한 파싱 필요)
+                        lines = extraction.data.split('\n')
+                        for i in range(0, len(lines), 4):
+                            try:
+                                value_line = lines[i] if i < len(lines) else ""
+                                if "값:" in value_line:
+                                    value = float(value_line.split(":")[-1].strip())
+                                    extracted_values.append({
+                                        'value': value,
+                                        'unit': lines[i+1].split(":")[-1].strip() if i+1 < len(lines) else "",
+                                        'source': lines[i+2].split(":")[-1].strip() if i+2 < len(lines) else "",
+                                        'condition': lines[i+3].split(":")[-1].strip() if i+3 < len(lines) else ""
+                                    })
+                            except:
+                                continue
+    
+        return extracted_values
+
+    def _generate_comparison_summary(self, exp_mean: float, exp_std: float, reference_values: List[Dict]):
+        """비교 요약 생성"""
+        if reference_values:
+            ref_values = [rv['value'] for rv in reference_values if 'value' in rv]
+            if ref_values:
+                ref_mean = np.mean(ref_values)
+            
+                # 비교 결과
+                difference = ((exp_mean - ref_mean) / ref_mean) * 100
+            
+                if abs(difference) < 5:
+                    st.success(f"✅ 실험 결과가 문헌값과 잘 일치합니다 (차이: {difference:.1f}%)")
+                elif abs(difference) < 10:
+                    st.warning(f"⚠️ 실험 결과가 문헌값과 약간 차이가 있습니다 (차이: {difference:.1f}%)")
+                else:
+                    st.error(f"❌ 실험 결과가 문헌값과 큰 차이를 보입니다 (차이: {difference:.1f}%)")
+            
+                # 상세 비교
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("실험 평균", f"{exp_mean:.2f}")
+                with col2:
+                    st.metric("문헌 평균", f"{ref_mean:.2f}")
+                with col3:
+                    st.metric("차이", f"{difference:.1f}%")
+        else:
+            st.info("비교할 문헌값이 없습니다.")
+
+    def _create_interpretation_prompt(self, interpretation_type: str, data_summary: Dict, 
+                                    results_df: pd.DataFrame, design_matrix: pd.DataFrame) -> str:
+        """해석 프롬프트 생성"""
+        base_prompt = f"""
+        다음 실험 결과를 분석하여 {interpretation_type}을 제공해주세요.
+    
+        실험 정보:
+        - 프로젝트: {data_summary['experiment_info'].get('project_name')}
+        - 고분자: {data_summary['experiment_info'].get('polymer_type')}
+        - 목적: {data_summary['experiment_info'].get('objective')}
+    
+        실험 설계:
+        - 설계 유형: {data_summary['design'].get('design_type')}
+        - 실험 수: {len(design_matrix)}
+        - 요인: {', '.join(data_summary['factors'])}
+        - 반응변수: {', '.join(data_summary['responses'])}
+    
+        결과 통계:
+        {json.dumps(data_summary['results_statistics'], ensure_ascii=False, indent=2)}
+        """
+    
+        if interpretation_type == "종합 해석":
+            base_prompt += """
+        
+            다음 항목들을 포함하여 종합적으로 해석해주세요:
+            1. 주요 발견사항
+            2. 각 요인의 영향력
+            3. 최적 조건
+            4. 예상치 못한 결과
+            5. 실험의 의의
+            """
+        elif interpretation_type == "최적화 제안":
+            base_prompt += """
+        
+            다음 관점에서 최적화 방안을 제시해주세요:
+            1. 현재 결과에서의 최적 조건
+            2. 추가 최적화 가능성
+            3. 제약 조건 고려사항
+            4. 실용적 적용 방안
+            5. 검증 실험 제안
+            """
+        elif interpretation_type == "문제점 진단":
+            base_prompt += """
+        
+            실험 결과의 잠재적 문제점을 진단해주세요:
+            1. 이상치나 비정상적 패턴
+            2. 실험 설계의 한계점
+            3. 측정 오류 가능성
+            4. 개선이 필요한 부분
+            5. 주의사항
+            """
+        elif interpretation_type == "다음 실험 제안":
+            base_prompt += """
+        
+            현재 결과를 바탕으로 다음 실험을 제안해주세요:
+            1. 추가로 탐색할 영역
+            2. 정밀 실험 설계
+            3. 새로운 요인 추가
+            4. 스케일업 고려사항
+            5. 예상 결과 및 가설
+            """
+    
+        return base_prompt
+
+    def _save_interpretation(self, interpretation_type: str, interpretation: str):
+        """해석 결과 저장"""
+        if 'interpretations' not in st.session_state:
+            st.session_state.interpretations = []
+    
+        st.session_state.interpretations.append({
+            'type': interpretation_type,
+            'interpretation': interpretation,
+            'timestamp': datetime.now(),
+            'experiment_id': st.session_state.get('current_experiment_id', 'unknown')
+        })
+
+    def _create_main_effects_plot(self, design_matrix: pd.DataFrame, results_df: pd.DataFrame, response: str):
+        """주효과 플롯 생성"""
+        factors = [col for col in design_matrix.columns if col not in ['run', 'Run', 'RUN']]
+    
+        fig = go.Figure()
+    
+        for factor in factors[:3]:  # 최대 3개 요인만 표시
+            levels = sorted(design_matrix[factor].unique())
+            means = []
+            errors = []
+        
+            for level in levels:
+                mask = design_matrix[factor] == level
+                if mask.any():
+                    values = results_df.loc[mask, response]
+                    means.append(values.mean())
+                    errors.append(values.std() / np.sqrt(len(values)))
+        
+            fig.add_trace(go.Scatter(
+                x=levels,
+                y=means,
+                error_y=dict(
+                    type='data',
+                    array=errors,
+                    visible=True
+                ),
+                mode='lines+markers',
+                name=factor,
+                line=dict(width=3),
+                marker=dict(size=10)
+            ))
+    
+        fig.update_layout(
+            title=f'{response} 주효과 플롯',
+            xaxis_title='수준',
+            yaxis_title=response,
+            height=500,
+            hovermode='x unified'
+        )
+    
+        st.plotly_chart(fig, use_container_width=True)
+
+    def _create_interaction_plot(self, design_matrix: pd.DataFrame, results_df: pd.DataFrame, response: str):
+        """상호작용 플롯 생성"""
+        factors = [col for col in design_matrix.columns if col not in ['run', 'Run', 'RUN']]
+    
+        if len(factors) >= 2:
+            factor1, factor2 = factors[0], factors[1]
+        
+            fig = go.Figure()
+        
+            levels1 = sorted(design_matrix[factor1].unique())
+            levels2 = sorted(design_matrix[factor2].unique())
+        
+            for level2 in levels2:
+                means = []
+            
+                for level1 in levels1:
+                    mask = (design_matrix[factor1] == level1) & (design_matrix[factor2] == level2)
+                    if mask.any():
+                        mean_val = results_df.loc[mask, response].mean()
+                        means.append(mean_val)
+                    else:
+                        means.append(None)
+            
+                fig.add_trace(go.Scatter(
+                    x=levels1,
+                    y=means,
+                    mode='lines+markers',
+                    name=f'{factor2}={level2}',
+                    line=dict(width=2),
+                    marker=dict(size=8)
+                ))
+        
+            fig.update_layout(
+                title=f'{factor1} × {factor2} 상호작용 플롯',
+                xaxis_title=factor1,
+                yaxis_title=response,
+                height=500
+            )
+        
+            st.plotly_chart(fig, use_container_width=True)
+
+# ==================== 문헌 검색 ====================
     def _show_literature_search(self):
         """문헌 검색 페이지 - 통합 검색 시스템"""
         st.header("📚 통합 문헌 검색 시스템")
