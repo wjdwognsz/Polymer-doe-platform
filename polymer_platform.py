@@ -1,10 +1,13 @@
 import os
 import streamlit as st
+import gspread
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import asyncio
+import aiohttp
 import json
 import requests
 import time
@@ -13,6 +16,8 @@ import openai
 from scipy import stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from enum import Enum
+import logging
 import hashlib
 import base64
 import io
@@ -28,16 +33,23 @@ st.set_page_config(
 )
 
 # ==================== 로깅 설정 ====================
-import logging
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
-from enum import Enum
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# API 상태 열거형
+class APIStatus(Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+    ERROR = "error"
+    RATE_LIMITED = "rate_limited"
+
+@dataclass
+class APIResponse:
+    success: bool
+    data: Any
+    error: Optional[str] = None
+    response_time: float = 0.0
+    api_name: str = ""
 
 # ==================== API 상태 타입 정의 ====================
 class APIStatus(Enum):
@@ -289,7 +301,7 @@ st.markdown("""
 
 # ==================== StateManager 클래스 ====================
 class StateManager:
-    """세션 상태를 중앙에서 관리하는 클래스"""
+    """세션 상태 중앙 관리"""
     
     @staticmethod
     def initialize():
@@ -299,17 +311,10 @@ class StateManager:
             'current_page': 'home',
             'project_info': {},
             'experiment_design': None,
+            'results_df': None,
             'analysis_results': None,
-            'literature_results': None,
-            'safety_results': None,
-            'community_posts': [],
-            'ai_consultations': [],
-            'platform_stats': {
-                'total_experiments': 0,
-                'ai_consultations': 0,
-                'active_users': 0,
-                'success_rate': 0.0
-            }
+            'api_keys_initialized': False,
+            'api_keys': {}
         }
         
         for key, value in defaults.items():
@@ -1546,54 +1551,122 @@ class APIManager:
             'figshare': st.secrets.get('FIGSHARE_API_KEY', '')
         }
         self.session = None
+
     
-    def search_pubchem(self, compound_name):
-        """PubChem에서 화합물 정보 검색"""
+    async def _get_session(self):
+        """비동기 HTTP 세션 관리"""
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+
+    async def search_pubchem(self, query: str) -> APIResponse:
+        """PubChem API 검색"""
         try:
-            # 화합물 이름으로 CID 검색
-            search_url = f"{self.pubchem_base}/compound/name/{compound_name}/cids/JSON"
-            response = requests.get(search_url, timeout=10)
+            session = await self._get_session()
             
-            if response.status_code == 200:
-                data = response.json()
-                if 'IdentifierList' in data and 'CID' in data['IdentifierList']:
-                    cid = data['IdentifierList']['CID'][0]
+            # 화합물 검색
+            search_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{query}/cids/JSON"
+            async with session.get(search_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    cids = data.get('IdentifierList', {}).get('CID', [])
                     
-                    # CID로 상세 정보 가져오기
-                    detail_url = f"{self.pubchem_base}/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,IUPACName/JSON"
-                    detail_response = requests.get(detail_url, timeout=10)
-                    
-                    if detail_response.status_code == 200:
-                        return detail_response.json()
-            
-            return None
+                    if cids:
+                        # 첫 번째 화합물의 상세 정보 가져오기
+                        cid = cids[0]
+                        detail_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IUPACName/JSON"
+                        
+                        async with session.get(detail_url) as detail_response:
+                            if detail_response.status == 200:
+                                detail_data = await detail_response.json()
+                                properties = detail_data.get('PropertyTable', {}).get('Properties', [{}])[0]
+                                
+                                return APIResponse(
+                                    success=True,
+                                    data={
+                                        'cid': cid,
+                                        'molecular_formula': properties.get('MolecularFormula'),
+                                        'molecular_weight': properties.get('MolecularWeight'),
+                                        'smiles': properties.get('CanonicalSMILES'),
+                                        'iupac_name': properties.get('IUPACName'),
+                                        'url': f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
+                                    },
+                                    api_name='pubchem'
+                                )
+                
+                return APIResponse(
+                    success=False,
+                    error="화합물을 찾을 수 없습니다",
+                    api_name='pubchem'
+                )
+                
         except Exception as e:
-            st.error(f"PubChem 검색 오류: {str(e)}")
-            return None
+            logger.error(f"PubChem API 오류: {e}")
+            return APIResponse(
+                success=False,
+                error=str(e),
+                api_name='pubchem'
+            )
     
-    def search_literature(self, query, limit=10):
-        """OpenAlex에서 문헌 검색"""
+    async def search_openalex(self, query: str, polymer_filter: bool = True) -> APIResponse:
+        """OpenAlex API 검색"""
         try:
+            session = await self._get_session()
+            
+            # 검색 쿼리 구성
+            search_query = query
+            if polymer_filter:
+                search_query += " polymer OR polymeric OR macromolecule"
+            
+            url = "https://api.openalex.org/works"
             params = {
-                'search': query,
-                'per-page': limit,
-                'filter': 'is_oa:true'
+                'search': search_query,
+                'per_page': 10,
+                'sort': 'cited_by_count:desc'
             }
             
-            response = requests.get(
-                f"{self.openalex_base}/works",
-                params=params,
-                headers={'User-Agent': 'PolymerDoE/1.0'},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-            
-            return None
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    formatted_results = []
+                    for work in data.get('results', []):
+                        formatted_results.append({
+                            'title': work.get('title'),
+                            'authors': [author.get('author', {}).get('display_name') 
+                                      for author in work.get('authorships', [])],
+                            'year': work.get('publication_year'),
+                            'doi': work.get('doi'),
+                            'cited_by_count': work.get('cited_by_count', 0),
+                            'open_access': work.get('open_access', {}).get('is_oa', False)
+                        })
+                    
+                    return APIResponse(
+                        success=True,
+                        data={'results': formatted_results},
+                        api_name='openalex'
+                    )
+                else:
+                    return APIResponse(
+                        success=False,
+                        error=f"API 오류: {response.status}",
+                        api_name='openalex'
+                    )
+                    
         except Exception as e:
-            st.error(f"문헌 검색 오류: {str(e)}")
-            return None
+            logger.error(f"OpenAlex API 오류: {e}")
+            return APIResponse(
+                success=False,
+                error=str(e),
+                api_name='openalex'
+            )
+    
+    def close(self):
+        """세션 종료"""
+        if self.session:
+            asyncio.create_task(self.session.close())
+    
 
 class StatisticalAnalyzer:
     """통계 분석 도구"""
