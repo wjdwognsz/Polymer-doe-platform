@@ -185,8 +185,13 @@ st.markdown("""
 
 # ==================== 상태 관리 클래스 ====================
 # ==================== API 키 관리 시스템 ====================
-class APIKeyManager:
+class SimpleAPIKeyManager:
     """API 키를 안전하게 관리하는 클래스"""
+    def get_key(self, key_id):
+        return os.getenv(f'{key_id.upper()}_API_KEY', '')
+
+    def initialize_keys(self):
+        pass
     
     def __init__(self):
         self.api_configs = {
