@@ -3003,7 +3003,7 @@ class PolymerDOEApp:
                                 
                                 **추천 설계**: 부분요인설계 (2^4-1)
                                 """)
-                        else: user_input:
+                        elif user_input:
                             st.info("기본 실험 설계를 제공합니다.")
                             st.markdown("""
                             **주요 변수**:
@@ -3016,8 +3016,8 @@ class PolymerDOEApp:
                             - 순도
                             - 물성
                             """)
-                    else:
-                        st.warning("연구 내용을 입력해주세요.")
+                    #else:
+                        #st.warning("연구 내용을 입력해주세요.")
                             
                             # AI 응답 (간단한 시뮬레이션)
                         if "염화콜린" in user_input and "구연산" in user_input:
