@@ -2092,22 +2092,35 @@ class DatabaseManager:
 # ==================== AI 오케스트레이터 ====================
 
 class AIOrchestrator:
-    """다중 AI 모델 통합 관리"""
+    """다중 AI 모델 통합 관리 (Enhanced 버전 통합)"""
     
-    def __init__(self, api_keys):
-        self.api_keys = api_keys
+    def __init__(self, api_keys=None):
+        # 기존 api_keys는 무시하고 새로운 시스템 사용
         self.available_ais = []
+        self.enhanced_orchestrator = None
+        self.enhanced_available = False
         
-        if api_keys.get('openai'):
-            self.available_ais.append('openai')
-            openai.api_key = api_keys['openai']
+        # Enhanced AI 시스템 연결
+        try:
+            # 전역에서 이미 생성된 enhanced_ai_orchestrator 사용
+            if 'enhanced_ai_orchestrator' in globals():
+                self.enhanced_orchestrator = enhanced_ai_orchestrator
+            else:
+                # 직접 생성
+                self.enhanced_orchestrator = EnhancedAIOrchestrator()
             
-        if api_keys.get('google'):
-            self.available_ais.append('google')
-            genai.configure(api_key=api_keys['google'])
+            self.enhanced_available = len(self.enhanced_orchestrator.available_engines) > 0
+            self.available_ais = list(self.enhanced_orchestrator.available_engines.keys())
+            
+            print(f"✅ Enhanced AI 시스템 연결됨: {self.available_ais}")
+            
+        except Exception as e:
+            print(f"❌ Enhanced AI 초기화 실패: {e}")
+            self.enhanced_available = False
     
     def create_experiment_prompt(self, user_input, user_level, project_info):
-        """사용자 레벨에 맞는 동적 프롬프트 생성"""
+        """사용자 레벨에 맞는 동적 프롬프트 생성 (기존 유지)"""
+        # 이 부분은 기존 코드 그대로 유지
         level_descriptions = {
             1: "초보자를 위해 모든 단계를 상세히 설명하고, 각 결정의 이유를 명확히 제시해주세요.",
             2: "학습자를 위해 2-3가지 옵션을 장단점과 함께 제시해주세요.",
@@ -2182,102 +2195,80 @@ class AIOrchestrator:
 """
         return prompt
     
-    def get_ai_response(self, prompt, ai_type='openai'):
-        """개별 AI 호출 (실제 작동 버전)"""
+    def get_ai_response(self, prompt, ai_type='auto'):
+        """AI 응답 획득 (Enhanced AI만 사용)"""
+        if not self.enhanced_available:
+            return self._get_fallback_response("AI가 사용 불가능합니다.")
+        
+        # AI 자동 선택
+        if ai_type == 'auto':
+            # 작업 유형에 따라 최적 AI 선택
+            if "계산" in prompt or "수식" in prompt:
+                ai_type = 'deepseek'
+            elif "한국" in prompt or "번역" in prompt:
+                ai_type = 'gemini'
+            else:
+                ai_type = 'gemini'  # 기본값
+        
+        # Enhanced AI 호출
         try:
-            if ai_type == 'openai' and 'openai' in self.available_ais:
-                import openai
-                openai.api_key = self.api_keys['openai']
-            
-                # GPT-3.5 또는 GPT-4 호출
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "당신은 고분자 실험 설계 전문가입니다. 사용자의 구체적인 연구 내용에 맞춰 맞춤형 조언을 제공하세요."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=1000
-                )
-                return response.choices[0].message.content
-            
-            elif ai_type == 'google' and 'google' in self.available_ais:
-                model = genai.GenerativeModel('gemini-pro')
-                response = model.generate_content(prompt)
-                return response.text
-            
+            result = self.enhanced_orchestrator.generate_single(ai_type, prompt)
+            if result.success:
+                # JSON 파싱 시도
+                try:
+                    return json.loads(result.data)
+                except:
+                    return result.data
+            else:
+                return self._get_fallback_response(f"AI 응답 실패: {result.error}")
+                
         except Exception as e:
-            print(f"{ai_type} API 오류: {str(e)}")
-            return None
+            print(f"AI 호출 오류: {e}")
+            return self._get_fallback_response(str(e))
     
     def get_consensus_design(self, user_input, user_level, project_info):
-        """다중 AI 합의 도출"""
+        """다중 AI 합의 도출 (Enhanced 버전)"""
         prompt = self.create_experiment_prompt(user_input, user_level, project_info)
-    
-        if not self.available_ais:
+        
+        if not self.enhanced_available:
             return self._get_fallback_design(user_input, project_info)
-    
-        # 단순화된 AI 호출 (병렬 처리 제거)
-        responses = []
-    
-        for ai in self.available_ais:
-            try:
-                result = self.get_ai_response(prompt, ai)
-                if result and isinstance(result, dict):
-                    responses.append(result)
-            except Exception as e:
-                print(f"{ai} 오류: {e}")
-                continue
-    
-        if not responses:
-            return self._get_fallback_design(user_input, project_info)
-    
-        # 응답 통합 (오류 방지)
+        
+        # Enhanced AI의 합의 시스템 사용
         try:
-            # 가장 상세한 응답 선택
-            best_response = responses[0]  # 첫 번째 유효한 응답 사용
-        
-            # 안전성 고려사항 통합
-            all_safety = set()
-            for r in responses:
-                if isinstance(r, dict) and 'safety_considerations' in r:
-                    all_safety.update(r.get('safety_considerations', []))
-        
-            if all_safety:
-                best_response['safety_considerations'] = list(all_safety)
-        
-            return best_response
-        except Exception as e:
-            print(f"응답 통합 오류: {e}")
-            return self._get_fallback_design(user_input, project_info)
-        
-        # 병렬 AI 호출
-        with ThreadPoolExecutor(max_workers=len(self.available_ais)) as executor:
-            futures = {
-                executor.submit(self.get_ai_response, prompt, ai): ai 
-                for ai in self.available_ais
-            }
+            consensus_result = self.enhanced_orchestrator.generate_consensus(
+                prompt,
+                required_engines=['gemini', 'deepseek', 'grok']
+            )
             
-            responses = []
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    responses.append(result)
-        
-        if not responses:
+            if consensus_result.get('success'):
+                # JSON 파싱 시도
+                try:
+                    design = json.loads(consensus_result.get('final_answer', '{}'))
+                    return design
+                except:
+                    # JSON 파싱 실패 시 텍스트를 설계로 변환
+                    return self._convert_text_to_design(
+                        consensus_result.get('final_answer', ''),
+                        user_input,
+                        project_info
+                    )
+            else:
+                return self._get_fallback_design(user_input, project_info)
+                
+        except Exception as e:
+            print(f"합의 도출 오류: {e}")
             return self._get_fallback_design(user_input, project_info)
-        
-        # 응답 통합 (가장 상세한 응답 선택)
-        best_response = max(responses, 
-                          key=lambda r: len(r.get('factors', [])) + len(r.get('reasoning', '')))
-        
-        # 안전성 고려사항 통합
-        all_safety = set()
-        for r in responses:
-            all_safety.update(r.get('safety_considerations', []))
-        best_response['safety_considerations'] = list(all_safety)
-        
-        return best_response
+    
+    def _convert_text_to_design(self, text_response, user_input, project_info):
+        """텍스트 응답을 설계 형식으로 변환"""
+        # 기본 구조에 AI 응답 내용 추가
+        design = self._get_fallback_design(user_input, project_info)
+        design['ai_reasoning'] = text_response
+        return design
+    
+    def _get_fallback_response(self, error_msg=""):
+        """간단한 폴백 응답"""
+        return f"AI 응답을 생성할 수 없습니다. {error_msg}"
     
     def _get_fallback_design(self, user_input, project_info):
         """AI 사용 불가 시 기본 설계"""
@@ -2678,6 +2669,29 @@ class PolymerDOEApp:
         self.api_manager = APIManager()
         self.stat_analyzer = StatisticalAnalyzer()
         self.report_generator = ReportGenerator()
+
+        # 새로운 Enhanced 컴포넌트들 추가
+        try:
+            # 새로운 AI Orchestrator (기존과 별도)
+            self.enhanced_ai_orchestrator = EnhancedAIOrchestrator()
+            
+            # 새로운 Database Manager (API 기반)
+            self.api_db_manager = database_manager  # 전역 인스턴스
+            
+            # 번역 서비스
+            self.translation_service = translation_service
+            
+            # AI 사용 가능 플래그
+            self.enhanced_ai_available = len(self.enhanced_ai_orchestrator.available_engines) > 0
+        except Exception as e:
+            logger.warning(f"Enhanced components initialization failed: {e}")
+            self.enhanced_ai_available = False
+        
+        # 기존 컴포넌트들
+        self.ai_orchestrator = None  # 기존 AI (OpenAI/Google 기반)
+        self.api_manager = APIManager()
+        self.stat_analyzer = StatisticalAnalyzer()
+        self.report_generator = ReportGenerator()
         
         # API 키 설정
         if st.session_state.api_keys.get('openai') or st.session_state.api_keys.get('google'):
@@ -2711,6 +2725,11 @@ class PolymerDOEApp:
         with st.sidebar:
             st.title("🔬 플랫폼 제어판")
             st.divider()
+
+            # API 상태 모니터 추가 (새로운 기능)
+            if hasattr(self, 'enhanced_ai_available') and self.enhanced_ai_available:
+                api_monitor.display_detailed_status()
+                st.divider()
             
             # 사용자 레벨 선택
             level_names = {
@@ -3056,7 +3075,12 @@ class PolymerDOEApp:
     def _show_experiment_design(self):
         """실험 설계 페이지 - DB 연동 강화"""
         st.header("🧪 AI 기반 실험 설계")
-    
+
+        # Enhanced AI 사용 가능 여부 확인
+        if hasattr(self, 'enhanced_ai_available') and self.enhanced_ai_available:
+            # API 상태 표시
+            api_monitor.display_status_bar('experiment_design')
+        
         # API 상태 표시
         api_monitor.display_status_bar('experiment_design')
     
@@ -3083,6 +3107,10 @@ class PolymerDOEApp:
         # 설계 검증 탭
         with tab4:
             self._show_design_validation()
+
+    else:
+        # Enhanced AI가 없으면 기존 방식으로 동작
+        self._show_basic_experiment_design_original()
 
 # ==================== 실험 설계 페이지2 ====================
     def _show_basic_experiment_design(self):
@@ -5101,6 +5129,15 @@ Polymer composites have gained significant attention...
 
 def main():
     """메인 함수"""
+    # API 키 초기화 (새로운 시스템)
+    api_key_manager.initialize_keys()
+    
+    # 필수 키 체크
+    if not api_key_manager._check_required_keys():
+        st.warning("⚠️ 필수 API 키를 설정해주세요.")
+        # 기본 기능은 계속 사용 가능하도록 함
+    
+    # 앱 실행
     app = PolymerDOEApp()
     app.run()
 
