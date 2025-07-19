@@ -75,6 +75,7 @@ qrcode>=7.4.0
 # ==================== 번역 및 NLP (선택적) ====================
 # googletrans==4.0.0-rc1  # httpx 버전 충돌로 주석 처리
 deep-translator>=1.11.4  # googletrans 대체
+translatepy>=2.3  # 다양한 번역 엔진 지원
 langdetect>=1.0.9
 # spacy>=3.7.0  # 선택적 (크기가 큼)
 # nltk>=3.8.0  # 선택적
