@@ -469,6 +469,195 @@ class DatabaseManager:
             logger.error(f"프로젝트 저장 실패: {e}")
         return False
 
+# ==================== UI 컴포넌트 ====================
+def show_api_status():
+    """API 상태 표시"""
+    st.markdown("### 🔌 API 연결 상태")
+    
+    api_manager = st.session_state.api_key_manager
+    api_manager.load_keys()  # 키 다시 로드
+    
+    cols = st.columns(2)
+    for idx, (api_id, config) in enumerate(api_manager.required_apis.items()):
+        col = cols[idx % 2]
+        with col:
+            status_color = api_manager.get_status_color(api_id)
+            masked_key = api_manager.get_masked_key(api_id)
+            
+            with st.expander(f"{status_color} {config['name']}"):
+                st.text(f"키: {masked_key}")
+                
+                # API 키 입력
+                new_key = st.text_input(
+                    f"{config['name']} API 키",
+                    type="password",
+                    key=f"input_{api_id}_key",
+                    placeholder=f"{config['prefix']}..."
+                )
+                
+                if st.button(f"저장", key=f"save_{api_id}"):
+                    if api_manager.save_key(api_id, new_key):
+                        st.success(f"{config['name']} API 키가 저장되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error("올바른 API 키 형식이 아닙니다.")
+
+def show_user_settings():
+    """사용자 설정 표시"""
+    st.markdown("### 👤 사용자 설정")
+    
+    # 사용자 레벨
+    user_levels = {
+        1: "가이드 모드",
+        2: "선택 모드", 
+        3: "검증 모드",
+        4: "전문가 모드"
+    }
+    
+    current_level = st.session_state.user_level
+    
+    # 라디오 버튼으로 레벨 선택
+    selected_level = st.radio(
+        "사용자 레벨",
+        options=list(user_levels.keys()),
+        format_func=lambda x: user_levels[x],
+        index=current_level - 1,
+        horizontal=True
+    )
+    
+    if selected_level != current_level:
+        st.session_state.user_level = selected_level
+        st.rerun()
+
+def create_doe_matrix(factors: dict, design_type: str = "full_factorial") -> pd.DataFrame:
+    """실험 설계 매트릭스 생성"""
+    if design_type == "full_factorial":
+        # 완전요인설계
+        import itertools
+        
+        factor_names = list(factors.keys())
+        factor_levels = [factors[f] for f in factor_names]
+        
+        # 모든 조합 생성
+        combinations = list(itertools.product(*factor_levels))
+        
+        # DataFrame 생성
+        df = pd.DataFrame(combinations, columns=factor_names)
+        df.insert(0, 'Run', range(1, len(df) + 1))
+        
+        return df
+    else:
+        # 다른 설계 방법 구현 가능
+        return pd.DataFrame()
+
+def show_experiment_visualization():
+    """실험점 시각화"""
+    if st.session_state.experiment_design is None:
+        return
+    
+    design_df = st.session_state.experiment_design
+    
+    # 시각화 유형 선택 (세션 상태에 저장)
+    if 'viz_type' not in st.session_state:
+        st.session_state.viz_type = '2D 산점도'
+    
+    viz_type = st.selectbox(
+        "시각화 유형",
+        ['2D 산점도', '3D 산점도', '평행 좌표계', '히트맵'],
+        index=['2D 산점도', '3D 산점도', '평행 좌표계', '히트맵'].index(st.session_state.viz_type)
+    )
+    
+    # 시각화 유형이 변경되면 세션 상태 업데이트
+    if viz_type != st.session_state.viz_type:
+        st.session_state.viz_type = viz_type
+    
+    # 선택된 시각화 표시
+    if viz_type == '2D 산점도':
+        factors = [col for col in design_df.columns if col != 'Run']
+        if len(factors) >= 2:
+            fig = px.scatter(design_df, x=factors[0], y=factors[1], 
+                           title='2D 실험 공간',
+                           hover_data=['Run'])
+            st.plotly_chart(fig, use_container_width=True)
+    
+    elif viz_type == '3D 산점도':
+        factors = [col for col in design_df.columns if col != 'Run']
+        if len(factors) >= 3:
+            fig = px.scatter_3d(design_df, x=factors[0], y=factors[1], z=factors[2],
+                              title='3D 실험 공간',
+                              hover_data=['Run'])
+            st.plotly_chart(fig, use_container_width=True)
+    
+    elif viz_type == '평행 좌표계':
+        factors = [col for col in design_df.columns if col != 'Run']
+        fig = go.Figure(data=
+            go.Parcoords(
+                dimensions=[dict(label=col, values=design_df[col]) for col in factors]
+            )
+        )
+        fig.update_layout(title='평행 좌표계 시각화')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif viz_type == '히트맵':
+        factors = [col for col in design_df.columns if col != 'Run']
+        if len(factors) >= 2:
+            # 각 실험점의 밀도를 계산하여 히트맵 생성
+            pivot_data = design_df.pivot_table(
+                index=factors[0], 
+                columns=factors[1] if len(factors) > 1 else factors[0],
+                values='Run',
+                aggfunc='count',
+                fill_value=0
+            )
+            fig = px.imshow(pivot_data, title='실험점 분포 히트맵')
+            st.plotly_chart(fig, use_container_width=True)
+
+def download_csv(df: pd.DataFrame, filename: str):
+    """CSV 다운로드 버튼 생성"""
+    csv = df.to_csv(index=False)
+    st.download_button(
+        label="📥 CSV 다운로드",
+        data=csv,
+        file_name=filename,
+        mime='text/csv'
+    )
+
+def download_excel(df: pd.DataFrame, filename: str):
+    """Excel 다운로드 버튼 생성 (xlsxwriter 없이)"""
+    # BytesIO 버퍼 생성
+    buffer = io.BytesIO()
+    
+    # pandas의 to_excel 사용 (engine 지정하지 않음)
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    
+    buffer.seek(0)
+    
+    st.download_button(
+        label="📥 Excel 다운로드",
+        data=buffer,
+        file_name=filename,
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+# ==================== 상태 관리 ====================
+def initialize_session_state():
+    """세션 상태 초기화"""
+    defaults = {
+        'user_level': 1,
+        'current_page': 'home',
+        'project_info': {},
+        'experiment_design': None,
+        'results_df': None,
+        'show_visualization': False,
+        'visualization_type': '2D 산점도',
+        'api_key_manager': APIKeyManager(),
+        'db_manager': DatabaseManager()
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 # ==================== Enhanced 기능들 ====================
 if ENHANCED_FEATURES_AVAILABLE:
@@ -4451,40 +4640,294 @@ class PolymerDOEApp:
                 st.info("아직 API 사용 통계가 없습니다.")
 
 # ==================== 메인 실행 ====================
-
 def main():
-    """메인 함수"""
-    # Enhanced 기능 상태 확인
-    if ENHANCED_FEATURES_AVAILABLE:
-        logger.info("🚀 Enhanced 기능이 활성화된 상태로 앱을 시작합니다.")
-        if enhanced_ai_orchestrator:
-            logger.info(f"  - AI 엔진: {list(enhanced_ai_orchestrator.available_engines.keys())}")
-        if database_manager:
-            logger.info(f"  - DB 연결: {list(database_manager.available_apis.keys())}")
-    else:
-        logger.info("⚠️ 기본 모드로 앱을 시작합니다.")
-        logger.info("  - Enhanced AI와 DB 기능이 비활성화되었습니다.")
+    st.set_page_config(
+        page_title="🧬 고분자 실험 설계 플랫폼",
+        page_icon="🧬",
+        layout="wide"
+    )
     
-    # 앱 실행
-    app = PolymerDOEApp()
-    app.run()
+    # 세션 상태 초기화
+    initialize_session_state()
+    
+    # 사이드바
+    with st.sidebar:
+        st.title("🧬 고분자 실험 설계")
+        
+        # 네비게이션
+        pages = {
+            'home': '🏠 홈',
+            'project': '📋 프로젝트 설정',
+            'design': '🔬 실험 설계',
+            'analysis': '📊 결과 분석',
+            'settings': '⚙️ 설정'
+        }
+        
+        # 현재 페이지 선택
+        current = st.session_state.current_page
+        for page_id, page_name in pages.items():
+            if st.button(page_name, use_container_width=True, 
+                        type="primary" if current == page_id else "secondary"):
+                st.session_state.current_page = page_id
+                st.rerun()
+        
+        st.divider()
+        
+        # 연결 상태
+        st.markdown("### 연결 상태")
+        
+        # Google Sheets 연결 상태
+        db_status = "🟢 연결됨" if st.session_state.db_manager.is_connected() else "🔴 미연결"
+        st.info(f"Google Sheets: {db_status}")
+        
+        # API 상태 요약
+        api_manager = st.session_state.api_key_manager
+        configured_apis = sum(1 for status in api_manager.api_status.values() if status == 'configured')
+        total_apis = len(api_manager.api_status)
+        st.info(f"API: {configured_apis}/{total_apis} 설정됨")
+    
+    # 페이지 라우팅
+    if st.session_state.current_page == 'home':
+        show_home_page()
+    elif st.session_state.current_page == 'project':
+        show_project_page()
+    elif st.session_state.current_page == 'design':
+        show_design_page()
+    elif st.session_state.current_page == 'analysis':
+        show_analysis_page()
+    elif st.session_state.current_page == 'settings':
+        show_settings_page()
+
+def show_home_page():
+    """홈 페이지"""
+    st.title("🧬 고분자 실험 설계 플랫폼")
+    st.markdown("### AI 기반 스마트 실험 설계 시스템")
+    
+    # 환영 메시지
+    st.info("Pectin, Cellulose 용해성 향상을 위한 DES 활용 실험 설계 플랫폼입니다.")
+    
+    # 빠른 시작
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🆕 새 프로젝트 시작", use_container_width=True):
+            st.session_state.current_page = 'project'
+            st.rerun()
+    
+    with col2:
+        if st.button("📖 사용 가이드", use_container_width=True):
+            with st.expander("플랫폼 사용 가이드", expanded=True):
+                st.markdown("""
+                1. **프로젝트 설정**: 실험 목표와 대상 고분자 선택
+                2. **실험 설계**: AI 추천 또는 수동으로 실험 설계
+                3. **결과 분석**: 실험 결과 업로드 및 분석
+                4. **설정**: API 키 및 사용자 레벨 설정
+                """)
+    
+    with col3:
+        if st.button("⚙️ 설정", use_container_width=True):
+            st.session_state.current_page = 'settings'
+            st.rerun()
+
+def show_project_page():
+    """프로젝트 설정 페이지"""
+    st.title("📋 프로젝트 설정")
+    
+    with st.form("project_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            project_name = st.text_input("프로젝트 이름", 
+                                       placeholder="예: Pectin DES 용해성 향상")
+            polymer_type = st.selectbox("대상 고분자",
+                                      ["Pectin", "Cellulose", "Chitosan", "기타"])
+        
+        with col2:
+            des_type = st.selectbox("DES 유형",
+                                   ["ChCl-Urea", "ChCl-Glycerol", "ChCl-Ethylene glycol", "기타"])
+            target_property = st.multiselect("목표 물성",
+                                           ["용해도", "점도", "안정성", "투명도"])
+        
+        objectives = st.text_area("실험 목표", 
+                                placeholder="달성하고자 하는 구체적인 목표를 입력하세요")
+        
+        submitted = st.form_submit_button("프로젝트 생성", use_container_width=True)
+        
+        if submitted:
+            if project_name and polymer_type and des_type:
+                project_data = {
+                    'name': project_name,
+                    'polymer': polymer_type,
+                    'des': des_type,
+                    'properties': ', '.join(target_property),
+                    'objectives': objectives,
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                
+                st.session_state.project_info = project_data
+                
+                # Google Sheets에 저장 시도
+                if st.session_state.db_manager.save_project(project_data):
+                    st.success("프로젝트가 생성되고 저장되었습니다!")
+                else:
+                    st.success("프로젝트가 생성되었습니다! (로컬 저장)")
+                
+                st.balloons()
+            else:
+                st.error("필수 항목을 모두 입력해주세요.")
+
+def show_design_page():
+    """실험 설계 페이지"""
+    st.title("🔬 실험 설계")
+    
+    if not st.session_state.project_info:
+        st.warning("먼저 프로젝트를 설정해주세요.")
+        if st.button("프로젝트 설정으로 이동"):
+            st.session_state.current_page = 'project'
+            st.rerun()
+        return
+    
+    # 프로젝트 정보 표시
+    with st.expander("프로젝트 정보", expanded=False):
+        st.json(st.session_state.project_info)
+    
+    # 실험 인자 설정
+    st.markdown("### 실험 인자 설정")
+    
+    # 기본 인자들
+    factors = {}
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        temp_min = st.number_input("온도 최소값 (°C)", value=25, step=5)
+        temp_max = st.number_input("온도 최대값 (°C)", value=50, step=5)
+        temp_levels = st.number_input("온도 수준 수", value=2, min_value=2, max_value=5)
+        
+        if temp_levels == 2:
+            factors['온도'] = [temp_min, temp_max]
+        else:
+            factors['온도'] = list(np.linspace(temp_min, temp_max, temp_levels))
+    
+    with col2:
+        time_min = st.number_input("시간 최소값 (min)", value=30, step=10)
+        time_max = st.number_input("시간 최대값 (min)", value=120, step=10)
+        time_levels = st.number_input("시간 수준 수", value=2, min_value=2, max_value=5)
+        
+        if time_levels == 2:
+            factors['시간'] = [time_min, time_max]
+        else:
+            factors['시간'] = list(np.linspace(time_min, time_max, time_levels))
+    
+    # 실험 설계 생성
+    if st.button("실험 설계 생성", use_container_width=True):
+        design_matrix = create_doe_matrix(factors)
+        st.session_state.experiment_design = design_matrix
+        
+        st.success("실험 설계가 생성되었습니다!")
+        
+        # 설계 매트릭스 표시
+        st.markdown("### 실험 설계 매트릭스")
+        st.dataframe(design_matrix, use_container_width=True)
+        
+        # 다운로드 옵션
+        col1, col2 = st.columns(2)
+        with col1:
+            download_csv(design_matrix, f"experiment_design_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        
+        with col2:
+            try:
+                download_excel(design_matrix, f"experiment_design_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            except Exception as e:
+                st.error(f"Excel 다운로드 오류: {e}")
+    
+    # 시각화
+    if st.session_state.experiment_design is not None:
+        st.markdown("### 실험점 시각화")
+        show_experiment_visualization()
+
+def show_analysis_page():
+    """결과 분석 페이지"""
+    st.title("📊 결과 분석")
+    
+    uploaded_file = st.file_uploader("실험 결과 CSV 파일 업로드", type=['csv'])
+    
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state.results_df = df
+            
+            st.success("파일이 업로드되었습니다!")
+            
+            # 데이터 미리보기
+            st.markdown("### 데이터 미리보기")
+            st.dataframe(df.head(), use_container_width=True)
+            
+            # 기본 통계
+            st.markdown("### 기본 통계")
+            st.dataframe(df.describe(), use_container_width=True)
+            
+            # 시각화
+            st.markdown("### 데이터 시각화")
+            
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            
+            if len(numeric_cols) >= 2:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    x_col = st.selectbox("X축", numeric_cols)
+                
+                with col2:
+                    y_col = st.selectbox("Y축", numeric_cols, index=1 if len(numeric_cols) > 1 else 0)
+                
+                if x_col and y_col:
+                    fig = px.scatter(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+                    st.plotly_chart(fig, use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"파일 처리 중 오류가 발생했습니다: {e}")
+
+def show_settings_page():
+    """설정 페이지"""
+    st.title("⚙️ 설정")
+    
+    # 사용자 설정
+    show_user_settings()
+    
+    st.divider()
+    
+    # API 설정
+    show_api_status()
+    
+    st.divider()
+    
+    # Google Sheets 설정
+    st.markdown("### 📊 Google Sheets 설정")
+    
+    if st.session_state.db_manager.is_connected():
+        st.success("✅ Google Sheets가 연결되어 있습니다.")
+    else:
+        st.warning("Google Sheets가 연결되지 않았습니다.")
+        
+        with st.expander("설정 방법"):
+            st.markdown("""
+            1. Google Cloud Console에서 서비스 계정 생성
+            2. Google Sheets API 활성화
+            3. 서비스 계정 JSON 키 다운로드
+            4. `.streamlit/secrets.toml`에 다음 형식으로 추가:
+            
+            ```toml
+            private_gsheets_url = "YOUR_SHEET_URL"
+            
+            [gcp_service_account]
+            type = "service_account"
+            project_id = "your-project"
+            # ... JSON 키 내용
+            ```
+            
+            5. 생성한 시트에 서비스 계정 이메일 편집자 권한 부여
+            """)
 
 if __name__ == "__main__":
-    # Google Colab에서 실행 시 안내
-    try:
-        from google.colab import files
-        print("\n" + "="*50)
-        print("🧬 고분자 실험 설계 플랫폼 - Google Colab")
-        print("="*50)
-        print("\nStreamlit 앱을 실행하려면:")
-        print("1. 다음 명령어를 실행하세요:")
-        print("   !streamlit run polymer_platform.py &")
-        print("\n2. ngrok을 사용하여 외부 접속을 허용하세요:")
-        print("   !pip install pyngrok")
-        print("   from pyngrok import ngrok")
-        print("   public_url = ngrok.connect(8501)")
-        print("   print(public_url)")
-        print("\n" + "="*50)
-    except ImportError:
-        # 일반 환경에서 실행
-        main()
+    main()
