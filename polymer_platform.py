@@ -1,22 +1,26 @@
-import os
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import os
 import json
-import requests
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import openai
-from scipy import stats
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-import hashlib
-import base64
+import asyncio
+import aiohttp
+from typing import Dict, List, Optional, Any
+import logging
+import gspread
+from google.oauth2 import service_account
 import io
-import re
+
+# xlsxwriter 설치 확인 및 대체 방안
+try:
+    import xlsxwriter
+    XLSX_AVAILABLE = True
+except ImportError:
+    XLSX_AVAILABLE = False
+    st.warning("xlsxwriter가 설치되지 않았습니다. CSV 형식으로만 다운로드 가능합니다.")
 
 # ==================== 기본 설정 ====================
 # Streamlit 페이지 설정
@@ -159,6 +163,81 @@ class APIKeyManager:
                 'category': 'database'
             }
         }
+        self.api_keys = {}
+        self.api_status = {}
+        self.load_keys()
+
+    def load_keys(self):
+        """Streamlit secrets 및 환경변수에서 API 키 로드"""
+        for api_id, config in self.required_apis.items():
+            key = None
+            
+            # 1. Streamlit secrets에서 먼저 확인
+            try:
+                key = st.secrets.get(config['env_key'].lower(), None)
+                if not key:
+                    key = st.secrets.get(api_id + '_api_key', None)
+            except:
+                pass
+            
+            # 2. 환경변수에서 확인
+            if not key:
+                key = os.getenv(config['env_key'])
+            
+            # 3. 세션 상태에서 확인 (사용자가 직접 입력한 경우)
+            if not key and f'{api_id}_api_key' in st.session_state:
+                key = st.session_state[f'{api_id}_api_key']
+            
+            if key:
+                self.api_keys[api_id] = key
+                self.api_status[api_id] = 'configured'
+            else:
+                self.api_status[api_id] = 'missing'
+    
+    def get_masked_key(self, api_id: str) -> str:
+        """API 키의 앞 3자리만 보여주고 나머지는 마스킹"""
+        if api_id not in self.api_keys:
+            return "미설정"
+        
+        key = self.api_keys[api_id]
+        if len(key) > 7:
+            return f"{key[:3]}{'*' * (len(key) - 7)}{key[-4:]}"
+        else:
+            return "*" * len(key)
+    
+    def validate_key_format(self, api_id: str, key: str) -> bool:
+        """API 키 형식 검증"""
+        if api_id not in self.required_apis:
+            return False
+        
+        prefix = self.required_apis[api_id]['prefix']
+        if prefix and not key.startswith(prefix):
+            return False
+        
+        # 기본 길이 체크
+        if len(key) < 10:
+            return False
+        
+        return True
+    
+    def save_key(self, api_id: str, key: str):
+        """API 키 저장 (세션 상태)"""
+        if self.validate_key_format(api_id, key):
+            st.session_state[f'{api_id}_api_key'] = key
+            self.api_keys[api_id] = key
+            self.api_status[api_id] = 'configured'
+            return True
+        return False
+    
+    def get_status_color(self, api_id: str) -> str:
+        """API 상태에 따른 색상 반환"""
+        status = self.api_status.get(api_id, 'missing')
+        if status == 'active':
+            return "🟢"
+        elif status == 'configured':
+            return "🟡"
+        else:
+            return "🔴"
     
     def initialize_keys(self):
         """API 키 초기화"""
@@ -318,55 +397,78 @@ class StateManager:
 
 # ==================== 데이터베이스 매니저 ====================
 class DatabaseManager:
-    """구글 시트를 사용한 데이터 영속성 관리"""
+    """Google Sheets 데이터베이스 관리"""
     
     def __init__(self):
-        self.sheet_url = None
         self.client = None
         self.sheet = None
-        self.available_databases = {}
-        self._initialize_databases()
+        self.initialize_connection()
     
-    def _initialize_databases(self):
-        """데이터베이스 연결 초기화"""
-        # 간단한 로컬 저장소로 대체
-        self.local_storage = {
-            'experiments': [],
-            'users': [],
-            'community_posts': []
-        }
+    def initialize_connection(self):
+        """Google Sheets 연결 초기화"""
+        try:
+            # Streamlit secrets에서 서비스 계정 정보 로드
+            if 'gcp_service_account' in st.secrets:
+                credentials_dict = dict(st.secrets['gcp_service_account'])
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=['https://www.googleapis.com/auth/spreadsheets',
+                            'https://www.googleapis.com/auth/drive']
+                )
+                self.client = gspread.authorize(credentials)
+                
+                # 스프레드시트 URL 확인
+                if 'private_gsheets_url' in st.secrets:
+                    try:
+                        self.sheet = self.client.open_by_url(st.secrets['private_gsheets_url'])
+                        logger.info("Google Sheets 연결 성공")
+                    except Exception as e:
+                        logger.error(f"스프레드시트 열기 실패: {e}")
+                        st.error("스프레드시트에 접근할 수 없습니다. URL과 권한을 확인하세요.")
+            else:
+                logger.warning("Google Sheets 인증 정보가 없습니다.")
+        except Exception as e:
+            logger.error(f"Google Sheets 연결 실패: {e}")
+            self.client = None
+            self.sheet = None
     
-    def save_experiment(self, experiment_data):
-        """실험 데이터 저장"""
-        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        experiment_data['id'] = experiment_id
-        experiment_data['created_at'] = datetime.now().isoformat()
-        self.local_storage['experiments'].append(experiment_data)
-        return experiment_id
+    def is_connected(self) -> bool:
+        """연결 상태 확인"""
+        return self.client is not None and self.sheet is not None
     
-    def get_experiment(self, experiment_id):
-        """실험 데이터 조회"""
-        for exp in self.local_storage['experiments']:
-            if exp.get('id') == experiment_id:
-                return exp
-        return None
-    
-    def get_platform_stats(self):
-        """플랫폼 통계 가져오기"""
-        return st.session_state.get('platform_stats', {
-            'total_experiments': len(self.local_storage['experiments']),
-            'ai_consultations': 0,
-            'active_users': 1,
-            'success_rate': 85.0
-        })
-    
-    def update_platform_stats(self, stat_type, increment=1):
-        """플랫폼 통계 업데이트"""
-        if 'platform_stats' not in st.session_state:
-            st.session_state['platform_stats'] = self.get_platform_stats()
+    def get_worksheet(self, name: str):
+        """워크시트 가져오기 또는 생성"""
+        if not self.is_connected():
+            return None
         
-        if stat_type in st.session_state['platform_stats']:
-            st.session_state['platform_stats'][stat_type] += increment
+        try:
+            return self.sheet.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            # 워크시트가 없으면 생성
+            worksheet = self.sheet.add_worksheet(title=name, rows=1000, cols=26)
+            return worksheet
+    
+    def save_project(self, project_data: dict) -> bool:
+        """프로젝트 저장"""
+        if not self.is_connected():
+            return False
+        
+        try:
+            worksheet = self.get_worksheet('projects')
+            if worksheet:
+                # 헤더가 없으면 추가
+                if worksheet.row_count == 0 or not worksheet.row_values(1):
+                    headers = list(project_data.keys())
+                    worksheet.update('A1', [headers])
+                
+                # 데이터 추가
+                values = list(project_data.values())
+                worksheet.append_row(values)
+                return True
+        except Exception as e:
+            logger.error(f"프로젝트 저장 실패: {e}")
+        return False
+
 
 # ==================== Enhanced 기능들 ====================
 if ENHANCED_FEATURES_AVAILABLE:
