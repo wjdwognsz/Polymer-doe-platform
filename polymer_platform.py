@@ -13587,111 +13587,555 @@ class LearningCenterPage:
     """학습 센터 페이지"""
     
     def __init__(self):
-        self.learning_modules = {
+        # 학습 모듈을 별도 메서드로 초기화
+        self.learning_modules = self._initialize_learning_modules()
+        # 사용자의 학습 기록을 추적하기 위한 속성
+        self.user_progress = {}
+        
+    def _initialize_learning_modules(self):
+        """학습 모듈을 초기화하고 반환합니다"""
+        modules = {
             'basics': {
                 'title': '기초 개념',
+                'icon': '🎯',
                 'topics': [
                     '실험계획법이란?',
                     '요인과 반응변수',
                     '주효과와 상호작용',
                     '통계적 유의성'
-                ]
+                ],
+                'difficulty': 1,  # 난이도 (1-5)
+                'estimated_time': 120,  # 예상 학습 시간 (분)
+                'prerequisites': [],  # 선수 학습 모듈
+                'order': 1  # 학습 순서
             },
             'design_types': {
                 'title': '실험 설계 유형',
+                'icon': '📐',
                 'topics': [
                     '완전요인설계',
                     '부분요인설계',
                     '반응표면설계',
                     '혼합물설계'
-                ]
+                ],
+                'difficulty': 2,
+                'estimated_time': 180,
+                'prerequisites': ['basics'],
+                'order': 2
             },
             'analysis': {
                 'title': '데이터 분석',
+                'icon': '📊',
                 'topics': [
                     'ANOVA 이해하기',
                     '회귀분석 기초',
                     '최적화 방법',
                     '결과 해석'
-                ]
+                ],
+                'difficulty': 3,
+                'estimated_time': 240,
+                'prerequisites': ['basics', 'design_types'],
+                'order': 3
             },
             'polymer_specific': {
                 'title': '고분자 특화',
+                'icon': '🧬',
                 'topics': [
                     '고분자 특성 평가',
                     '가공 조건 최적화',
                     '구조-물성 관계',
                     '품질 관리'
-                ]
+                ],
+                'difficulty': 3,
+                'estimated_time': 200,
+                'prerequisites': ['basics'],
+                'order': 4
             }
         }
         
-    def render(self, user_level: UserLevel):  # user_level 인자 추가
+        # 사용자 설정이나 권한에 따라 고급 모듈 추가
+        if self._is_advanced_mode_enabled():
+            modules['advanced'] = {
+                'title': '고급 기법',
+                'icon': '🚀',
+                'topics': [
+                    '베이지안 최적화',
+                    '기계학습 응용',
+                    '다목적 최적화',
+                    '불확실성 정량화'
+                ],
+                'difficulty': 5,
+                'estimated_time': 300,
+                'prerequisites': ['analysis', 'polymer_specific'],
+                'order': 5
+            }
+        
+        # 특별 이벤트나 시즌에 따른 모듈 추가
+        if self._is_special_content_available():
+            modules['special'] = {
+                'title': '특별 강좌',
+                'icon': '✨',
+                'topics': self._get_special_topics(),
+                'difficulty': 2,
+                'estimated_time': 90,
+                'prerequisites': [],
+                'order': 6
+            }
+        
+        return modules
+    
+    def _is_advanced_mode_enabled(self):
+        """고급 모드가 활성화되어 있는지 확인"""
+        # 사용자 레벨이나 설정을 확인하여 고급 모드 활성화 여부 결정
+        if 'user_settings' in st.session_state:
+            return st.session_state.user_settings.get('advanced_mode', False)
+        return False
+    
+    def _is_special_content_available(self):
+        """특별 콘텐츠가 사용 가능한지 확인"""
+        # 날짜나 이벤트에 따라 특별 콘텐츠 제공
+        from datetime import datetime
+        current_month = datetime.now().month
+        # 예: 12월에 특별 콘텐츠 제공
+        return current_month == 12
+    
+    def _get_special_topics(self):
+        """특별 토픽 목록을 동적으로 생성"""
+        return [
+            '최신 연구 동향 2024',
+            'AI와 고분자 설계',
+            '지속가능한 고분자',
+            '산업 응용 사례'
+        ]
+    
+    def _check_prerequisites(self, module_key: str) -> Tuple[bool, List[str]]:
+        """선수 학습 모듈 완료 여부 확인"""
+        module = self.learning_modules.get(module_key)
+        if not module:
+            return False, []
+        
+        prerequisites = module.get('prerequisites', [])
+        if not prerequisites:
+            return True, []
+        
+        # 사용자의 학습 진도 확인
+        completed_modules = st.session_state.get('completed_modules', [])
+        missing_prerequisites = [
+            prereq for prereq in prerequisites 
+            if prereq not in completed_modules
+        ]
+        
+        return len(missing_prerequisites) == 0, missing_prerequisites
+    
+    def render(self, user_level: UserLevel):
+        """페이지 렌더링"""
         st.title("📚 학습 센터")
         
-        # 사용자 레벨별 맞춤 콘텐츠
-        st.markdown(f"### {user_level.icon} {user_level.description}")
+        # 사용자 레벨별 맞춤 환영 메시지
+        self._render_welcome_message(user_level)
         
-        # 학습 진도
-        col1, col2, col3 = st.columns(3)
+        # 학습 진도 대시보드
+        self._render_progress_dashboard()
+        
+        # 추천 학습 경로
+        self._render_learning_path(user_level)
+        
+        # 학습 모듈 렌더링
+        self._render_learning_modules(user_level)
+    
+    def _render_welcome_message(self, user_level: UserLevel):
+        """사용자 레벨별 맞춤 환영 메시지"""
+        messages = {
+            UserLevel.BEGINNER: """
+            🌟 **학습 센터에 오신 것을 환영합니다!**
+            
+            실험 설계가 처음이신가요? 걱정하지 마세요! 
+            기초부터 차근차근 배워나가실 수 있도록 도와드리겠습니다.
+            
+            💡 **팁**: '기초 개념' 모듈부터 시작하시는 것을 추천드립니다.
+            """,
+            UserLevel.INTERMEDIATE: """
+            🌿 **다시 오신 것을 환영합니다!**
+            
+            기초를 마스터하셨다면, 이제 더 깊이 있는 내용을 탐구해볼 시간입니다.
+            데이터 분석과 최적화 기법에 도전해보세요!
+            """,
+            UserLevel.ADVANCED: """
+            🌳 **고급 학습자님, 환영합니다!**
+            
+            이제 실전 응용과 최신 기법들을 익혀보세요.
+            고분자 특화 모듈과 고급 기법들이 준비되어 있습니다.
+            """,
+            UserLevel.EXPERT: """
+            🎓 **전문가님, 환영합니다!**
+            
+            최신 연구 동향과 고급 토픽들을 탐구해보세요.
+            여러분의 지식을 다른 사용자들과 공유하는 것도 고려해보시기 바랍니다.
+            """
+        }
+        
+        st.info(messages.get(user_level, messages[UserLevel.BEGINNER]))
+    
+    def _render_progress_dashboard(self):
+        """학습 진도 대시보드"""
+        st.markdown("### 📊 나의 학습 현황")
+        
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             progress = self._calculate_learning_progress()
-            st.metric("학습 진도", f"{progress}%")
+            st.metric(
+                "전체 진도", 
+                f"{progress}%",
+                delta=f"+{progress - st.session_state.get('last_progress', 0)}%"
+            )
         
         with col2:
-            completed_modules = self._get_completed_modules()
-            st.metric("완료 모듈", f"{completed_modules}/16")
+            completed = self._get_completed_modules()
+            total = len(self.learning_modules)
+            st.metric(
+                "완료 모듈", 
+                f"{completed}/{total}",
+                delta="+1" if completed > st.session_state.get('last_completed', 0) else None
+            )
         
         with col3:
             streak = self._get_learning_streak()
-            st.metric("연속 학습", f"{streak}일")
+            st.metric(
+                "연속 학습", 
+                f"{streak}일",
+                delta="+1일" if streak > 0 else None
+            )
         
-        # 추천 학습 경로
-        if user_level == UserLevel.BEGINNER:
-            st.info("""
-            🎯 **초보자 추천 학습 경로**
-            1. 기초 개념 → 2. 실험 설계 유형 → 3. 데이터 분석 → 4. 고분자 특화
+        with col4:
+            total_time = self._get_total_learning_time()
+            st.metric(
+                "총 학습 시간",
+                f"{total_time}시간",
+                delta=f"+{total_time - st.session_state.get('last_time', 0)}시간"
+            )
+    
+    def _render_learning_path(self, user_level: UserLevel):
+        """추천 학습 경로 표시"""
+        st.markdown("### 🗺️ 추천 학습 경로")
+        
+        # 학습 경로를 시각적으로 표시
+        path_container = st.container()
+        with path_container:
+            # 모듈을 순서대로 정렬
+            sorted_modules = sorted(
+                self.learning_modules.items(),
+                key=lambda x: x[1].get('order', 99)
+            )
             
-            각 모듈을 순서대로 학습하시면 전문가 수준에 도달할 수 있습니다!
-            """)
+            # 경로 표시
+            path_cols = st.columns(len(sorted_modules))
+            for i, (module_key, module_info) in enumerate(sorted_modules):
+                with path_cols[i]:
+                    # 완료 여부 확인
+                    is_completed = module_key in st.session_state.get('completed_modules', [])
+                    can_access, missing = self._check_prerequisites(module_key)
+                    
+                    # 상태에 따른 스타일 적용
+                    if is_completed:
+                        st.success(f"✅ {module_info['icon']}\n{module_info['title']}")
+                    elif can_access:
+                        st.info(f"🔓 {module_info['icon']}\n{module_info['title']}")
+                    else:
+                        st.warning(f"🔒 {module_info['icon']}\n{module_info['title']}")
+                        if missing:
+                            st.caption(f"선수: {', '.join(missing)}")
+                    
+                    # 진행률 표시
+                    module_progress = self._get_module_progress(module_key)
+                    st.progress(module_progress / 100)
+                    st.caption(f"{module_progress}% 완료")
+                
+                # 화살표 표시 (마지막 모듈 제외)
+                if i < len(sorted_modules) - 1:
+                    st.markdown("→")
+    
+    def _render_learning_modules(self, user_level: UserLevel):
+        """학습 모듈 렌더링"""
+        st.markdown("### 📖 학습 모듈")
         
-        # 학습 모듈 탭
-        tabs = st.tabs(list(self.learning_modules.keys()))
+        # 탭으로 모듈 구성
+        tab_names = [f"{info['icon']} {info['title']}" for info in self.learning_modules.values()]
+        tabs = st.tabs(tab_names)
         
         for i, (module_key, module_info) in enumerate(self.learning_modules.items()):
             with tabs[i]:
-                st.markdown(f"### {module_info['title']}")
+                # 모듈 정보 표시
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"**난이도**: {'⭐' * module_info['difficulty']}")
+                with col2:
+                    hours = module_info['estimated_time'] // 60
+                    minutes = module_info['estimated_time'] % 60
+                    st.markdown(f"**예상 시간**: {hours}시간 {minutes}분")
+                with col3:
+                    can_access, missing = self._check_prerequisites(module_key)
+                    if can_access:
+                        st.markdown("**상태**: 🟢 학습 가능")
+                    else:
+                        st.markdown("**상태**: 🔴 잠김")
                 
-                for topic in module_info['topics']:
-                    with st.expander(f"📖 {topic}"):
-                        # 학습 컨텐츠 로드
+                # 선수 학습 요구사항 표시
+                if not can_access and missing:
+                    st.warning(f"먼저 다음 모듈을 완료해주세요: {', '.join(missing)}")
+                    continue
+                
+                # 토픽별 학습 콘텐츠
+                for topic_index, topic in enumerate(module_info['topics']):
+                    with st.expander(f"📖 {topic}", expanded=False):
+                        # 학습 콘텐츠 로드
                         content = self._load_learning_content(module_key, topic, user_level)
+                        
+                        # 콘텐츠 표시
                         st.markdown(content['text'])
                         
-                        # 인터랙티브 요소
-                        if 'quiz' in content:
-                            st.markdown("#### 🎯 확인 문제")
-                            answer = st.radio(
-                                content['quiz']['question'],
-                                content['quiz']['options'],
-                                key=f"quiz_{module_key}_{topic}"
-                            )
-                            
-                            if st.button("정답 확인", key=f"check_{module_key}_{topic}"):
-                                if answer == content['quiz']['correct']:
-                                    st.success("정답입니다! 🎉")
-                                else:
-                                    st.error(f"틀렸습니다. 정답은 '{content['quiz']['correct']}'입니다.")
+                        # 학습 활동
+                        self._render_learning_activities(
+                            module_key, 
+                            topic, 
+                            topic_index,
+                            content,
+                            user_level
+                        )
+    
+    def _render_learning_activities(self, module_key: str, topic: str, 
+                                  topic_index: int, content: Dict, 
+                                  user_level: UserLevel):
+        """학습 활동 렌더링 (퀴즈, 실습 등)"""
+        
+        # 퀴즈가 있는 경우
+        if 'quiz' in content:
+            st.markdown("#### 🎯 확인 문제")
+            quiz = content['quiz']
+            
+            # 이전 답변 기록 확인
+            quiz_key = f"quiz_{module_key}_{topic_index}"
+            previous_answer = st.session_state.get(f"{quiz_key}_answer")
+            
+            answer = st.radio(
+                quiz['question'],
+                quiz['options'],
+                key=quiz_key,
+                index=quiz['options'].index(previous_answer) if previous_answer else 0
+            )
+            
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button("정답 확인", key=f"check_{quiz_key}"):
+                    st.session_state[f"{quiz_key}_answer"] = answer
+                    if answer == quiz['correct']:
+                        st.success("정답입니다! 🎉")
+                        self._update_topic_progress(module_key, topic_index, 'quiz', True)
+                    else:
+                        st.error(f"틀렸습니다. 정답은 '{quiz['correct']}'입니다.")
+                        st.info(quiz.get('explanation', '다시 한번 생각해보세요!'))
+        
+        # 실습 예제가 있는 경우
+        if 'example' in content:
+            st.markdown("#### 💻 실습 예제")
+            example = content['example']
+            
+            # 코드 표시
+            st.code(example['code'], language='python')
+            
+            # 실행 버튼
+            if st.button("실행", key=f"run_{module_key}_{topic_index}"):
+                with st.spinner("실행 중..."):
+                    # 실제로는 안전한 샌드박스 환경에서 실행해야 함
+                    try:
+                        # 시뮬레이션된 결과 표시
+                        if 'result' in example:
+                            st.pyplot(example['result'])
+                        else:
+                            st.success("실행이 완료되었습니다!")
                         
-                        # 실습 예제
-                        if 'example' in content:
-                            st.markdown("#### 💻 실습 예제")
-                            st.code(content['example']['code'], language='python')
-                            
-                            if st.button("실행", key=f"run_{module_key}_{topic}"):
-                                # 예제 실행 (시뮬레이션)
-                                st.pyplot(content['example']['result'])
+                        self._update_topic_progress(module_key, topic_index, 'practice', True)
+                    except Exception as e:
+                        st.error(f"실행 중 오류가 발생했습니다: {str(e)}")
+        
+        # 추가 자료
+        if 'resources' in content:
+            st.markdown("#### 📚 추가 학습 자료")
+            for resource in content['resources']:
+                st.markdown(f"- [{resource['title']}]({resource['url']})")
+    
+    def _load_learning_content(self, module_key: str, topic: str, 
+                             user_level: UserLevel) -> Dict:
+        """학습 콘텐츠 로드 (실제로는 DB나 파일에서 가져와야 함)"""
+        # 여기서는 예시 콘텐츠를 반환
+        content_database = {
+            'basics': {
+                '실험계획법이란?': {
+                    'text': """
+                    실험계획법(Design of Experiments, DOE)은 실험을 체계적으로 
+                    계획하고 수행하여 최소한의 실험으로 최대한의 정보를 얻는 
+                    통계적 방법론입니다.
+                    
+                    **주요 개념:**
+                    - 요인(Factor): 실험에서 변화시키는 변수
+                    - 수준(Level): 각 요인이 가질 수 있는 값
+                    - 반응(Response): 측정하는 결과값
+                    
+                    **왜 필요한가요?**
+                    1. 시간과 비용 절약
+                    2. 상호작용 효과 파악
+                    3. 최적 조건 도출
+                    4. 통계적 신뢰성 확보
+                    """,
+                    'quiz': {
+                        'question': "실험계획법의 주요 목적은 무엇인가요?",
+                        'options': [
+                            "많은 실험을 수행하기",
+                            "최소 실험으로 최대 정보 획득",
+                            "복잡한 통계 사용하기",
+                            "데이터를 많이 수집하기"
+                        ],
+                        'correct': "최소 실험으로 최대 정보 획득",
+                        'explanation': "실험계획법의 핵심은 효율성입니다. 체계적인 계획을 통해 적은 수의 실험으로도 신뢰할 수 있는 결과를 얻을 수 있습니다."
+                    },
+                    'example': {
+                        'code': """
+# 간단한 2^2 완전요인설계 예시
+import numpy as np
+import pandas as pd
+
+# 요인 설정
+factors = {
+    '온도': [-1, 1],  # 낮음(-1), 높음(1)
+    '시간': [-1, 1]   # 짧음(-1), 길음(1)
+}
+
+# 실험 매트릭스 생성
+experiments = []
+for temp in factors['온도']:
+    for time in factors['시간']:
+        experiments.append({'온도': temp, '시간': time})
+
+design_matrix = pd.DataFrame(experiments)
+print("실험 설계 매트릭스:")
+print(design_matrix)
+""",
+                        'result': None  # 실제로는 그래프나 테이블 객체
+                    },
+                    'resources': [
+                        {
+                            'title': 'DOE 기초 가이드 (NIST)',
+                            'url': 'https://www.itl.nist.gov/div898/handbook/pri/pri.htm'
+                        },
+                        {
+                            'title': '실험계획법 온라인 강의',
+                            'url': 'https://www.coursera.org/learn/design-experiments'
+                        }
+                    ]
+                }
+            }
+        }
+        
+        # 기본 콘텐츠
+        default_content = {
+            'text': f"""
+            **{topic}**에 대한 학습 콘텐츠입니다.
+            
+            이 주제는 {module_key} 모듈의 일부로, 실험 설계의 중요한 개념을 다룹니다.
+            
+            사용자 레벨: {user_level.description}에 맞춰 설명을 제공합니다.
+            """,
+            'quiz': None,
+            'example': None,
+            'resources': []
+        }
+        
+        # 실제 콘텐츠 또는 기본값 반환
+        module_content = content_database.get(module_key, {})
+        topic_content = module_content.get(topic, default_content)
+        
+        # 사용자 레벨에 따른 콘텐츠 조정
+        if user_level == UserLevel.BEGINNER:
+            topic_content['text'] = "💡 **초보자를 위한 쉬운 설명**\n\n" + topic_content['text']
+        elif user_level == UserLevel.EXPERT:
+            topic_content['text'] += "\n\n📚 **심화 학습**\n고급 통계 이론과 최신 연구 동향을 추가로 학습하세요."
+        
+        return topic_content
+    
+    def _calculate_learning_progress(self) -> int:
+        """전체 학습 진도 계산"""
+        if 'learning_progress' not in st.session_state:
+            st.session_state.learning_progress = {}
+        
+        total_topics = sum(len(module['topics']) for module in self.learning_modules.values())
+        completed_topics = len(st.session_state.learning_progress)
+        
+        return int((completed_topics / total_topics) * 100) if total_topics > 0 else 0
+    
+    def _get_completed_modules(self) -> int:
+        """완료된 모듈 수 반환"""
+        return len(st.session_state.get('completed_modules', []))
+    
+    def _get_learning_streak(self) -> int:
+        """연속 학습 일수 계산"""
+        # 실제로는 날짜별 학습 기록을 추적해야 함
+        return st.session_state.get('learning_streak', 0)
+    
+    def _get_total_learning_time(self) -> float:
+        """총 학습 시간 계산 (시간 단위)"""
+        # 실제로는 각 세션의 시간을 추적해야 함
+        return st.session_state.get('total_learning_time', 0) / 60
+    
+    def _get_module_progress(self, module_key: str) -> int:
+        """특정 모듈의 진행률 계산"""
+        module = self.learning_modules.get(module_key)
+        if not module:
+            return 0
+        
+        total_topics = len(module['topics'])
+        completed_topics = 0
+        
+        # 각 토픽의 완료 여부 확인
+        progress = st.session_state.get('learning_progress', {})
+        for i in range(total_topics):
+            topic_key = f"{module_key}_{i}"
+            if topic_key in progress and progress[topic_key].get('completed', False):
+                completed_topics += 1
+        
+        return int((completed_topics / total_topics) * 100) if total_topics > 0 else 0
+    
+    def _update_topic_progress(self, module_key: str, topic_index: int, 
+                             activity_type: str, completed: bool):
+        """토픽 진행 상황 업데이트"""
+        if 'learning_progress' not in st.session_state:
+            st.session_state.learning_progress = {}
+        
+        topic_key = f"{module_key}_{topic_index}"
+        
+        if topic_key not in st.session_state.learning_progress:
+            st.session_state.learning_progress[topic_key] = {
+                'started_at': datetime.now(),
+                'activities': {}
+            }
+        
+        # 활동 완료 기록
+        st.session_state.learning_progress[topic_key]['activities'][activity_type] = {
+            'completed': completed,
+            'completed_at': datetime.now()
+        }
+        
+        # 모든 활동이 완료되었는지 확인
+        all_completed = all(
+            act.get('completed', False) 
+            for act in st.session_state.learning_progress[topic_key]['activities'].values()
+        )
+        
+        if all_completed:
+            st.session_state.learning_progress[topic_key]['completed'] = True
+            st.session_state.learning_progress[topic_key]['completed_at'] = datetime.now()
+            
+            # 모듈 완료 여부 확인
+            self._check_module_completion(module_key)
 
 # ==================== 학습 컨텐츠 시스템 ====================
     def _load_learning_content(self, module: str, topic: str, user_level: UserLevel) -> Dict:
