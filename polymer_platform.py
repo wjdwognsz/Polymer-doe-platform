@@ -8386,6 +8386,107 @@ class OpenAlexClient(BaseDBClient):
             })
         return formatted
 
+class CrossrefClient(BaseDBClient):
+    """Crossref API 클라이언트"""
+    
+    def __init__(self):
+        super().__init__(
+            name="crossref",
+            base_url="https://api.crossref.org",
+            requires_auth=False  # Crossref는 인증 불필요
+        )
+        
+    async def _test_connection(self):
+        """연결 테스트"""
+        async with self.session.get(f"{self.base_url}/works?rows=1") as response:
+            if response.status != 200:
+                raise ConnectionError(f"API 응답 오류: {response.status}")
+    
+    async def search(self, query: str, filters: Dict = None) -> List[Dict]:
+        """문헌 검색"""
+        if not self.is_available:
+            return []
+        
+        # Rate limiting 체크
+        if not await self.rate_limiter.check_rate():
+            logger.warning(f"{self.name}: Rate limit 초과")
+            return []
+        
+        # 검색 파라미터 구성
+        params = {
+            'query': query,
+            'rows': filters.get('limit', 20) if filters else 20,
+            'sort': filters.get('sort', 'relevance') if filters else 'relevance'
+        }
+        
+        # 필터 적용
+        if filters:
+            if 'from_date' in filters:
+                params['filter'] = f"from-created-date:{filters['from_date']}"
+            if 'type' in filters:
+                params['filter'] = params.get('filter', '') + f",type:{filters['type']}"
+        
+        try:
+            async with self.session.get(
+                f"{self.base_url}/works",
+                params=params
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._format_results(data.get('message', {}).get('items', []))
+                else:
+                    logger.error(f"{self.name}: 검색 오류 - {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"{self.name}: 검색 중 오류 - {str(e)}")
+            return []
+    
+    def _format_results(self, raw_results: List[Dict]) -> List[Dict]:
+        """결과 포맷팅"""
+        formatted = []
+        for item in raw_results:
+            # 저자 정보 추출
+            authors = []
+            for author in item.get('author', []):
+                if 'given' in author and 'family' in author:
+                    authors.append(f"{author['given']} {author['family']}")
+                elif 'name' in author:
+                    authors.append(author['name'])
+            
+            # DOI URL 생성
+            doi = item.get('DOI', '')
+            url = f"https://doi.org/{doi}" if doi else None
+            
+            formatted.append({
+                'source': 'Crossref',
+                'doi': doi,
+                'title': item.get('title', [''])[0] if item.get('title') else '',
+                'authors': authors,
+                'published_date': self._parse_date(item.get('published-print', item.get('published-online', {}))),
+                'journal': item.get('container-title', [''])[0] if item.get('container-title') else '',
+                'volume': item.get('volume'),
+                'issue': item.get('issue'),
+                'pages': item.get('page'),
+                'type': item.get('type'),
+                'cited_by_count': item.get('is-referenced-by-count', 0),
+                'url': url
+            })
+        return formatted
+    
+    def _parse_date(self, date_parts_dict):
+        """날짜 파싱"""
+        if not date_parts_dict or 'date-parts' not in date_parts_dict:
+            return None
+        
+        date_parts = date_parts_dict.get('date-parts', [[]])[0]
+        if len(date_parts) >= 3:
+            return f"{date_parts[0]}-{date_parts[1]:02d}-{date_parts[2]:02d}"
+        elif len(date_parts) == 2:
+            return f"{date_parts[0]}-{date_parts[1]:02d}"
+        elif len(date_parts) == 1:
+            return str(date_parts[0])
+        return None
+
 # ==================== 고급 실험 설계 엔진 ====================
 class AdvancedExperimentDesignEngine:
     """AI 기반 고급 실험 설계 엔진"""
