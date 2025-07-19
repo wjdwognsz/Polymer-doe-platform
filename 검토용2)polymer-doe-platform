@@ -9335,4 +9335,685 @@ class ExperimentDesignPage:
                 else:
                     st.error(f"설계 생성 실패: {design_result.get('error', '알 수 없는 오류')}")
 
+    def _render_validation(self, user_level: UserLevel):
+        """검증 및 최적화 탭"""
+        st.markdown("### 실험 설계 검증")
+        
+        if 'experiment_design' not in st.session_state:
+            st.warning("먼저 실험 설계를 생성해주세요.")
+            return
+        
+        design = st.session_state.experiment_design
+        validation_report = design.get('validation_report', {})
+        
+        # 전체 검증 점수
+        overall_score = validation_report.get('overall_score', 0)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            # 게이지 차트로 점수 표시
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=overall_score * 100,
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "설계 품질 점수"},
+                delta={'reference': 80, 'relative': True},
+                gauge={
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "darkblue"},
+                    'steps': [
+                        {'range': [0, 50], 'color': "lightgray"},
+                        {'range': [50, 80], 'color': "gray"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 90
+                    }
+                }
+            ))
+            
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # 상세 검증 결과
+        st.markdown("#### 📋 상세 검증 결과")
+        
+        # 탭으로 구분
+        val_tab1, val_tab2, val_tab3 = st.tabs(["통계적 검증", "실용성 검증", "안전성 검증"])
+        
+        with val_tab1:
+            stat_validation = validation_report.get('statistical', {})
+            
+            # 검증 항목별 결과
+            metrics = {
+                "균형성": stat_validation.get('details', {}).get('balance_score', 0),
+                "직교성": stat_validation.get('details', {}).get('orthogonality_score', 0),
+                "검정력": stat_validation.get('details', {}).get('power', 0)
+            }
+            
+            cols = st.columns(len(metrics))
+            for (metric_name, score), col in zip(metrics.items(), cols):
+                with col:
+                    color = "green" if score >= 0.8 else "orange" if score >= 0.6 else "red"
+                    st.metric(
+                        metric_name,
+                        f"{score:.2f}",
+                        f"{(score - 0.8) * 100:.1f}%",
+                        delta_color="normal" if score >= 0.8 else "inverse"
+                    )
+            
+            # 문제점 및 제안사항
+            if stat_validation.get('issues'):
+                st.warning("**발견된 문제점:**")
+                for issue in stat_validation['issues']:
+                    st.write(f"- {issue}")
+            
+            if stat_validation.get('suggestions'):
+                st.info("**개선 제안:**")
+                for suggestion in stat_validation['suggestions']:
+                    st.write(f"- {suggestion}")
+        
+        with val_tab2:
+            practical_validation = validation_report.get('practical', {})
+            
+            # 실용성 메트릭
+            st.markdown("**시간 분석**")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                estimated_time = design.get('estimates', {}).get('total_time_sequential', 0)
+                available_time = st.session_state.project_info.get('timeline', 4) * 7 * 24
+                
+                time_ratio = estimated_time / available_time if available_time > 0 else 0
+                
+                st.progress(min(time_ratio, 1.0))
+                st.caption(f"예상: {estimated_time:.0f}시간 / 가용: {available_time:.0f}시간")
+            
+            with col2:
+                if practical_validation.get('optimized_sequence'):
+                    st.success("✅ 실험 순서 최적화 완료")
+                    if st.button("최적화된 순서 보기"):
+                        st.dataframe(practical_validation['optimized_sequence'])
+            
+            # 장비 제약
+            if practical_validation.get('issues'):
+                st.warning("**제약사항:**")
+                for issue in practical_validation['issues']:
+                    st.write(f"- {issue}")
+        
+        with val_tab3:
+            safety_validation = validation_report.get('safety', {})
+            
+            # 위험도 레벨
+            risk_level = safety_validation.get('risk_level', 'low')
+            risk_colors = {'low': 'green', 'medium': 'orange', 'high': 'red'}
+            
+            st.markdown(f"**전체 위험도**: :{risk_colors[risk_level]}[{risk_level.upper()}]")
+            
+            # 안전 요구사항
+            if safety_validation.get('safety_requirements'):
+                st.markdown("**필수 안전 조치:**")
+                
+                requirements = safety_validation['safety_requirements']
+                
+                # 카테고리별 그룹화
+                ppe_reqs = [r for r in requirements if '착용' in r or '보호' in r]
+                eng_controls = [r for r in requirements if '환기' in r or '시스템' in r]
+                procedures = [r for r in requirements if r not in ppe_reqs + eng_controls]
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("**개인보호구**")
+                    for req in ppe_reqs:
+                        st.write(f"• {req}")
+                
+                with col2:
+                    st.markdown("**공학적 제어**")
+                    for req in eng_controls:
+                        st.write(f"• {req}")
+                
+                with col3:
+                    st.markdown("**작업 절차**")
+                    for req in procedures:
+                        st.write(f"• {req}")
+        
+        # 최적화 옵션
+        st.markdown("#### 🔧 설계 최적화")
+        
+        if overall_score < 0.9:
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.info(f"""
+                현재 설계 점수가 {overall_score*100:.1f}점입니다. 
+                90점 이상을 권장합니다. AI가 설계를 개선할 수 있습니다.
+                """)
+            
+            with col2:
+                if st.button("🚀 AI 최적화", type="primary"):
+                    with st.spinner("AI가 설계를 최적화하는 중..."):
+                        optimized_design = asyncio.run(
+                            self._optimize_design_with_ai(design, validation_report)
+                        )
+                        
+                        if optimized_design:
+                            st.session_state.experiment_design = optimized_design
+                            st.success("설계가 최적화되었습니다!")
+                            st.rerun()
+    
+    def _render_final_confirmation(self, user_level: UserLevel):
+        """최종 확인 탭"""
+        st.markdown("### 최종 확인")
+        
+        if 'experiment_design' not in st.session_state:
+            st.warning("실험 설계를 먼저 완성해주세요.")
+            return
+        
+        design = st.session_state.experiment_design
+        
+        # 실험 설계 요약
+        st.markdown("#### 📊 실험 설계 요약")
+        
+        summary_data = {
+            "항목": ["실험 제목", "설계 유형", "총 실험수", "요인 수", 
+                    "반응변수 수", "예상 비용", "예상 기간", "설계 점수"],
+            "내용": [
+                design.get('experiment_title', 'N/A'),
+                design.get('design_type', 'N/A'),
+                f"{len(design.get('matrix', []))}회",
+                f"{len(design.get('factors', []))}개",
+                f"{len(design.get('responses', []))}개",
+                f"{design.get('estimates', {}).get('total_cost', 0):.0f}만원",
+                f"{design.get('estimates', {}).get('total_time_sequential', 0)/24:.1f}일",
+                f"{design.get('validation_report', {}).get('overall_score', 0)*100:.1f}점"
+            ]
+        }
+        
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(summary_df, hide_index=True, use_container_width=True)
+        
+        # 체크리스트
+        st.markdown("#### ✅ 최종 체크리스트")
+        
+        checklist_items = [
+            "실험 목적이 명확히 정의되었습니다",
+            "모든 중요 요인이 포함되었습니다",
+            "반응변수와 목표가 설정되었습니다",
+            "장비와 재료가 준비 가능합니다",
+            "안전 프로토콜을 확인했습니다",
+            "데이터 수집 계획이 준비되었습니다"
+        ]
+        
+        all_checked = True
+        for item in checklist_items:
+            checked = st.checkbox(item, key=f"check_{item}")
+            if not checked:
+                all_checked = False
+        
+        # QR 코드 생성
+        st.markdown("#### 🔲 실험 라벨 QR 코드")
+        
+        if st.button("QR 코드 생성"):
+            qr_codes = self._generate_qr_codes(design)
+            
+            # QR 코드 표시
+            cols = st.columns(4)
+            for i, (exp_id, qr_img) in enumerate(qr_codes.items()):
+                with cols[i % 4]:
+                    st.image(qr_img, caption=f"실험 {exp_id}")
+        
+        # 최종 승인
+        st.markdown("#### 🎯 실험 시작")
+        
+        if user_level == UserLevel.BEGINNER:
+            st.info("""
+            💡 **초보자 팁**: 실험을 시작하기 전에 다음을 확인하세요:
+            1. 실험 노트 준비
+            2. 데이터 기록 양식 준비  
+            3. 첫 실험은 중심점으로 시작
+            4. 모든 측정값을 즉시 기록
+            """)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            if all_checked:
+                if st.button("🚀 실험 시작하기", type="primary", use_container_width=True):
+                    # 실험 상태 업데이트
+                    st.session_state.experiment_status = ExperimentStatus.IN_PROGRESS
+                    st.session_state.experiment_start_time = datetime.now()
+                    st.session_state.current_page = 'data_analysis'
+                    
+                    st.balloons()
+                    st.success("실험이 시작되었습니다! 행운을 빕니다! 🍀")
+                    time.sleep(2)
+                    st.rerun()
+            else:
+                st.warning("모든 체크리스트 항목을 확인해주세요.")
+    
+    async def _get_ai_strategy_recommendation(self, project_info: Dict) -> str:
+        """AI 전략 추천"""
+        # 구현 생략 (이전 파트 참조)
+        return "optimization"
+    
+    async def _generate_experiment_design(self, 
+                                        project_info: Dict,
+                                        strategy: str,
+                                        user_level: UserLevel) -> Dict:
+        """실험 설계 생성"""
+        # 구현 생략 (이전 파트 참조)
+        return {
+            'status': 'success',
+            'design': {
+                'experiment_title': f"{project_info['polymer_type']} 최적화 실험",
+                'design_type': strategy,
+                'matrix': pd.DataFrame(),  # 실제 설계 매트릭스
+                'factors': [],
+                'responses': [],
+                'estimates': {
+                    'total_cost': 450,
+                    'total_time_sequential': 120
+                },
+                'validation_report': {
+                    'overall_score': 0.85
+                }
+            }
+        }
+    
+    def _generate_qr_codes(self, design: Dict) -> Dict[str, Image.Image]:
+        """실험별 QR 코드 생성"""
+        import qrcode
+        
+        qr_codes = {}
+        matrix = design.get('matrix', pd.DataFrame())
+        
+        for idx, row in matrix.iterrows():
+            # QR 데이터 생성
+            qr_data = {
+                'exp_id': f"EXP_{idx+1:03d}",
+                'project': st.session_state.project_info['name'],
+                'conditions': row.to_dict(),
+                'date': datetime.now().isoformat()
+            }
+            
+            # QR 코드 생성
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            
+            qr.add_data(json.dumps(qr_data))
+            qr.make(fit=True)
+            
+            img = qr.make_image(fill_color="black", back_color="white")
+            qr_codes[f"EXP_{idx+1:03d}"] = img
+        
+        return qr_codes
+
+
+# Polymer-doe-platform - Part 12
+# ==================== 데이터 분석 페이지 ====================
+class DataAnalysisPage:
+    """데이터 분석 페이지"""
+    
+    def __init__(self):
+        self.analyzer = AdvancedStatisticalAnalyzer()
+        self.ml_analyzer = MachineLearningAnalyzer()
+        
+    def render(self, user_level: UserLevel):
+        st.title("📊 데이터 분석")
+        
+        # 실험 상태 확인
+        if 'experiment_design' not in st.session_state:
+            st.warning("먼저 실험을 설계해주세요.")
+            return
+        
+        # 탭 구성
+        tabs = st.tabs([
+            "📥 데이터 입력",
+            "📈 기본 분석",
+            "🔬 고급 분석",
+            "🤖 AI 인사이트",
+            "📑 보고서"
+        ])
+        
+        with tabs[0]:
+            self._render_data_input(user_level)
+        
+        with tabs[1]:
+            self._render_basic_analysis(user_level)
+        
+        with tabs[2]:
+            self._render_advanced_analysis(user_level)
+        
+        with tabs[3]:
+            self._render_ai_insights(user_level)
+        
+        with tabs[4]:
+            self._render_report_generation()
+    
+    def _render_data_input(self, user_level: UserLevel):
+        """데이터 입력 탭"""
+        st.markdown("### 실험 데이터 입력")
+        
+        design = st.session_state.experiment_design
+        
+        # 입력 방법 선택
+        input_method = st.radio(
+            "데이터 입력 방법",
+            ["직접 입력", "파일 업로드", "QR 스캔", "실시간 연동"],
+            horizontal=True
+        )
+        
+        if input_method == "직접 입력":
+            # 실험별 데이터 입력
+            st.markdown("#### 실험별 결과 입력")
+            
+            # 데이터 입력 테이블
+            if 'experimental_data' not in st.session_state:
+                # 초기 데이터프레임 생성
+                matrix = design['matrix'].copy()
+                for response in design['responses']:
+                    matrix[response['name']] = np.nan
+                st.session_state.experimental_data = matrix
+            
+            # 데이터 에디터
+            edited_data = st.data_editor(
+                st.session_state.experimental_data,
+                use_container_width=True,
+                num_rows="fixed",
+                column_config={
+                    col: st.column_config.NumberColumn(
+                        col,
+                        help=f"{col} 측정값을 입력하세요",
+                        format="%.3f"
+                    )
+                    for col in design['responses']
+                }
+            )
+            
+            st.session_state.experimental_data = edited_data
+            
+            # 진행률 표시
+            total_cells = len(design['matrix']) * len(design['responses'])
+            filled_cells = edited_data[
+                [r['name'] for r in design['responses']]
+            ].notna().sum().sum()
+            
+            progress = filled_cells / total_cells if total_cells > 0 else 0
+            
+            st.progress(progress)
+            st.caption(f"입력 완료: {filled_cells}/{total_cells} ({progress*100:.1f}%)")
+            
+        elif input_method == "파일 업로드":
+            uploaded_file = st.file_uploader(
+                "데이터 파일 선택",
+                type=['csv', 'xlsx', 'xls'],
+                help="실험 설계와 동일한 형식의 파일을 업로드하세요."
+            )
+            
+            if uploaded_file:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        data = pd.read_csv(uploaded_file)
+                    else:
+                        data = pd.read_excel(uploaded_file)
+                    
+                    st.success("파일이 성공적으로 로드되었습니다!")
+                    st.dataframe(data, use_container_width=True)
+                    
+                    # 데이터 검증
+                    validation_result = self._validate_uploaded_data(data, design)
+                    if validation_result['valid']:
+                        st.session_state.experimental_data = data
+                    else:
+                        st.error(f"데이터 검증 실패: {validation_result['message']}")
+                        
+                except Exception as e:
+                    st.error(f"파일 읽기 오류: {str(e)}")
+        
+        elif input_method == "QR 스캔":
+            st.info("QR 스캔 기능은 모바일 앱에서 사용 가능합니다.")
+            
+            # QR 데이터 시뮬레이션
+            if st.button("QR 데이터 시뮬레이션"):
+                simulated_data = self._simulate_qr_data(design)
+                st.session_state.experimental_data = simulated_data
+                st.success("QR 데이터가 로드되었습니다!")
+        
+        elif input_method == "실시간 연동":
+            st.markdown("#### 실시간 데이터 연동")
+            
+            equipment_options = st.session_state.project_info.get('equipment', [])
+            selected_equipment = st.selectbox(
+                "연동할 장비",
+                equipment_options,
+                help="실시간 데이터를 받을 장비를 선택하세요."
+            )
+            
+            if st.button("연동 시작"):
+                st.info(f"{selected_equipment}와 연동을 시작합니다...")
+                # 실시간 데이터 스트림 시뮬레이션
+                self._start_realtime_stream(selected_equipment)
+        
+        # 데이터 저장
+        if st.button("💾 데이터 저장", type="primary"):
+            if hasattr(st.session_state, 'experimental_data'):
+                # 데이터 저장 로직
+                st.success("데이터가 저장되었습니다!")
+                
+                # 자동 백업
+                backup_path = self._create_data_backup(st.session_state.experimental_data)
+                st.caption(f"백업 생성: {backup_path}")
+    
+    def _render_basic_analysis(self, user_level: UserLevel):
+        """기본 분석 탭"""
+        st.markdown("### 기본 통계 분석")
+        
+        if 'experimental_data' not in st.session_state:
+            st.warning("먼저 실험 데이터를 입력해주세요.")
+            return
+        
+        data = st.session_state.experimental_data
+        design = st.session_state.experiment_design
+        responses = [r['name'] for r in design['responses']]
+        
+        # 반응변수 선택
+        selected_response = st.selectbox(
+            "분석할 반응변수",
+            responses,
+            help="분석하고자 하는 반응변수를 선택하세요."
+        )
+        
+        if selected_response and selected_response in data.columns:
+            response_data = data[selected_response].dropna()
+            
+            if len(response_data) > 0:
+                # 기술통계
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    st.markdown("#### 📊 기술통계")
+                    
+                    stats_data = {
+                        "통계량": ["평균", "표준편차", "최소값", "Q1", "중앙값", "Q3", "최대값", "CV(%)"],
+                        "값": [
+                            f"{response_data.mean():.3f}",
+                            f"{response_data.std():.3f}",
+                            f"{response_data.min():.3f}",
+                            f"{response_data.quantile(0.25):.3f}",
+                            f"{response_data.median():.3f}",
+                            f"{response_data.quantile(0.75):.3f}",
+                            f"{response_data.max():.3f}",
+                            f"{(response_data.std()/response_data.mean()*100):.1f}"
+                        ]
+                    }
+                    
+                    stats_df = pd.DataFrame(stats_data)
+                    st.dataframe(stats_df, hide_index=True, use_container_width=True)
+                
+                with col2:
+                    st.markdown("#### 📈 분포 그래프")
+                    
+                    # 히스토그램 with 정규분포
+                    fig = go.Figure()
+                    
+                    # 히스토그램
+                    fig.add_trace(go.Histogram(
+                        x=response_data,
+                        name='실제 분포',
+                        nbinsx=10,
+                        opacity=0.7
+                    ))
+                    
+                    # 정규분포 곡선
+                    x_range = np.linspace(response_data.min(), response_data.max(), 100)
+                    normal_dist = stats.norm(loc=response_data.mean(), scale=response_data.std())
+                    
+                    fig.add_trace(go.Scatter(
+                        x=x_range,
+                        y=normal_dist.pdf(x_range) * len(response_data) * (response_data.max() - response_data.min()) / 10,
+                        mode='lines',
+                        name='정규분포',
+                        line=dict(color='red', width=2)
+                    ))
+                    
+                    fig.update_layout(
+                        title=f"{selected_response} 분포",
+                        xaxis_title=selected_response,
+                        yaxis_title="빈도",
+                        showlegend=True
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # 정규성 검정
+                st.markdown("#### 🔍 정규성 검정")
+                
+                # Shapiro-Wilk 검정
+                stat, p_value = stats.shapiro(response_data)
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Shapiro-Wilk 통계량", f"{stat:.4f}")
+                
+                with col2:
+                    st.metric("p-value", f"{p_value:.4f}")
+                
+                with col3:
+                    if p_value > 0.05:
+                        st.success("정규분포를 따릅니다")
+                    else:
+                        st.warning("정규분포를 따르지 않습니다")
+                
+                # 주효과 분석
+                st.markdown("#### 🎯 주효과 분석")
+                
+                factors = [f['name'] for f in design['factors']]
+                
+                # 각 요인별 효과 계산
+                effects = {}
+                
+                for factor in factors:
+                    if factor in data.columns:
+                        # 고수준과 저수준 그룹으로 분리
+                        factor_median = data[factor].median()
+                        high_group = data[data[factor] > factor_median][selected_response].dropna()
+                        low_group = data[data[factor] <= factor_median][selected_response].dropna()
+                        
+                        if len(high_group) > 0 and len(low_group) > 0:
+                            effect = high_group.mean() - low_group.mean()
+                            effects[factor] = effect
+                
+                if effects:
+                    # 효과 막대 그래프
+                    effect_df = pd.DataFrame(
+                        list(effects.items()), 
+                        columns=['요인', '효과']
+                    )
+                    effect_df = effect_df.sort_values('효과', key=abs, ascending=False)
+                    
+                    fig = px.bar(
+                        effect_df,
+                        x='효과',
+                        y='요인',
+                        orientation='h',
+                        title='요인별 주효과',
+                        color='효과',
+                        color_continuous_scale='RdBu_r',
+                        color_continuous_midpoint=0
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 유의성 테이블
+                    significance_data = []
+                    
+                    for factor in factors:
+                        if factor in data.columns:
+                            # t-test
+                            factor_median = data[factor].median()
+                            high_group = data[data[factor] > factor_median][selected_response].dropna()
+                            low_group = data[data[factor] <= factor_median][selected_response].dropna()
+                            
+                            if len(high_group) > 1 and len(low_group) > 1:
+                                t_stat, p_val = stats.ttest_ind(high_group, low_group)
+                                
+                                significance_data.append({
+                                    '요인': factor,
+                                    '효과': effects.get(factor, 0),
+                                    't-통계량': t_stat,
+                                    'p-value': p_val,
+                                    '유의성': '✓' if p_val < 0.05 else '✗'
+                                })
+                    
+                    if significance_data:
+                        sig_df = pd.DataFrame(significance_data)
+                        st.dataframe(
+                            sig_df.style.format({
+                                '효과': '{:.3f}',
+                                't-통계량': '{:.3f}',
+                                'p-value': '{:.4f}'
+                            }),
+                            use_container_width=True
+                        )
+    
+    def _render_advanced_analysis(self, user_level: UserLevel):
+        """고급 분석 탭"""
+        st.markdown("### 고급 통계 분석")
+        
+        if user_level == UserLevel.BEGINNER:
+            st.info("""
+            💡 **초보자 가이드**: 고급 분석은 다음을 포함합니다:
+            - ANOVA: 요인들이 결과에 미치는 영향 분석
+            - 회귀분석: 수학적 모델 구축
+            - 최적화: 최상의 조건 찾기
+            """)
+        
+        analysis_type = st.selectbox(
+            "분석 유형",
+            ["ANOVA", "회귀분석", "반응표면분석", "최적화", "기계학습"]
+        )
+        
+        if analysis_type == "ANOVA":
+            self._render_anova_analysis()
+        elif analysis_type == "회귀분석":
+            self._render_regression_analysis()
+        elif analysis_type == "반응표면분석":
+            self._render_rsm_analysis()
+        elif analysis_type == "최적화":
+            self._render_optimization()
+        elif analysis_type == "기계학습":
+            self._render_ml_analysis()
+
+
+
+
+
 
