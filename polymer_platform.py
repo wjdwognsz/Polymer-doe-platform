@@ -1560,7 +1560,7 @@ class ConfigManager:
             'animation_speed': 1.0
         },
         'ai': {
-            'default_model': 'gemini',
+            'default_model': 'google_gemini',
             'temperature': 0.7,
             'max_tokens': 2000,
             'timeout': 30,
@@ -2636,7 +2636,7 @@ class APIKeyManager:
             # AI APIs
             'gemini': {
                 'name': 'Google Gemini',
-                'env_key': 'GEMINI_API_KEY',
+                'env_key': 'google_gemini',
                 'required': False,
                 'test_endpoint': 'https://generativelanguage.googleapis.com/v1beta/models',
                 'category': 'ai',
@@ -2647,7 +2647,7 @@ class APIKeyManager:
             },
             'grok': {
                 'name': 'xAI Grok',
-                'env_key': 'GROK_API_KEY',
+                'env_key': 'xai_grok',
                 'required': False,
                 'test_endpoint': 'https://api.x.ai/v1/models',
                 'category': 'ai',
@@ -2658,7 +2658,7 @@ class APIKeyManager:
             },
             'sambanova': {
                 'name': 'SambaNova',
-                'env_key': 'SAMBANOVA_API_KEY',
+                'env_key': 'sambanova',
                 'required': False,
                 'test_endpoint': 'https://api.sambanova.ai/v1/models',
                 'category': 'ai',
@@ -2669,7 +2669,7 @@ class APIKeyManager:
             },
             'deepseek': {
                 'name': 'DeepSeek',
-                'env_key': 'DEEPSEEK_API_KEY',
+                'env_key': 'deepseek',
                 'required': False,
                 'test_endpoint': 'https://api.deepseek.com/v1/models',
                 'category': 'ai',
@@ -2680,7 +2680,7 @@ class APIKeyManager:
             },
             'groq': {
                 'name': 'Groq',
-                'env_key': 'GROQ_API_KEY',
+                'env_key': 'groq',
                 'required': False,
                 'test_endpoint': 'https://api.groq.com/v1/models',
                 'category': 'ai',
@@ -2691,7 +2691,7 @@ class APIKeyManager:
             },
             'huggingface': {
                 'name': 'HuggingFace',
-                'env_key': 'HUGGINGFACE_API_KEY',
+                'env_key': 'huggingface',
                 'required': False,
                 'test_endpoint': 'https://api-inference.huggingface.co/models',
                 'category': 'ai',
@@ -2702,7 +2702,7 @@ class APIKeyManager:
             },
             'openai': {
                 'name': 'OpenAI',
-                'env_key': 'OPENAI_API_KEY',
+                'env_key': 'openai',
                 'required': False,
                 'test_endpoint': 'https://api.openai.com/v1/models',
                 'category': 'ai',
@@ -2713,7 +2713,7 @@ class APIKeyManager:
             },
             'anthropic': {
                 'name': 'Anthropic Claude',
-                'env_key': 'ANTHROPIC_API_KEY',
+                'env_key': 'anthropic',
                 'required': False,
                 'test_endpoint': 'https://api.anthropic.com/v1/messages',
                 'category': 'ai',
@@ -2726,7 +2726,7 @@ class APIKeyManager:
             # Database & Repository APIs
             'github': {
                 'name': 'GitHub',
-                'env_key': 'GITHUB_TOKEN',
+                'env_key': 'github',
                 'required': False,
                 'test_endpoint': 'https://api.github.com/user',
                 'category': 'repository',
@@ -2736,7 +2736,7 @@ class APIKeyManager:
             },
             'materials_project': {
                 'name': 'Materials Project',
-                'env_key': 'MP_API_KEY',
+                'env_key': 'materials_project',
                 'required': False,
                 'test_endpoint': 'https://api.materialsproject.org',
                 'category': 'database',
@@ -2746,7 +2746,7 @@ class APIKeyManager:
             },
             'materials_commons': {
                 'name': 'Materials Commons',
-                'env_key': 'MC_API_KEY',
+                'env_key': 'materials_commons',
                 'required': False,
                 'test_endpoint': 'https://materialscommons.org/api',
                 'category': 'database',
@@ -2756,7 +2756,7 @@ class APIKeyManager:
             },
             'zenodo': {
                 'name': 'Zenodo',
-                'env_key': 'ZENODO_API_KEY',
+                'env_key': 'zenodo',
                 'required': False,
                 'test_endpoint': 'https://zenodo.org/api/records',
                 'category': 'repository',
@@ -2766,7 +2766,7 @@ class APIKeyManager:
             },
             'protocols_io': {
                 'name': 'Protocols.io',
-                'env_key': 'PROTOCOLS_IO_API_KEY',
+                'env_key': 'protocols_io',
                 'required': False,
                 'test_endpoint': 'https://www.protocols.io/api/v3/protocols',
                 'category': 'protocol',
@@ -2776,7 +2776,7 @@ class APIKeyManager:
             },
             'figshare': {
                 'name': 'Figshare',
-                'env_key': 'FIGSHARE_API_KEY',
+                'env_key': 'figshare',
                 'required': False,
                 'test_endpoint': 'https://api.figshare.com/v2/articles',
                 'category': 'repository',
@@ -2786,7 +2786,7 @@ class APIKeyManager:
             },
             'polymer_database': {
                 'name': 'PoLyInfo',
-                'env_key': 'POLYINFO_API_KEY',
+                'env_key': 'polyinfo',
                 'required': False,
                 'test_endpoint': 'https://polymer.nims.go.jp/api',
                 'category': 'database',
@@ -2796,7 +2796,7 @@ class APIKeyManager:
             },
             'chemspider': {
                 'name': 'ChemSpider',
-                'env_key': 'CHEMSPIDER_API_KEY',
+                'env_key': 'chemspider',
                 'required': False,
                 'test_endpoint': 'https://api.rsc.org/compounds/v1',
                 'category': 'database',
@@ -2808,7 +2808,7 @@ class APIKeyManager:
             # Google Services
             'google_sheets': {
                 'name': 'Google Sheets',
-                'env_key': 'GOOGLE_SHEETS_URL',
+                'env_key': 'google_sheets_url',
                 'required': False,
                 'test_endpoint': None,
                 'category': 'storage',
@@ -2818,7 +2818,7 @@ class APIKeyManager:
             },
             'google_oauth': {
                 'name': 'Google OAuth',
-                'env_key': 'GOOGLE_OAUTH_CLIENT_ID',
+                'env_key': 'google_oauth_id',
                 'required': False,
                 'test_endpoint': None,
                 'category': 'auth',
@@ -2828,7 +2828,7 @@ class APIKeyManager:
             },
             'google_oauth_secret': {
                 'name': 'Google OAuth Secret',
-                'env_key': 'GOOGLE_OAUTH_CLIENT_SECRET',
+                'env_key': 'google_oauth_secret',
                 'required': False,
                 'test_endpoint': None,
                 'category': 'auth',
@@ -2874,16 +2874,16 @@ class APIKeyManager:
             
             # 특수 케이스 처리
             # 1. Google Sheets URL (다른 이름으로 저장되어 있을 수 있음)
-            if 'GOOGLE_SHEETS_URL' in st.secrets:
-                st.session_state.api_keys['google_sheets'] = st.secrets['GOOGLE_SHEETS_URL']
+            if 'google_sheets_url' in st.secrets:
+                st.session_state.api_keys['google_sheets'] = st.secrets['google_sheets_url']
             elif 'private_gsheets_url' in st.secrets:
                 st.session_state.api_keys['google_sheets'] = st.secrets['private_gsheets_url']
                 
             # 2. Google OAuth (클라이언트 ID와 시크릿)
-            if 'GOOGLE_OAUTH_CLIENT_ID' in st.secrets:
-                st.session_state.api_keys['google_oauth'] = st.secrets['GOOGLE_OAUTH_CLIENT_ID']
-            if 'GOOGLE_OAUTH_CLIENT_SECRET' in st.secrets:
-                st.session_state.api_keys['google_oauth_secret'] = st.secrets['GOOGLE_OAUTH_CLIENT_SECRET']
+            if 'google_oauth_id' in st.secrets:
+                st.session_state.api_keys['google_oauth'] = st.secrets['google_oauth_id']
+            if 'google_oauth_secret' in st.secrets:
+                st.session_state.api_keys['google_oauth_secret'] = st.secrets['google_oauth_secret']
                 
             # 3. Google Service Account (전체 JSON으로 저장된 경우)
             if 'gcp_service_account' in st.secrets:
@@ -2891,10 +2891,10 @@ class APIKeyManager:
                 logger.info("Google Service Account 정보가 로드되었습니다")
                 
             # 4. Protocols.io (점이 포함된 이름 처리)
-            if 'PROTOCOLS_IO_API_KEY' in st.secrets:
-                st.session_state.api_keys['protocols_io'] = st.secrets['PROTOCOLS_IO_API_KEY']
+            if 'protocols_io' in st.secrets:
+                st.session_state.api_keys['protocols_io'] = st.secrets['protocols_io']
             elif 'PROTOCOLS.IO_API_KEY' in st.secrets:
-                st.session_state.api_keys['protocols_io'] = st.secrets['PROTOCOLS.IO_API_KEY']
+                st.session_state.api_keys['protocols_io'] = st.secrets['protocols_io']
                 
         except Exception as e:
             logger.debug(f"Secrets 로드 중 오류 (정상적일 수 있음): {e}")
@@ -2947,7 +2947,7 @@ class APIKeyManager:
         # API별 형식 검증
         if key_id == 'openai':
             return key.startswith('sk-') and len(key) > 20
-        elif key_id == 'gemini':
+        elif key_id == 'google_gemini':
             return key.startswith('AIza') and len(key) > 30
         elif key_id == 'anthropic':
             return key.startswith('sk-ant-') and len(key) > 40
@@ -2973,9 +2973,9 @@ class APIKeyManager:
             return len(key) > 20  # Protocols.io API token
         elif key_id == 'figshare':
             return len(key) > 20  # Figshare token
-        elif key_id == 'google_sheets':
+        elif key_id == 'google_sheets_url':
             return key.startswith('https://docs.google.com/spreadsheets/') and len(key) > 50
-        elif key_id == 'google_oauth':
+        elif key_id == 'google_oauth_id':
             return '.apps.googleusercontent.com' in key  # OAuth 클라이언트 ID
         elif key_id == 'google_oauth_secret':
             return len(key) > 20  # OAuth 클라이언트 시크릿
@@ -3202,7 +3202,7 @@ class APIMonitor:
         
         self.cost_per_token = {
             'openai': {'input': 0.00003, 'output': 0.00006},  # GPT-4 기준
-            'gemini': {'input': 0.00001, 'output': 0.00002},
+            'google_gemini': {'input': 0.00001, 'output': 0.00002},
             'anthropic': {'input': 0.00003, 'output': 0.00015}
         }
     
@@ -6706,7 +6706,7 @@ class MultiAIOrchestrator:
         # 각 엔진을 안전하게 초기화
         engine_classes = {
             # 'openai': lambda: OpenAIEngine(),  # OpenAIEngine이 정의되지 않음
-            'gemini': lambda: GeminiEngine(),
+            'google_gemini': lambda: GeminiEngine(),
             # 'anthropic': lambda: AnthropicEngine(),  # AnthropicEngine이 정의되지 않음
             'groq': lambda: GroqEngine(),
             'grok': lambda: GrokEngine(),
@@ -6733,7 +6733,7 @@ class MultiAIOrchestrator:
             #     'priority': 1,
             #     'specialties': ['코드', '분석', '창의성']
             # },
-            'gemini': {
+            'google_gemini': {
                 'strength': '과학적 분석, 한국어 처리, 긴 컨텍스트',
                 'priority': 1,
                 'specialties': ['과학', '한국어', '멀티모달']
@@ -7063,8 +7063,8 @@ class MultiAIOrchestrator:
         """
         
         # Gemini를 사용하여 최종 합의 생성 (가장 신뢰할 수 있는 엔진)
-        if self.engines['gemini'].available:
-            final_response = await self.engines['gemini'].generate_response(
+        if self.engines['google_gemini'].available:
+            final_response = await self.engines['google_gemini'].generate_response(
                 consensus_prompt,
                 temperature=0.3  # 낮은 temperature로 일관성 있는 응답
             )
@@ -7185,7 +7185,7 @@ class MultiAIOrchestrator:
             
             # 엔진별 신뢰도 가중치
             engine_weights = {
-                'gemini': 1.2,
+                'google_gemini': 1.2,
                 'deepseek': 1.1,
                 'sambanova': 1.0,
                 'grok': 0.9,
@@ -8876,7 +8876,7 @@ class AdvancedExperimentDesignEngine:
         """
         
         response = await self.ai_orchestrator.query_single(
-            'gemini',
+            'google_gemini',
             analysis_prompt,
             temperature=0.3
         )
@@ -8982,7 +8982,7 @@ class AdvancedExperimentDesignEngine:
         response = await self.ai_orchestrator.query_multiple(
             design_prompt,
             strategy='consensus',
-            engines=['gemini', 'deepseek', 'sambanova'],
+            engines=['google_gemini', 'deepseek', 'sambanova'],
             temperature=0.5,
             user_level=user_level
         )
@@ -9174,7 +9174,7 @@ class AdvancedExperimentDesignEngine:
         """
         
         ai_estimate = await self.ai_orchestrator.query_single(
-            'gemini',
+            'google_gemini',
             estimation_prompt,
             temperature=0.5
         )
@@ -9238,7 +9238,7 @@ class AdvancedExperimentDesignEngine:
         """
         
         explanation = await self.ai_orchestrator.query_single(
-            'gemini',
+            'google_gemini',
             explanation_prompt,
             temperature=0.7,
             user_level=user_level
@@ -11288,7 +11288,7 @@ class ProjectSetupPage:
         """
         
         response = await st.session_state.ai_orchestrator.query_single(
-            'gemini',
+            'google_gemini',
             prompt,
             temperature=0.7
         )
@@ -13089,7 +13089,7 @@ class DataAnalysisPage:
         response = await st.session_state.ai_orchestrator.query_multiple(
             prompt,
             strategy='consensus',
-            engines=['gemini', 'deepseek', 'sambanova'],
+            engines=['google_gemini', 'deepseek', 'sambanova'],
             temperature=0.7,
             user_level=user_level
         )
