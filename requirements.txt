@@ -1,15 +1,85 @@
+# ==================== 핵심 패키지 ====================
 streamlit>=1.28.0
 pandas>=1.5.0
 numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
 plotly>=5.17.0
+
+# ==================== 머신러닝 패키지 ====================
+xgboost>=2.0.0
+lightgbm>=4.0.0
+statsmodels>=0.14.0
+optuna>=3.4.0
+shap>=0.43.0
+
+# ==================== Streamlit 확장 ====================
+streamlit-option-menu>=0.3.6
+streamlit-aggrid>=0.3.4
+streamlit-elements>=0.1.0
+streamlit-ace>=0.1.1
+streamlit-drawable-canvas>=0.9.3
+streamlit-timeline>=0.0.2
+streamlit-folium>=0.15.0
+
+# ==================== 시각화 추가 패키지 ====================
+altair>=5.1.0
+holoviews>=1.18.0
+bokeh>=3.3.0
+Pillow>=10.1.0
+opencv-python-headless>=4.8.0
+
+# ==================== API 및 웹 ====================
+aiohttp>=3.8.0
+requests>=2.31.0
+httpx>=0.25.0
+websocket-client>=1.6.0
+python-socketio>=5.10.0
+
+# ==================== AI 서비스 ====================
+openai>=1.3.0
+google-generativeai>=0.3.0
+anthropic>=0.7.0
+groq>=0.3.0
+transformers>=4.35.0
+huggingface-hub>=0.19.0
+
+# ==================== Google 서비스 ====================
 gspread>=5.12.0
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
 google-auth-httplib2>=0.1.1
-openpyxl>=3.1.2
-aiohttp>=3.8.0
+google-api-python-client>=2.108.0
+
+# ==================== 데이터베이스 ====================
+pymongo>=4.6.0
+motor>=3.3.0
+redis>=5.0.0
+PyGithub>=2.1.0
+
+# ==================== 화학정보학 (선택적) ====================
+# rdkit-pypi>=2023.9.0  # 선택적
+pubchempy>=1.0.4
+
+# ==================== 실험 설계 ====================
+pyDOE2>=1.3.0
+# smt>=2.3.0  # 선택적 (설치 복잡)
+
+# ==================== 문서 생성 ====================
+reportlab>=4.0.0
+qrcode>=7.4.0
+# pdfkit>=1.0.0  # 선택적 (wkhtmltopdf 필요)
+
+# ==================== 번역 및 NLP (선택적) ====================
+googletrans==4.0.0-rc1
+langdetect>=1.0.9
+# spacy>=3.7.0  # 선택적 (크기가 큼)
+# nltk>=3.8.0  # 선택적
+
+# ==================== 기타 필수 ====================
 python-dotenv>=1.0.0
-requests>=2.31.0
-openai>=1.3.0
-google-generativeai>=0.3.0
+openpyxl>=3.1.2
 xlsxwriter>=3.1.9
+asyncio-mqtt>=0.16.0
