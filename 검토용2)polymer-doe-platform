@@ -1,1 +1,5225 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+🧬 범용 고분자 실험 설계 플랫폼 (Universal Polymer Design of Experiments Platform)
+================================================================================
+
+Enhanced Version 4.0.0
+- 완전한 AI-데이터베이스 통합
+- 실시간 학습 시스템
+- 초보자 친화적 인터페이스
+- 3D 분자 시각화
+- 실시간 협업 기능
+
+개발: Polymer DOE Research Team
+라이선스: MIT
+"""
+
+# ==================== 표준 라이브러리 ====================
+import os
+import sys
+import json
+import time
+import hashlib
+import base64
+import io
+import re
+import logging
+import warnings
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any, Union, Callable, TypeVar, Generic
+from dataclasses import dataclass, field, asdict
+from enum import Enum, auto
+from collections import defaultdict, OrderedDict, deque
+from functools import lru_cache, wraps, partial
+from pathlib import Path
+import tempfile
+import shutil
+import traceback
+import pickle
+import sqlite3
+import threading
+import queue
+import asyncio
+import concurrent.futures
+import uuid
+import mimetypes
+import zipfile
+import tarfile
+from contextlib import contextmanager
+import subprocess
+import platform
+
+# ==================== 데이터 처리 및 분석 ====================
+import numpy as np
+import pandas as pd
+from scipy import stats, optimize, interpolate, signal
+from scipy.stats import (
+    f_oneway, ttest_ind, shapiro, levene, anderson,
+    kruskal, mannwhitneyu, wilcoxon, friedmanchisquare
+)
+from scipy.optimize import minimize, differential_evolution, dual_annealing
+from scipy.spatial.distance import cdist
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.decomposition import PCA, ICA, NMF
+from sklearn.manifold import TSNE, MDS
+from sklearn.model_selection import (
+    train_test_split, cross_val_score, KFold, 
+    GridSearchCV, RandomizedSearchCV, BayesSearchCV
+)
+from sklearn.ensemble import (
+    RandomForestRegressor, GradientBoostingRegressor,
+    ExtraTreesRegressor, AdaBoostRegressor
+)
+from sklearn.metrics import (
+    r2_score, mean_squared_error, mean_absolute_error,
+    explained_variance_score, max_error
+)
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import (
+    RBF, Matern, RationalQuadratic, ExpSineSquared,
+    DotProduct, WhiteKernel, ConstantKernel
+)
+from sklearn.neural_network import MLPRegressor
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+import xgboost as xgb
+import lightgbm as lgb
+
+# ==================== 시각화 ====================
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.animation import FuncAnimation
+import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.io as pio
+import altair as alt
+import holoviews as hv
+import bokeh.plotting as bk
+from PIL import Image, ImageDraw, ImageFont
+import cv2
+
+# ==================== 웹 프레임워크 ====================
+import streamlit as st
+from streamlit_option_menu import option_menu
+from streamlit_drawable_canvas import st_canvas
+from streamlit_ace import st_ace
+from streamlit_aggrid import AgGrid, GridOptionsBuilder
+from streamlit_elements import elements, mui, html
+from streamlit_timeline import timeline
+from streamlit_folium import folium_static
+import streamlit.components.v1 as components
+
+# ==================== 3D 시각화 ====================
+try:
+    import py3Dmol
+    from stmol import showmol
+    import nglview
+    PY3DMOL_AVAILABLE = True
+except ImportError:
+    PY3DMOL_AVAILABLE = False
+
+# ==================== 화학 정보학 ====================
+try:
+    from rdkit import Chem
+    from rdkit.Chem import Draw, Descriptors, AllChem
+    from rdkit.Chem.Draw import IPythonConsole
+    import pubchempy as pcp
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+
+# ==================== API 및 외부 서비스 ====================
+import requests
+import aiohttp
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+import httpx
+import websocket
+import socketio
+
+# ==================== AI 서비스 ====================
+# OpenAI
+try:
+    import openai
+    from openai import AsyncOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+# Google AI
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+# Anthropic Claude
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+# 추가 AI 서비스들
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
+try:
+    from huggingface_hub import InferenceClient, HfApi
+    from transformers import pipeline
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_AVAILABLE = False
+
+# ==================== 데이터베이스 및 저장소 ====================
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    from google.auth.transport.requests import Request
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    GSPREAD_AVAILABLE = True
+except ImportError:
+    GSPREAD_AVAILABLE = False
+
+try:
+    from github import Github
+    GITHUB_AVAILABLE = True
+except ImportError:
+    GITHUB_AVAILABLE = False
+
+try:
+    import pymongo
+    from motor.motor_asyncio import AsyncIOMotorClient
+    MONGODB_AVAILABLE = True
+except ImportError:
+    MONGODB_AVAILABLE = False
+
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
+# ==================== 번역 및 자연어 처리 ====================
+try:
+    from googletrans import Translator
+    import langdetect
+    TRANSLATION_AVAILABLE = True
+except ImportError:
+    TRANSLATION_AVAILABLE = False
+
+try:
+    import spacy
+    import nltk
+    NLP_AVAILABLE = True
+except ImportError:
+    NLP_AVAILABLE = False
+
+# ==================== 실험 설계 라이브러리 ====================
+try:
+    import pyDOE2
+    PYDOE_AVAILABLE = True
+except ImportError:
+    PYDOE_AVAILABLE = False
+
+try:
+    from smt.sampling_methods import LHS
+    from smt.surrogate_models import KRG
+    SMT_AVAILABLE = True
+except ImportError:
+    SMT_AVAILABLE = False
+
+# ==================== 추가 유틸리티 ====================
+try:
+    import pdfkit
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
+
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
+
+# ==================== 설정 및 상수 ====================
+warnings.filterwarnings('ignore')
+
+# 로깅 설정
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(level=logging.INFO, format=log_format)
+
+# 파일 핸들러 추가
+file_handler = logging.FileHandler('polymer_doe.log')
+file_handler.setFormatter(logging.Formatter(log_format))
+logger = logging.getLogger(__name__)
+logger.addHandler(file_handler)
+
+# 버전 정보
+VERSION = "4.0.0"
+BUILD_DATE = "2024-01-20"
+API_VERSION = "v1"
+
+# 지원 언어 (확장)
+SUPPORTED_LANGUAGES = {
+    'ko': '한국어',
+    'en': 'English',
+    'ja': '日本語',
+    'zh-cn': '简体中文',
+    'zh-tw': '繁體中文',
+    'de': 'Deutsch',
+    'fr': 'Français',
+    'es': 'Español',
+    'it': 'Italiano',
+    'pt': 'Português',
+    'ru': 'Русский',
+    'ar': 'العربية',
+    'hi': 'हिन्दी',
+    'th': 'ไทย',
+    'vi': 'Tiếng Việt'
+}
+
+# 실험 설계 방법 (확장)
+DESIGN_METHODS = {
+    'full_factorial': {
+        'name': '완전 요인 설계 (Full Factorial)',
+        'description': '모든 인자 조합을 시험하는 가장 완전한 설계',
+        'pros': ['완전한 정보', '모든 상호작용 파악 가능'],
+        'cons': ['실험 수가 많음', '비용이 높음'],
+        'suitable_for': '인자 수가 적은 경우 (2-4개)',
+        'min_factors': 2,
+        'max_factors': 5
+    },
+    'fractional_factorial': {
+        'name': '부분 요인 설계 (Fractional Factorial)',
+        'description': '주요 효과와 일부 상호작용만 추정하는 효율적 설계',
+        'pros': ['실험 수 절감', '효율적'],
+        'cons': ['일부 상호작용 혼동', '해상도 제한'],
+        'suitable_for': '스크리닝 실험, 많은 인자',
+        'min_factors': 3,
+        'max_factors': 15
+    },
+    'plackett_burman': {
+        'name': 'Plackett-Burman 설계',
+        'description': '주효과만 추정하는 스크리닝 설계',
+        'pros': ['매우 효율적', '많은 인자 처리 가능'],
+        'cons': ['상호작용 추정 불가', '2수준만 가능'],
+        'suitable_for': '초기 스크리닝',
+        'min_factors': 3,
+        'max_factors': 47
+    },
+    'box_behnken': {
+        'name': 'Box-Behnken 설계',
+        'description': '2차 모델을 위한 3수준 설계',
+        'pros': ['극값 조건 회피', '효율적인 2차 모델'],
+        'cons': ['3개 이상 인자 필요', '정육면체 영역만'],
+        'suitable_for': '반응표면 모델링',
+        'min_factors': 3,
+        'max_factors': 7
+    },
+    'central_composite': {
+        'name': '중심 합성 설계 (CCD)',
+        'description': '2차 모델을 위한 표준 설계',
+        'pros': ['회전 가능', '순차적 실험 가능'],
+        'cons': ['축점이 범위 밖일 수 있음'],
+        'suitable_for': '최적화 실험',
+        'min_factors': 2,
+        'max_factors': 6
+    },
+    'latin_hypercube': {
+        'name': '라틴 하이퍼큐브 샘플링',
+        'description': '공간 충진 설계',
+        'pros': ['균등한 공간 탐색', '모델 무관'],
+        'cons': ['통계적 특성 부족'],
+        'suitable_for': '컴퓨터 실험, 시뮬레이션',
+        'min_factors': 1,
+        'max_factors': 100
+    },
+    'taguchi': {
+        'name': '다구치 설계',
+        'description': '강건 설계를 위한 직교 배열',
+        'pros': ['잡음 인자 고려', '강건성'],
+        'cons': ['상호작용 제한적'],
+        'suitable_for': '품질 개선, 강건 설계',
+        'min_factors': 2,
+        'max_factors': 50
+    },
+    'mixture': {
+        'name': '혼합물 설계',
+        'description': '성분 합이 일정한 실험',
+        'pros': ['혼합물 특화', '제약 조건 처리'],
+        'cons': ['특수한 분석 필요'],
+        'suitable_for': '조성 최적화',
+        'min_factors': 3,
+        'max_factors': 10
+    },
+    'optimal': {
+        'name': '최적 설계 (D-optimal)',
+        'description': '정보량을 최대화하는 설계',
+        'pros': ['유연한 설계', '제약 조건 처리'],
+        'cons': ['계산 집약적'],
+        'suitable_for': '비표준 상황',
+        'min_factors': 1,
+        'max_factors': 20
+    },
+    'adaptive': {
+        'name': '적응형 설계',
+        'description': '결과에 따라 다음 실험점 결정',
+        'pros': ['효율적 탐색', '실시간 최적화'],
+        'cons': ['복잡한 알고리즘'],
+        'suitable_for': '고가 실험, 실시간 최적화',
+        'min_factors': 1,
+        'max_factors': 10
+    },
+    'sequential': {
+        'name': '순차적 설계',
+        'description': '단계별로 정밀도를 높이는 설계',
+        'pros': ['리스크 감소', '단계적 개선'],
+        'cons': ['시간 소요'],
+        'suitable_for': '장기 프로젝트',
+        'min_factors': 1,
+        'max_factors': 20
+    },
+    'space_filling': {
+        'name': '공간 충진 설계',
+        'description': '실험 영역을 균등하게 커버',
+        'pros': ['모델 독립적', '탐색적'],
+        'cons': ['통계적 최적성 부족'],
+        'suitable_for': '미지 시스템 탐색',
+        'min_factors': 1,
+        'max_factors': 50
+    },
+    'bayesian': {
+        'name': '베이지안 최적화',
+        'description': '확률 모델 기반 순차적 설계',
+        'pros': ['매우 효율적', '불확실성 정량화'],
+        'cons': ['계산 복잡', '초기 데이터 필요'],
+        'suitable_for': '고비용 실험',
+        'min_factors': 1,
+        'max_factors': 20
+    }
+}
+
+# 고분자 유형 (확장 및 유연화)
+POLYMER_CATEGORIES = {
+    'base_types': {
+        'thermoplastic': {
+            'name': '열가소성 고분자',
+            'description': '가열 시 연화되고 냉각 시 경화되는 고분자',
+            'subcategories': ['범용', '엔지니어링', '슈퍼 엔지니어링'],
+            'examples': ['PE', 'PP', 'PS', 'PVC', 'PET', 'PA', 'PC', 'PMMA', 'POM', 'PEEK', 'PPS', 'PSU'],
+            'typical_properties': ['녹는점', '유리전이온도', '용융지수', '인장강도', '신율', '충격강도', '경도'],
+            'processing_methods': ['사출성형', '압출', '블로우성형', '열성형', '3D프린팅']
+        },
+        'thermosetting': {
+            'name': '열경화성 고분자',
+            'description': '가열 시 화학반응으로 경화되는 고분자',
+            'subcategories': ['에폭시', '폴리에스터', '페놀', '폴리우레탄'],
+            'examples': ['Epoxy', 'UP', 'VE', 'Phenolic', 'PU', 'Silicone', 'BMI', 'PI'],
+            'typical_properties': ['경화시간', '경화온도', '가교밀도', '경도', '내열성', '접착강도', '수축률'],
+            'processing_methods': ['RTM', 'SMC', 'BMC', '핸드레이업', '필라멘트와인딩', '오토클레이브']
+        },
+        'elastomer': {
+            'name': '탄성체',
+            'description': '고무와 같은 탄성을 가진 고분자',
+            'subcategories': ['천연고무', '합성고무', '열가소성 탄성체'],
+            'examples': ['NR', 'SBR', 'NBR', 'EPDM', 'Silicone', 'TPE', 'TPU', 'TPV', 'FKM'],
+            'typical_properties': ['경도', '인장강도', '신율', '반발탄성', '압축영구변형', '인열강도', '내마모성'],
+            'processing_methods': ['컴파운딩', '캘린더링', '압출', '사출성형', '가황']
+        },
+        'biopolymer': {
+            'name': '바이오 고분자',
+            'description': '생물 유래 또는 생분해성 고분자',
+            'subcategories': ['천연 고분자', '바이오 기반', '생분해성'],
+            'examples': ['PLA', 'PHA', 'PBS', 'Starch', 'Cellulose', 'Chitosan', 'Alginate', 'Collagen'],
+            'typical_properties': ['생분해성', '생체적합성', '기계적강도', '가공성', '안정성', '수분흡수율', '결정화도'],
+            'processing_methods': ['용액캐스팅', '전기방사', '3D바이오프린팅', '압출', '사출성형']
+        },
+        'conducting': {
+            'name': '전도성 고분자',
+            'description': '전기 전도성을 가진 특수 고분자',
+            'subcategories': ['본질전도성', '복합전도성'],
+            'examples': ['PANI', 'PPy', 'PEDOT', 'PTh', 'PAc', 'P3HT', 'Graphene composite'],
+            'typical_properties': ['전기전도도', '도핑레벨', '안정성', '가공성', '광학특성', '캐리어 이동도', '일함수'],
+            'processing_methods': ['전기중합', '화학중합', '스핀코팅', '잉크젯프린팅', '증착']
+        },
+        'composite': {
+            'name': '복합재료',
+            'description': '강화재와 매트릭스로 구성된 재료',
+            'subcategories': ['섬유강화', '입자강화', '나노복합재'],
+            'examples': ['CFRP', 'GFRP', 'AFRP', 'CNT composite', 'Graphene composite', 'Clay nanocomposite'],
+            'typical_properties': ['인장강도', '굴곡강도', '충격강도', '계면접착력', '분산도', '섬유함량', '공극률'],
+            'processing_methods': ['프리프레그', 'RTM', 'VARTM', '필라멘트와인딩', 'AFP', '3D프린팅']
+        },
+        'inorganic': {
+            'name': '무기 고분자',
+            'description': '탄소 대신 다른 원소가 주사슬을 이루는 고분자',
+            'subcategories': ['실리콘계', '인계', '붕소계'],
+            'examples': ['Silicone', 'Phosphazene', 'Polysilane', 'Polysiloxane', 'Polyphosphate', 'Sol-gel'],
+            'typical_properties': ['내열성', '화학적안정성', '기계적특성', '광학특성', '유전특성', '열팽창계수'],
+            'processing_methods': ['졸겔', 'CVD', '스핀코팅', '딥코팅', '스프레이']
+        }
+    },
+    'special_types': {
+        'smart': {
+            'name': '스마트 고분자',
+            'description': '외부 자극에 반응하는 고분자',
+            'types': ['형상기억', '자가치유', '자극응답성'],
+            'stimuli': ['온도', 'pH', '빛', '전기', '자기장']
+        },
+        'functional': {
+            'name': '기능성 고분자',
+            'description': '특수 기능을 가진 고분자',
+            'types': ['의료용', '광학용', '전자재료용', '분리막용']
+        }
+    }
+}
+
+# API 상태
+class APIStatus(Enum):
+    """API 연결 상태"""
+    ONLINE = "🟢 온라인"
+    OFFLINE = "🔴 오프라인"
+    ERROR = "⚠️ 오류"
+    RATE_LIMITED = "⏱️ 속도 제한"
+    UNAUTHORIZED = "🔐 인증 필요"
+    MAINTENANCE = "🔧 유지보수"
+
+# 사용자 레벨
+class UserLevel(Enum):
+    """사용자 숙련도"""
+    BEGINNER = (1, "🌱 초보자", "상세한 설명과 가이드 제공", 0.9)
+    INTERMEDIATE = (2, "🌿 중급자", "선택지와 권장사항 제공", 0.7)
+    ADVANCED = (3, "🌳 고급자", "자유로운 설정과 고급 기능", 0.3)
+    EXPERT = (4, "🎓 전문가", "완전한 제어와 커스터마이징", 0.1)
+    
+    def __init__(self, level, icon, description, help_ratio):
+        self.level = level
+        self.icon = icon
+        self.description = description
+        self.help_ratio = help_ratio  # 도움말 표시 비율
+
+# 실험 상태
+class ExperimentStatus(Enum):
+    """실험 진행 상태"""
+    PLANNED = "📋 계획됨"
+    IN_PROGRESS = "🔬 진행중"
+    COMPLETED = "✅ 완료"
+    FAILED = "❌ 실패"
+    PAUSED = "⏸️ 일시정지"
+    CANCELLED = "🚫 취소됨"
+
+# 분석 유형
+class AnalysisType(Enum):
+    """통계 분석 유형"""
+    DESCRIPTIVE = "기술통계"
+    ANOVA = "분산분석"
+    REGRESSION = "회귀분석"
+    RSM = "반응표면분석"
+    OPTIMIZATION = "최적화"
+    PCA = "주성분분석"
+    CORRELATION = "상관분석"
+    TIME_SERIES = "시계열분석"
+    MACHINE_LEARNING = "기계학습"
+
+# ==================== 타입 정의 ====================
+T = TypeVar('T')
+FactorType = Union[float, int, str, bool]
+ResponseType = Union[float, int]
+
+# ==================== 데이터 클래스 ====================
+@dataclass
+class ExperimentFactor:
+    """실험 인자 정의 (확장판)"""
+    name: str
+    unit: str = ""
+    min_value: float = 0.0
+    max_value: float = 100.0
+    levels: List[float] = field(default_factory=list)
+    categorical: bool = False
+    categories: List[str] = field(default_factory=list)
+    description: str = ""
+    constraints: List[str] = field(default_factory=list)
+    importance: float = 1.0  # 중요도 가중치
+    cost: float = 1.0  # 비용 가중치
+    difficulty: float = 1.0  # 실험 난이도
+    tolerance: float = 0.01  # 허용 오차
+    controllable: bool = True  # 제어 가능 여부
+    noise_factor: bool = False  # 잡음 인자 여부
+    transformation: Optional[str] = None  # 변환 함수 (log, sqrt 등)
+    
+    def validate(self) -> Tuple[bool, List[str]]:
+        """인자 유효성 검증"""
+        errors = []
+        
+        if not self.name:
+            errors.append("인자 이름이 필요합니다.")
+        
+        if not self.categorical:
+            if self.min_value >= self.max_value:
+                errors.append(f"{self.name}: 최소값이 최대값보다 작아야 합니다.")
+            
+            if self.levels:
+                for level in self.levels:
+                    if level < self.min_value or level > self.max_value:
+                        errors.append(f"{self.name}: 수준 {level}이 범위를 벗어났습니다.")
+        else:
+            if not self.categories:
+                errors.append(f"{self.name}: 범주형 인자는 카테고리가 필요합니다.")
+        
+        return len(errors) == 0, errors
+    
+    def get_levels(self, n_levels: int = None) -> List[FactorType]:
+        """수준 목록 반환"""
+        if self.categorical:
+            return self.categories[:n_levels] if n_levels else self.categories
+        
+        if self.levels:
+            return self.levels[:n_levels] if n_levels else self.levels
+        
+        # 수준이 지정되지 않은 경우 자동 생성
+        if n_levels:
+            if n_levels == 2:
+                return [self.min_value, self.max_value]
+            else:
+                return np.linspace(self.min_value, self.max_value, n_levels).tolist()
+        
+        return [self.min_value, self.max_value]
+    
+    def apply_transformation(self, value: float) -> float:
+        """변환 적용"""
+        if not self.transformation or self.categorical:
+            return value
+        
+        if self.transformation == 'log':
+            return np.log(value) if value > 0 else 0
+        elif self.transformation == 'sqrt':
+            return np.sqrt(value) if value >= 0 else 0
+        elif self.transformation == 'inverse':
+            return 1 / value if value != 0 else float('inf')
+        elif self.transformation == 'square':
+            return value ** 2
+        
+        return value
+
+@dataclass
+class ExperimentResponse:
+    """반응 변수 정의 (확장판)"""
+    name: str
+    unit: str = ""
+    target_value: Optional[float] = None
+    minimize: bool = False
+    maximize: bool = False
+    weight: float = 1.0
+    specification_limits: Tuple[Optional[float], Optional[float]] = (None, None)
+    transformation: Optional[str] = None
+    measurement_error: float = 0.0  # 측정 오차
+    cost_per_measurement: float = 0.0  # 측정 비용
+    measurement_time: float = 0.0  # 측정 시간 (분)
+    critical: bool = False  # 핵심 반응 여부
+    
+    def is_within_spec(self, value: float) -> bool:
+        """규격 내 여부 확인"""
+        lower, upper = self.specification_limits
+        
+        if lower is not None and value < lower:
+            return False
+        if upper is not None and value > upper:
+            return False
+        
+        return True
+    
+    def calculate_desirability(self, value: float) -> float:
+        """바람직함 지수 계산 (0-1)"""
+        if self.target_value is not None:
+            # 목표값에 가까울수록 1
+            deviation = abs(value - self.target_value)
+            return np.exp(-deviation / abs(self.target_value))
+        
+        elif self.minimize:
+            lower, upper = self.specification_limits
+            if lower is None:
+                return 0.5  # 정보 부족
+            
+            if value <= lower:
+                return 1.0
+            elif upper is not None and value >= upper:
+                return 0.0
+            else:
+                return (upper - value) / (upper - lower) if upper else 0.5
+        
+        elif self.maximize:
+            lower, upper = self.specification_limits
+            if upper is None:
+                return 0.5  # 정보 부족
+            
+            if value >= upper:
+                return 1.0
+            elif lower is not None and value <= lower:
+                return 0.0
+            else:
+                return (value - lower) / (upper - lower) if lower else 0.5
+        
+        return 0.5  # 기본값
+
+@dataclass
+class ProjectInfo:
+    """프로젝트 정보 (확장판)"""
+    id: str
+    name: str
+    description: str
+    polymer_type: str
+    polymer_system: Dict[str, Any]
+    objectives: List[str]
+    constraints: List[str]
+    created_at: datetime
+    updated_at: datetime
+    owner: str
+    collaborators: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    version: int = 1
+    parent_project_id: Optional[str] = None
+    status: str = "active"
+    budget: Optional[float] = None
+    deadline: Optional[datetime] = None
+    notes: str = ""
+    attachments: List[str] = field(default_factory=list)
+    custom_fields: Dict[str, Any] = field(default_factory=dict)
+    
+    def add_collaborator(self, user_id: str):
+        """협업자 추가"""
+        if user_id not in self.collaborators:
+            self.collaborators.append(user_id)
+            self.updated_at = datetime.now()
+    
+    def add_tag(self, tag: str):
+        """태그 추가"""
+        if tag not in self.tags:
+            self.tags.append(tag)
+            self.updated_at = datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """딕셔너리로 변환"""
+        return asdict(self)
+
+@dataclass
+class ExperimentData:
+    """실험 데이터 (확장판)"""
+    id: str
+    project_id: str
+    design_matrix: pd.DataFrame
+    results: Optional[pd.DataFrame] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.now)
+    status: ExperimentStatus = ExperimentStatus.PLANNED
+    run_order: Optional[List[int]] = None
+    block_structure: Optional[Dict[str, List[int]]] = None
+    replicates: Dict[int, List[int]] = field(default_factory=dict)
+    conditions: Dict[str, Any] = field(default_factory=dict)
+    operator: Optional[str] = None
+    equipment: Optional[str] = None
+    notes: Dict[int, str] = field(default_factory=dict)
+    
+    def get_completed_runs(self) -> List[int]:
+        """완료된 실험 번호 목록"""
+        if self.results is None:
+            return []
+        
+        return self.results[~self.results.isnull().any(axis=1)].index.tolist()
+    
+    def get_progress(self) -> float:
+        """진행률 계산 (0-100%)"""
+        total_runs = len(self.design_matrix)
+        completed_runs = len(self.get_completed_runs())
+        
+        return (completed_runs / total_runs * 100) if total_runs > 0 else 0
+
+@dataclass
+class AIResponse:
+    """AI 응답 데이터"""
+    success: bool
+    content: str
+    model: str
+    tokens_used: int = 0
+    response_time: float = 0.0
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+
+@dataclass
+class LearningRecord:
+    """학습 기록 데이터"""
+    id: str
+    timestamp: datetime
+    user_id: str
+    user_level: UserLevel
+    action_type: str
+    action_details: Dict[str, Any]
+    outcome: Dict[str, Any]
+    quality_score: float
+    context: Dict[str, Any] = field(default_factory=dict)
+    feedback: Optional[str] = None
+
+# ==================== 예외 처리 ====================
+class PolymerDOEException(Exception):
+    """플랫폼 기본 예외"""
+    def __init__(self, message: str, error_code: str = None, details: Dict[str, Any] = None):
+        super().__init__(message)
+        self.error_code = error_code
+        self.details = details or {}
+        self.timestamp = datetime.now()
+        
+        # 로깅
+        logger.error(f"Exception: {error_code} - {message}", extra=self.details)
+
+class APIException(PolymerDOEException):
+    """API 관련 예외"""
+    pass
+
+class ValidationException(PolymerDOEException):
+    """검증 실패 예외"""
+    pass
+
+class DataException(PolymerDOEException):
+    """데이터 관련 예외"""
+    pass
+
+class DesignException(PolymerDOEException):
+    """실험 설계 관련 예외"""
+    pass
+
+class AnalysisException(PolymerDOEException):
+    """분석 관련 예외"""
+    pass
+
+# ==================== 유틸리티 함수 ====================
+def timeit(func: Callable) -> Callable:
+    """함수 실행 시간 측정 데코레이터"""
+    @wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        start = time.time()
+        result = await func(*args, **kwargs)
+        end = time.time()
+        logger.debug(f"{func.__name__} 실행 시간: {end - start:.3f}초")
+        return result
+    
+    @wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        logger.debug(f"{func.__name__} 실행 시간: {end - start:.3f}초")
+        return result
+    
+    if asyncio.iscoroutinefunction(func):
+        return async_wrapper
+    else:
+        return sync_wrapper
+
+def retry(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0):
+    """재시도 데코레이터"""
+    def decorator(func):
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            attempt = 0
+            current_delay = delay
+            
+            while attempt < max_attempts:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= max_attempts:
+                        logger.error(f"{func.__name__} 실패 (시도 {attempt}/{max_attempts}): {e}")
+                        raise
+                    
+                    logger.warning(f"{func.__name__} 재시도 {attempt}/{max_attempts} ({current_delay}초 대기)")
+                    await asyncio.sleep(current_delay)
+                    current_delay *= backoff
+        
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            attempt = 0
+            current_delay = delay
+            
+            while attempt < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= max_attempts:
+                        logger.error(f"{func.__name__} 실패 (시도 {attempt}/{max_attempts}): {e}")
+                        raise
+                    
+                    logger.warning(f"{func.__name__} 재시도 {attempt}/{max_attempts} ({current_delay}초 대기)")
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+    
+    return decorator
+
+def validate_input(value: Any, 
+                  min_val: float = None, 
+                  max_val: float = None,
+                  allowed_values: List = None,
+                  value_type: type = None) -> Tuple[bool, Optional[str]]:
+    """입력값 검증"""
+    if value is None:
+        return False, "값이 입력되지 않았습니다."
+    
+    if value_type and not isinstance(value, value_type):
+        return False, f"타입이 올바르지 않습니다. {value_type.__name__}이어야 합니다."
+    
+    if min_val is not None and value < min_val:
+        return False, f"최소값 {min_val} 이상이어야 합니다."
+    
+    if max_val is not None and value > max_val:
+        return False, f"최대값 {max_val} 이하여야 합니다."
+    
+    if allowed_values is not None and value not in allowed_values:
+        return False, f"허용된 값이 아닙니다. 가능한 값: {allowed_values}"
+    
+    return True, None
+
+def generate_unique_id(prefix: str = "EXP") -> str:
+    """고유 ID 생성"""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    random_part = hashlib.md5(f"{timestamp}{uuid.uuid4()}".encode()).hexdigest()[:6]
+    return f"{prefix}_{timestamp}_{random_part}"
+
+def safe_float_conversion(value: Any, default: float = 0.0) -> float:
+    """안전한 float 변환"""
+    if value is None:
+        return default
+    
+    try:
+        # 문자열인 경우 쉼표 제거
+        if isinstance(value, str):
+            value = value.replace(',', '')
+        
+        return float(value)
+    except (ValueError, TypeError):
+        logger.warning(f"Float 변환 실패: {value}")
+        return default
+
+def format_number(value: float, 
+                 decimals: int = 2, 
+                 use_scientific: bool = True,
+                 threshold: float = 1e6) -> str:
+    """숫자 포맷팅"""
+    if pd.isna(value):
+        return "N/A"
+    
+    if use_scientific and (abs(value) >= threshold or (abs(value) < 1e-3 and value != 0)):
+        return f"{value:.{decimals}e}"
+    else:
+        return f"{value:,.{decimals}f}"
+
+def sanitize_filename(filename: str) -> str:
+    """파일명 정리"""
+    # 특수문자 제거
+    invalid_chars = '<>:"/\\|?*'
+    for char in invalid_chars:
+        filename = filename.replace(char, '_')
+    
+    # 공백을 언더스코어로
+    filename = filename.replace(' ', '_')
+    
+    # 길이 제한
+    max_length = 255
+    if len(filename) > max_length:
+        name, ext = os.path.splitext(filename)
+        filename = name[:max_length - len(ext)] + ext
+    
+    return filename
+
+@lru_cache(maxsize=128)
+def calculate_hash(data: str) -> str:
+    """데이터 해시 계산 (캐싱)"""
+    return hashlib.sha256(data.encode()).hexdigest()
+
+def create_backup(data: Any, backup_dir: str = "backups") -> str:
+    """데이터 백업 생성"""
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = os.path.join(backup_dir, f"backup_{timestamp}.pkl")
+    
+    with open(backup_file, 'wb') as f:
+        pickle.dump(data, f)
+    
+    logger.info(f"백업 생성: {backup_file}")
+    return backup_file
+
+def restore_backup(backup_file: str) -> Any:
+    """백업 복원"""
+    if not os.path.exists(backup_file):
+        raise FileNotFoundError(f"백업 파일을 찾을 수 없습니다: {backup_file}")
+    
+    with open(backup_file, 'rb') as f:
+        data = pickle.load(f)
+    
+    logger.info(f"백업 복원: {backup_file}")
+    return data
+
+class ProgressTracker:
+    """진행 상황 추적기"""
+    def __init__(self, total: int, description: str = "Processing"):
+        self.total = total
+        self.current = 0
+        self.description = description
+        self.start_time = time.time()
+        self.last_update = self.start_time
+        
+    def update(self, increment: int = 1):
+        """진행 상황 업데이트"""
+        self.current += increment
+        current_time = time.time()
+        
+        # 0.5초마다 업데이트
+        if current_time - self.last_update > 0.5:
+            self.last_update = current_time
+            self._display_progress()
+    
+    def _display_progress(self):
+        """진행률 표시"""
+        if self.total == 0:
+            return
+        
+        progress = self.current / self.total
+        elapsed = time.time() - self.start_time
+        eta = elapsed / progress - elapsed if progress > 0 else 0
+        
+        bar_length = 30
+        filled_length = int(bar_length * progress)
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        
+        st.progress(progress)
+        st.text(f"{self.description}: {bar} {progress*100:.1f}% (ETA: {eta:.1f}s)")
+    
+    def finish(self):
+        """완료"""
+        self.current = self.total
+        self._display_progress()
+        elapsed = time.time() - self.start_time
+        st.success(f"{self.description} 완료! (소요시간: {elapsed:.1f}초)")
+
+# ==================== 초보자를 위한 도움말 시스템 ====================
+class HelpSystem:
+    """상황별 도움말 제공 시스템"""
+    
+    def __init__(self):
+        self.help_database = {
+            'factor_selection': {
+                'title': '🎯 실험 인자란?',
+                'basic': """
+                실험 인자(Factor)는 실험 결과에 영향을 줄 수 있는 변수입니다.
+                
+                예시:
+                - 🌡️ **온도**: 반응 속도에 영향
+                - ⏱️ **시간**: 반응 완성도에 영향
+                - 🧪 **농도**: 생성물 양에 영향
+                """,
+                'detailed': """
+                ### 인자 선택 시 고려사항
+                
+                1. **제어 가능성**: 실험 중 정확히 조절할 수 있나요?
+                2. **측정 가능성**: 정확히 측정할 수 있나요?
+                3. **영향력**: 결과에 실제로 영향을 미치나요?
+                4. **독립성**: 다른 인자와 독립적인가요?
+                
+                💡 **팁**: 처음에는 2-3개의 핵심 인자로 시작하세요!
+                """,
+                'examples': [
+                    "고분자 합성: 온도, 시간, 촉매 농도",
+                    "복합재료: 섬유 함량, 경화 온도, 압력",
+                    "코팅: 두께, 건조 시간, 용매 비율"
+                ]
+            },
+            'design_method': {
+                'title': '📊 실험 설계 방법 선택',
+                'basic': """
+                실험 설계는 어떤 조건에서 실험할지 정하는 계획입니다.
+                
+                주요 방법:
+                - **완전 요인**: 모든 조합 (정확하지만 실험 많음)
+                - **부분 요인**: 일부 조합 (효율적)
+                - **반응표면**: 최적점 찾기 (고급)
+                """,
+                'detailed': """
+                ### 설계 방법별 특징
+                
+                #### 🔷 완전 요인 설계
+                - **장점**: 모든 정보 획득, 이해하기 쉬움
+                - **단점**: 실험 수가 기하급수적 증가
+                - **사용 시기**: 인자가 적고(2-4개) 정확한 분석 필요할 때
+                
+                #### 🔶 부분 요인 설계
+                - **장점**: 실험 수 크게 감소
+                - **단점**: 일부 상호작용 정보 손실
+                - **사용 시기**: 스크리닝, 많은 인자(5개 이상)
+                
+                #### 🔴 Box-Behnken 설계
+                - **장점**: 2차 모델, 극값 회피
+                - **단점**: 3개 이상 인자 필요
+                - **사용 시기**: 최적화, 곡선 관계
+                """,
+                'quiz': [
+                    {
+                        'question': "인자가 2개이고 각각 3수준일 때, 완전 요인 설계의 실험 수는?",
+                        'answer': "9개 (3 × 3)",
+                        'explanation': "각 인자의 수준을 곱합니다."
+                    }
+                ]
+            },
+            'response_variable': {
+                'title': '📈 반응 변수란?',
+                'basic': """
+                반응 변수(Response)는 실험에서 측정하는 결과값입니다.
+                
+                예시:
+                - 💪 **인장강도**: 재료의 강도
+                - 📏 **신율**: 늘어나는 정도
+                - 🌡️ **유리전이온도**: 물성 변화 온도
+                """,
+                'detailed': """
+                ### 좋은 반응 변수의 조건
+                
+                1. **정량적**: 숫자로 측정 가능
+                2. **재현성**: 같은 조건에서 비슷한 값
+                3. **민감성**: 인자 변화에 반응
+                4. **관련성**: 연구 목적과 직결
+                
+                ### 반응 변수 유형
+                - **목표값**: 특정 값에 맞추기 (예: pH 7.0)
+                - **최대화**: 클수록 좋음 (예: 강도)
+                - **최소화**: 작을수록 좋음 (예: 불량률)
+                """
+            },
+            'analysis': {
+                'title': '📊 결과 분석 이해하기',
+                'basic': """
+                실험 결과를 분석하여 인자의 영향을 파악합니다.
+                
+                주요 분석:
+                - **주효과**: 각 인자의 영향
+                - **상호작용**: 인자들의 복합 영향
+                - **최적 조건**: 가장 좋은 설정
+                """,
+                'detailed': """
+                ### 통계 용어 쉽게 이해하기
+                
+                #### 📌 p-value (유의확률)
+                - **p < 0.05**: "우연이 아니다!" ✅
+                - **p ≥ 0.05**: "우연일 수도..." ❌
+                - 작을수록 인자의 영향이 확실함
+                
+                #### 📌 R² (결정계수)
+                - 모델이 데이터를 얼마나 잘 설명하는지
+                - 0~1 사이 값 (1에 가까울수록 좋음)
+                - 0.8 이상이면 대체로 양호
+                
+                #### 📌 주효과 그래프
+                - 기울기가 급할수록 영향이 큼
+                - 평평하면 영향이 적음
+                
+                #### 📌 상호작용 그래프
+                - 선이 평행: 상호작용 없음
+                - 선이 교차: 상호작용 있음
+                """
+            }
+        }
+        
+        self.tooltips = {
+            'factor': "결과에 영향을 주는 실험 조건",
+            'response': "측정하려는 실험 결과",
+            'level': "인자가 가질 수 있는 값",
+            'replicate': "같은 조건의 반복 실험",
+            'block': "외부 영향을 줄이는 실험 그룹",
+            'randomization': "순서 효과를 없애는 무작위 배치",
+            'center_point': "중간 조건에서의 추가 실험",
+            'resolution': "구별 가능한 효과의 수준",
+            'confounding': "효과를 구별할 수 없는 상태",
+            'orthogonal': "인자들이 독립적인 설계"
+        }
+    
+    def get_help(self, topic: str, level: str = 'basic') -> str:
+        """도움말 내용 반환"""
+        if topic in self.help_database:
+            help_content = self.help_database[topic]
+            
+            if level == 'basic':
+                return f"## {help_content['title']}\n{help_content['basic']}"
+            elif level == 'detailed':
+                return f"## {help_content['title']}\n{help_content['basic']}\n{help_content['detailed']}"
+            elif level == 'examples' and 'examples' in help_content:
+                examples = '\n'.join([f"- {ex}" for ex in help_content['examples']])
+                return f"### 📝 예시\n{examples}"
+        
+        return "도움말을 찾을 수 없습니다."
+    
+    def get_tooltip(self, term: str) -> str:
+        """툴팁 반환"""
+        return self.tooltips.get(term, "")
+    
+    def show_help_button(self, topic: str, key: str = None):
+        """도움말 버튼 표시"""
+        if st.button("❓ 도움말", key=key):
+            st.info(self.get_help(topic, 'basic'))
+            
+            if st.button("📖 더 자세히", key=f"{key}_more"):
+                st.info(self.get_help(topic, 'detailed'))
+    
+    def show_contextual_help(self, context: str, user_level: UserLevel):
+        """상황별 도움말 표시"""
+        # 초보자는 자동으로 도움말 표시
+        if user_level == UserLevel.BEGINNER:
+            with st.expander("💡 도움말", expanded=True):
+                st.markdown(self.get_help(context, 'basic'))
+        
+        # 중급자는 버튼으로 표시
+        elif user_level == UserLevel.INTERMEDIATE:
+            self.show_help_button(context)
+
+# ==================== 캐시 시스템 ====================
+class CacheManager:
+    """효율적인 캐싱 시스템"""
+    
+    def __init__(self, cache_dir: str = ".cache"):
+        self.cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
+        self.memory_cache = {}
+        self.cache_stats = defaultdict(lambda: {'hits': 0, 'misses': 0})
+    
+    def _get_cache_key(self, func_name: str, *args, **kwargs) -> str:
+        """캐시 키 생성"""
+        key_data = f"{func_name}:{args}:{sorted(kwargs.items())}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def get(self, key: str) -> Optional[Any]:
+        """캐시에서 값 가져오기"""
+        # 메모리 캐시 확인
+        if key in self.memory_cache:
+            self.cache_stats[key]['hits'] += 1
+            return self.memory_cache[key]
+        
+        # 디스크 캐시 확인
+        cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'rb') as f:
+                    value = pickle.load(f)
+                
+                # 메모리 캐시에도 저장
+                self.memory_cache[key] = value
+                self.cache_stats[key]['hits'] += 1
+                return value
+            except Exception as e:
+                logger.warning(f"캐시 로드 실패: {e}")
+        
+        self.cache_stats[key]['misses'] += 1
+        return None
+    
+    def set(self, key: str, value: Any, ttl: int = 3600):
+        """캐시에 값 저장"""
+        # 메모리 캐시에 저장
+        self.memory_cache[key] = value
+        
+        # 디스크 캐시에 저장
+        cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
+        try:
+            with open(cache_file, 'wb') as f:
+                pickle.dump(value, f)
+        except Exception as e:
+            logger.warning(f"캐시 저장 실패: {e}")
+    
+    def invalidate(self, pattern: str = None):
+        """캐시 무효화"""
+        if pattern:
+            # 패턴과 일치하는 캐시 삭제
+            keys_to_remove = [k for k in self.memory_cache.keys() if pattern in k]
+            for key in keys_to_remove:
+                del self.memory_cache[key]
+                
+                cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
+                if os.path.exists(cache_file):
+                    os.remove(cache_file)
+        else:
+            # 전체 캐시 삭제
+            self.memory_cache.clear()
+            shutil.rmtree(self.cache_dir)
+            os.makedirs(self.cache_dir)
+    
+    def get_stats(self) -> Dict[str, Dict[str, int]]:
+        """캐시 통계 반환"""
+        return dict(self.cache_stats)
+
+# 전역 캐시 인스턴스
+cache_manager = CacheManager()
+
+def cached(ttl: int = 3600):
+    """캐싱 데코레이터"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # 캐시 키 생성
+            cache_key = cache_manager._get_cache_key(func.__name__, *args, **kwargs)
+            
+            # 캐시 확인
+            cached_value = cache_manager.get(cache_key)
+            if cached_value is not None:
+                return cached_value
+            
+            # 함수 실행
+            result = func(*args, **kwargs)
+            
+            # 캐시 저장
+            cache_manager.set(cache_key, result, ttl)
+            
+            return result
+        
+        return wrapper
+    return decorator
+
+# ==================== 설정 관리 ====================
+class ConfigManager:
+    """설정 관리 시스템"""
+    
+    DEFAULT_CONFIG = {
+        'app': {
+            'name': '고분자 실험 설계 플랫폼',
+            'version': VERSION,
+            'theme': 'light',
+            'language': 'ko',
+            'timezone': 'Asia/Seoul'
+        },
+        'experiment': {
+            'default_confidence_level': 0.95,
+            'default_power': 0.8,
+            'max_factors': 20,
+            'max_runs': 1000,
+            'auto_save': True,
+            'save_interval': 300  # 5분
+        },
+        'analysis': {
+            'significance_level': 0.05,
+            'outlier_threshold': 3.0,  # 표준편차
+            'min_r_squared': 0.7,
+            'cross_validation_folds': 5
+        },
+        'visualization': {
+            'plot_style': 'seaborn',
+            'color_palette': 'viridis',
+            'figure_dpi': 150,
+            'interactive_plots': True,
+            'animation_speed': 1.0
+        },
+        'ai': {
+            'default_model': 'gemini',
+            'temperature': 0.7,
+            'max_tokens': 2000,
+            'timeout': 30,
+            'retry_attempts': 3,
+            'consensus_threshold': 0.7
+        },
+        'database': {
+            'backup_enabled': True,
+            'backup_interval': 86400,  # 24시간
+            'max_backups': 7,
+            'compression': True
+        },
+        'notifications': {
+            'email_enabled': False,
+            'slack_enabled': False,
+            'desktop_enabled': True
+        }
+    }
+    
+    def __init__(self, config_file: str = "config.json"):
+        self.config_file = config_file
+        self.config = self.load_config()
+    
+    def load_config(self) -> Dict[str, Any]:
+        """설정 로드"""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    user_config = json.load(f)
+                
+                # 기본 설정과 병합
+                return self._merge_configs(self.DEFAULT_CONFIG, user_config)
+            except Exception as e:
+                logger.error(f"설정 로드 실패: {e}")
+        
+        return self.DEFAULT_CONFIG.copy()
+    
+    def save_config(self):
+        """설정 저장"""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+            
+            logger.info("설정 저장 완료")
+        except Exception as e:
+            logger.error(f"설정 저장 실패: {e}")
+    
+    def get(self, path: str, default: Any = None) -> Any:
+        """설정 값 가져오기 (점 표기법 지원)"""
+        keys = path.split('.')
+        value = self.config
+        
+        for key in keys:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                return default
+        
+        return value
+    
+    def set(self, path: str, value: Any):
+        """설정 값 설정"""
+        keys = path.split('.')
+        config = self.config
+        
+        for key in keys[:-1]:
+            if key not in config:
+                config[key] = {}
+            config = config[key]
+        
+        config[keys[-1]] = value
+        self.save_config()
+    
+    def _merge_configs(self, default: Dict, user: Dict) -> Dict:
+        """설정 병합 (재귀적)"""
+        result = default.copy()
+        
+        for key, value in user.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._merge_configs(result[key], value)
+            else:
+                result[key] = value
+        
+        return result
+
+# 전역 설정 인스턴스
+config_manager = ConfigManager()
+
+# ==================== 이벤트 시스템 ====================
+class EventType(Enum):
+    """이벤트 유형"""
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    EXPERIMENT_STARTED = "experiment_started"
+    EXPERIMENT_COMPLETED = "experiment_completed"
+    ANALYSIS_COMPLETED = "analysis_completed"
+    ERROR_OCCURRED = "error_occurred"
+    USER_ACTION = "user_action"
+    SYSTEM_EVENT = "system_event"
+
+@dataclass
+class Event:
+    """이벤트 데이터"""
+    type: EventType
+    timestamp: datetime
+    data: Dict[str, Any]
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+class EventBus:
+    """이벤트 버스 시스템"""
+    
+    def __init__(self):
+        self.subscribers: Dict[EventType, List[Callable]] = defaultdict(list)
+        self.event_queue: queue.Queue = queue.Queue()
+        self.event_history: deque = deque(maxlen=1000)
+        self.running = False
+        self.worker_thread = None
+    
+    def subscribe(self, event_type: EventType, callback: Callable):
+        """이벤트 구독"""
+        self.subscribers[event_type].append(callback)
+        logger.debug(f"구독 추가: {event_type.value} -> {callback.__name__}")
+    
+    def unsubscribe(self, event_type: EventType, callback: Callable):
+        """구독 해제"""
+        if callback in self.subscribers[event_type]:
+            self.subscribers[event_type].remove(callback)
+    
+    def publish(self, event: Event):
+        """이벤트 발행"""
+        self.event_queue.put(event)
+        self.event_history.append(event)
+        
+        # 즉시 처리가 필요한 경우
+        if event.type == EventType.ERROR_OCCURRED:
+            self._process_event(event)
+    
+    def start(self):
+        """이벤트 처리 시작"""
+        if not self.running:
+            self.running = True
+            self.worker_thread = threading.Thread(target=self._worker, daemon=True)
+            self.worker_thread.start()
+            logger.info("이벤트 버스 시작")
+    
+    def stop(self):
+        """이벤트 처리 중지"""
+        self.running = False
+        if self.worker_thread:
+            self.worker_thread.join()
+        logger.info("이벤트 버스 중지")
+    
+    def _worker(self):
+        """백그라운드 워커"""
+        while self.running:
+            try:
+                event = self.event_queue.get(timeout=1)
+                self._process_event(event)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"이벤트 처리 오류: {e}")
+    
+    def _process_event(self, event: Event):
+        """이벤트 처리"""
+        for callback in self.subscribers[event.type]:
+            try:
+                callback(event)
+            except Exception as e:
+                logger.error(f"이벤트 콜백 오류: {callback.__name__} - {e}")
+    
+    def get_history(self, event_type: EventType = None, limit: int = 100) -> List[Event]:
+        """이벤트 기록 조회"""
+        history = list(self.event_history)
+        
+        if event_type:
+            history = [e for e in history if e.type == event_type]
+        
+        return history[-limit:]
+
+# 전역 이벤트 버스
+event_bus = EventBus()
+
+# ==================== 데이터베이스 매니저 ====================
+class DatabaseManager:
+    """통합 데이터베이스 관리 시스템"""
+    
+    def __init__(self, 
+                 db_type: str = "sqlite",
+                 db_path: str = "polymer_doe.db",
+                 backup_enabled: bool = True):
+        self.db_type = db_type
+        self.db_path = db_path
+        self.backup_enabled = backup_enabled
+        self.connection_pool = []
+        self.lock = threading.Lock()
+        
+        self._init_database()
+        
+        # 백업 스케줄러
+        if backup_enabled:
+            self._schedule_backups()
+    
+    def _init_database(self):
+        """데이터베이스 초기화"""
+        if self.db_type == "sqlite":
+            self._init_sqlite()
+        elif self.db_type == "mongodb" and MONGODB_AVAILABLE:
+            self._init_mongodb()
+        else:
+            logger.warning(f"지원하지 않는 DB 타입: {self.db_type}")
+            self.db_type = "sqlite"
+            self._init_sqlite()
+    
+    def _init_sqlite(self):
+        """SQLite 초기화"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 프로젝트 테이블
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    polymer_type TEXT,
+                    polymer_system TEXT,
+                    objectives TEXT,
+                    constraints TEXT,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    owner TEXT,
+                    collaborators TEXT,
+                    tags TEXT,
+                    version INTEGER DEFAULT 1,
+                    parent_project_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    budget REAL,
+                    deadline TIMESTAMP,
+                    notes TEXT,
+                    attachments TEXT,
+                    custom_fields TEXT,
+                    data BLOB
+                )
+            """)
+            
+            # 실험 데이터 테이블
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS experiments (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT,
+                    design_matrix TEXT,
+                    results TEXT,
+                    metadata TEXT,
+                    created_at TIMESTAMP,
+                    status TEXT,
+                    run_order TEXT,
+                    block_structure TEXT,
+                    conditions TEXT,
+                    operator TEXT,
+                    equipment TEXT,
+                    notes TEXT,
+                    data BLOB,
+                    FOREIGN KEY (project_id) REFERENCES projects (id)
+                )
+            """)
+            
+            # 분석 결과 테이블
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS analysis_results (
+                    id TEXT PRIMARY KEY,
+                    experiment_id TEXT,
+                    analysis_type TEXT,
+                    results TEXT,
+                    plots TEXT,
+                    statistics TEXT,
+                    created_at TIMESTAMP,
+                    parameters TEXT,
+                    quality_metrics TEXT,
+                    FOREIGN KEY (experiment_id) REFERENCES experiments (id)
+                )
+            """)
+            
+            # 사용자 활동 로그
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    action TEXT,
+                    details TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    session_id TEXT,
+                    ip_address TEXT,
+                    user_agent TEXT
+                )
+            """)
+            
+            # 학습 데이터 테이블
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS learning_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_id TEXT,
+                    user_level TEXT,
+                    action_type TEXT,
+                    action_details TEXT,
+                    outcome TEXT,
+                    quality_score REAL,
+                    context TEXT,
+                    feedback TEXT
+                )
+            """)
+            
+            # AI 상호작용 로그
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ai_interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_id TEXT,
+                    prompt TEXT,
+                    response TEXT,
+                    model TEXT,
+                    tokens_used INTEGER,
+                    response_time REAL,
+                    quality_rating REAL,
+                    feedback TEXT
+                )
+            """)
+            
+            # 협업 데이터
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS collaborations (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT,
+                    type TEXT,  -- comment, review, suggestion
+                    user_id TEXT,
+                    content TEXT,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    parent_id TEXT,  -- for threaded discussions
+                    status TEXT,
+                    metadata TEXT,
+                    FOREIGN KEY (project_id) REFERENCES projects (id)
+                )
+            """)
+            
+            # 템플릿 저장소
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS templates (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    type TEXT,  -- project, experiment, analysis
+                    content TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    usage_count INTEGER DEFAULT 0,
+                    rating REAL,
+                    tags TEXT,
+                    public BOOLEAN DEFAULT FALSE
+                )
+            """)
+            
+            # 인덱스 생성
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_experiments_project ON experiments(project_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_learning_user ON learning_data(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_user ON ai_interactions(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_collaborations_project ON collaborations(project_id)")
+            
+            conn.commit()
+            logger.info("SQLite 데이터베이스 초기화 완료")
+    
+    @contextmanager
+    def get_connection(self):
+        """데이터베이스 연결 컨텍스트 매니저"""
+        conn = None
+        try:
+            if self.connection_pool:
+                conn = self.connection_pool.pop()
+            else:
+                if self.db_type == "sqlite":
+                    conn = sqlite3.connect(self.db_path)
+                    conn.row_factory = sqlite3.Row
+            
+            yield conn
+            
+        finally:
+            if conn:
+                if len(self.connection_pool) < 5:
+                    self.connection_pool.append(conn)
+                else:
+                    conn.close()
+    
+    def execute_query(self, query: str, params: tuple = None) -> List[Dict]:
+        """쿼리 실행"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            if query.strip().upper().startswith('SELECT'):
+                columns = [desc[0] for desc in cursor.description]
+                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            else:
+                conn.commit()
+                return []
+    
+    def save_project(self, project: ProjectInfo) -> bool:
+        """프로젝트 저장"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # JSON 직렬화
+                polymer_system = json.dumps(project.polymer_system)
+                objectives = json.dumps(project.objectives)
+                constraints = json.dumps(project.constraints)
+                collaborators = json.dumps(project.collaborators)
+                tags = json.dumps(project.tags)
+                attachments = json.dumps(project.attachments)
+                custom_fields = json.dumps(project.custom_fields)
+                
+                # 전체 객체 직렬화 (백업용)
+                data = pickle.dumps(project)
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO projects 
+                    (id, name, description, polymer_type, polymer_system, 
+                     objectives, constraints, created_at, updated_at, 
+                     owner, collaborators, tags, version, parent_project_id,
+                     status, budget, deadline, notes, attachments, 
+                     custom_fields, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    project.id, project.name, project.description,
+                    project.polymer_type, polymer_system, objectives,
+                    constraints, project.created_at, project.updated_at,
+                    project.owner, collaborators, tags, project.version,
+                    project.parent_project_id, project.status, project.budget,
+                    project.deadline, project.notes, attachments,
+                    custom_fields, data
+                ))
+                
+                conn.commit()
+                
+                # 이벤트 발행
+                event_bus.publish(Event(
+                    type=EventType.PROJECT_CREATED,
+                    timestamp=datetime.now(),
+                    data={'project_id': project.id, 'name': project.name},
+                    user_id=project.owner
+                ))
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"프로젝트 저장 실패: {e}")
+            return False
+    
+    def load_project(self, project_id: str) -> Optional[ProjectInfo]:
+        """프로젝트 불러오기"""
+        try:
+            results = self.execute_query(
+                "SELECT data FROM projects WHERE id = ?",
+                (project_id,)
+            )
+            
+            if results:
+                return pickle.loads(results[0]['data'])
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"프로젝트 로드 실패: {e}")
+            return None
+    
+    def search_projects(self, 
+                       owner: str = None,
+                       tags: List[str] = None,
+                       polymer_type: str = None,
+                       status: str = None,
+                       limit: int = 100) -> List[ProjectInfo]:
+        """프로젝트 검색"""
+        query = "SELECT data FROM projects WHERE 1=1"
+        params = []
+        
+        if owner:
+            query += " AND owner = ?"
+            params.append(owner)
+        
+        if polymer_type:
+            query += " AND polymer_type = ?"
+            params.append(polymer_type)
+        
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        
+        if tags:
+            # 태그는 JSON 배열로 저장되어 있음
+            for tag in tags:
+                query += " AND tags LIKE ?"
+                params.append(f'%"{tag}"%')
+        
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
+        
+        results = self.execute_query(query, tuple(params))
+        
+        projects = []
+        for row in results:
+            try:
+                project = pickle.loads(row['data'])
+                projects.append(project)
+            except:
+                continue
+        
+        return projects
+    
+    def save_experiment(self, experiment: ExperimentData) -> bool:
+        """실험 데이터 저장"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # 직렬화
+                design_matrix = experiment.design_matrix.to_json()
+                results = experiment.results.to_json() if experiment.results is not None else None
+                metadata = json.dumps(experiment.metadata)
+                run_order = json.dumps(experiment.run_order)
+                block_structure = json.dumps(experiment.block_structure)
+                conditions = json.dumps(experiment.conditions)
+                notes = json.dumps(experiment.notes)
+                data = pickle.dumps(experiment)
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO experiments 
+                    (id, project_id, design_matrix, results, metadata,
+                     created_at, status, run_order, block_structure,
+                     conditions, operator, equipment, notes, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    experiment.id, experiment.project_id, design_matrix,
+                    results, metadata, experiment.created_at, 
+                    experiment.status.value, run_order, block_structure,
+                    conditions, experiment.operator, experiment.equipment,
+                    notes, data
+                ))
+                
+                conn.commit()
+                
+                # 이벤트 발행
+                event_bus.publish(Event(
+                    type=EventType.EXPERIMENT_STARTED,
+                    timestamp=datetime.now(),
+                    data={'experiment_id': experiment.id, 'project_id': experiment.project_id}
+                ))
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"실험 데이터 저장 실패: {e}")
+            return False
+    
+    def save_analysis_result(self, 
+                           experiment_id: str,
+                           analysis_type: str,
+                           results: Dict[str, Any],
+                           plots: List[str] = None,
+                           parameters: Dict[str, Any] = None) -> bool:
+        """분석 결과 저장"""
+        try:
+            analysis_id = generate_unique_id("ANALYSIS")
+            
+            # 품질 메트릭 계산
+            quality_metrics = self._calculate_quality_metrics(results)
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT INTO analysis_results
+                    (id, experiment_id, analysis_type, results, plots,
+                     statistics, created_at, parameters, quality_metrics)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    analysis_id, experiment_id, analysis_type,
+                    json.dumps(results), json.dumps(plots or []),
+                    json.dumps(results.get('statistics', {})),
+                    datetime.now(), json.dumps(parameters or {}),
+                    json.dumps(quality_metrics)
+                ))
+                
+                conn.commit()
+                
+                # 이벤트 발행
+                event_bus.publish(Event(
+                    type=EventType.ANALYSIS_COMPLETED,
+                    timestamp=datetime.now(),
+                    data={
+                        'analysis_id': analysis_id,
+                        'experiment_id': experiment_id,
+                        'type': analysis_type
+                    }
+                ))
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"분석 결과 저장 실패: {e}")
+            return False
+    
+    def log_activity(self, 
+                    user_id: str,
+                    action: str,
+                    details: Dict[str, Any],
+                    session_id: str = None):
+        """활동 로그 기록"""
+        try:
+            self.execute_query("""
+                INSERT INTO activity_log 
+                (user_id, action, details, session_id)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, action, json.dumps(details), session_id))
+            
+        except Exception as e:
+            logger.error(f"활동 로그 기록 실패: {e}")
+    
+    def save_learning_record(self, record: LearningRecord):
+        """학습 기록 저장"""
+        try:
+            self.execute_query("""
+                INSERT INTO learning_data
+                (timestamp, user_id, user_level, action_type,
+                 action_details, outcome, quality_score, context, feedback)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record.timestamp, record.user_id, record.user_level.name,
+                record.action_type, json.dumps(record.action_details),
+                json.dumps(record.outcome), record.quality_score,
+                json.dumps(record.context), record.feedback
+            ))
+            
+        except Exception as e:
+            logger.error(f"학습 기록 저장 실패: {e}")
+    
+    def get_learning_recommendations(self, 
+                                   user_id: str,
+                                   context: str,
+                                   limit: int = 5) -> List[Dict[str, Any]]:
+        """학습 기반 추천"""
+        # 유사한 컨텍스트의 성공 사례 검색
+        query = """
+            SELECT action_details, outcome, quality_score
+            FROM learning_data
+            WHERE user_id = ? AND action_type = ? AND quality_score > 0.7
+            ORDER BY quality_score DESC, timestamp DESC
+            LIMIT ?
+        """
+        
+        results = self.execute_query(query, (user_id, context, limit * 2))
+        
+        recommendations = []
+        for row in results[:limit]:
+            try:
+                recommendations.append({
+                    'action': json.loads(row['action_details']),
+                    'outcome': json.loads(row['outcome']),
+                    'score': row['quality_score']
+                })
+            except:
+                continue
+        
+        return recommendations
+    
+    def save_template(self, 
+                     name: str,
+                     template_type: str,
+                     content: Dict[str, Any],
+                     user_id: str,
+                     description: str = "",
+                     tags: List[str] = None,
+                     public: bool = False) -> str:
+        """템플릿 저장"""
+        template_id = generate_unique_id("TEMPLATE")
+        
+        try:
+            self.execute_query("""
+                INSERT INTO templates
+                (id, name, description, type, content, created_by,
+                 created_at, updated_at, tags, public)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                template_id, name, description, template_type,
+                json.dumps(content), user_id, datetime.now(),
+                datetime.now(), json.dumps(tags or []), public
+            ))
+            
+            return template_id
+            
+        except Exception as e:
+            logger.error(f"템플릿 저장 실패: {e}")
+            return None
+    
+    def load_template(self, template_id: str) -> Optional[Dict[str, Any]]:
+        """템플릿 불러오기"""
+        results = self.execute_query(
+            "SELECT * FROM templates WHERE id = ?",
+            (template_id,)
+        )
+        
+        if results:
+            template = results[0]
+            template['content'] = json.loads(template['content'])
+            template['tags'] = json.loads(template['tags'])
+            
+            # 사용 횟수 증가
+            self.execute_query(
+                "UPDATE templates SET usage_count = usage_count + 1 WHERE id = ?",
+                (template_id,)
+            )
+            
+            return template
+        
+        return None
+    
+    def search_templates(self,
+                        template_type: str = None,
+                        tags: List[str] = None,
+                        public_only: bool = True,
+                        limit: int = 50) -> List[Dict[str, Any]]:
+        """템플릿 검색"""
+        query = "SELECT * FROM templates WHERE 1=1"
+        params = []
+        
+        if template_type:
+            query += " AND type = ?"
+            params.append(template_type)
+        
+        if public_only:
+            query += " AND public = 1"
+        
+        if tags:
+            for tag in tags:
+                query += " AND tags LIKE ?"
+                params.append(f'%"{tag}"%')
+        
+        query += " ORDER BY usage_count DESC, rating DESC LIMIT ?"
+        params.append(limit)
+        
+        results = self.execute_query(query, tuple(params))
+        
+        templates = []
+        for row in results:
+            template = dict(row)
+            template['content'] = json.loads(template['content'])
+            template['tags'] = json.loads(template['tags'])
+            templates.append(template)
+        
+        return templates
+    
+    def _calculate_quality_metrics(self, results: Dict[str, Any]) -> Dict[str, float]:
+        """분석 품질 메트릭 계산"""
+        metrics = {}
+        
+        # R² 값
+        if 'r_squared' in results:
+            metrics['r_squared'] = results['r_squared']
+        
+        # p-value 기반 신뢰도
+        if 'p_values' in results:
+            p_values = results['p_values']
+            if isinstance(p_values, dict):
+                significant_count = sum(1 for p in p_values.values() if p < 0.05)
+                metrics['significance_ratio'] = significant_count / len(p_values) if p_values else 0
+        
+        # 잔차 분석
+        if 'residuals' in results:
+            residuals = results['residuals']
+            if isinstance(residuals, dict):
+                metrics['residual_normality'] = residuals.get('normality_p_value', 0)
+        
+        # 전체 품질 점수
+        quality_score = 0
+        weights = {'r_squared': 0.4, 'significance_ratio': 0.3, 'residual_normality': 0.3}
+        
+        for metric, weight in weights.items():
+            if metric in metrics:
+                quality_score += metrics[metric] * weight
+        
+        metrics['overall_quality'] = quality_score
+        
+        return metrics
+    
+    def backup_database(self) -> str:
+        """데이터베이스 백업"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_dir = "backups"
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        if self.db_type == "sqlite":
+            backup_file = os.path.join(backup_dir, f"polymer_doe_{timestamp}.db")
+            
+            try:
+                import shutil
+                shutil.copy2(self.db_path, backup_file)
+                
+                # 압축
+                if config_manager.get('database.compression'):
+                    import gzip
+                    with open(backup_file, 'rb') as f_in:
+                        with gzip.open(f"{backup_file}.gz", 'wb') as f_out:
+                            f_out.writelines(f_in)
+                    
+                    os.remove(backup_file)
+                    backup_file = f"{backup_file}.gz"
+                
+                logger.info(f"데이터베이스 백업 완료: {backup_file}")
+                
+                # 오래된 백업 삭제
+                self._cleanup_old_backups(backup_dir)
+                
+                return backup_file
+                
+            except Exception as e:
+                logger.error(f"백업 실패: {e}")
+                return None
+    
+    def _cleanup_old_backups(self, backup_dir: str):
+        """오래된 백업 삭제"""
+        max_backups = config_manager.get('database.max_backups', 7)
+        
+        backups = sorted([
+            f for f in os.listdir(backup_dir) 
+            if f.startswith('polymer_doe_') and (f.endswith('.db') or f.endswith('.db.gz'))
+        ])
+        
+        if len(backups) > max_backups:
+            for old_backup in backups[:-max_backups]:
+                try:
+                    os.remove(os.path.join(backup_dir, old_backup))
+                    logger.info(f"오래된 백업 삭제: {old_backup}")
+                except:
+                    pass
+    
+    def _schedule_backups(self):
+        """백업 스케줄링"""
+        def backup_task():
+            while self.backup_enabled:
+                interval = config_manager.get('database.backup_interval', 86400)
+                time.sleep(interval)
+                self.backup_database()
+        
+        backup_thread = threading.Thread(target=backup_task, daemon=True)
+        backup_thread.start()
+
+# 전역 데이터베이스 인스턴스
+db_manager = DatabaseManager()
+
+# ==================== 협업 시스템 ====================
+class CollaborationType(Enum):
+    """협업 유형"""
+    COMMENT = "comment"
+    REVIEW = "review"
+    SUGGESTION = "suggestion"
+    APPROVAL = "approval"
+    QUESTION = "question"
+
+@dataclass
+class Collaboration:
+    """협업 데이터"""
+    id: str
+    project_id: str
+    type: CollaborationType
+    user_id: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    parent_id: Optional[str] = None
+    status: str = "active"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    reactions: Dict[str, List[str]] = field(default_factory=dict)  # emoji -> user_ids
+
+class CollaborationManager:
+    """협업 관리 시스템"""
+    
+    def __init__(self, db_manager: DatabaseManager):
+        self.db = db_manager
+        self.active_sessions: Dict[str, List[str]] = defaultdict(list)  # project_id -> user_ids
+    
+    def add_collaboration(self, 
+                         project_id: str,
+                         collab_type: CollaborationType,
+                         user_id: str,
+                         content: str,
+                         parent_id: str = None) -> str:
+        """협업 항목 추가"""
+        collab_id = generate_unique_id("COLLAB")
+        
+        collaboration = Collaboration(
+            id=collab_id,
+            project_id=project_id,
+            type=collab_type,
+            user_id=user_id,
+            content=content,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            parent_id=parent_id
+        )
+        
+        # 데이터베이스에 저장
+        self.db.execute_query("""
+            INSERT INTO collaborations
+            (id, project_id, type, user_id, content, created_at,
+             updated_at, parent_id, status, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            collab_id, project_id, collab_type.value, user_id,
+            content, collaboration.created_at, collaboration.updated_at,
+            parent_id, collaboration.status, json.dumps(collaboration.metadata)
+        ))
+        
+        # 실시간 알림 (활성 사용자에게)
+        self._notify_collaborators(project_id, collaboration)
+        
+        return collab_id
+    
+    def get_collaborations(self, 
+                          project_id: str,
+                          collab_type: CollaborationType = None,
+                          parent_id: str = None) -> List[Collaboration]:
+        """협업 항목 조회"""
+        query = "SELECT * FROM collaborations WHERE project_id = ?"
+        params = [project_id]
+        
+        if collab_type:
+            query += " AND type = ?"
+            params.append(collab_type.value)
+        
+        if parent_id is not None:
+            query += " AND parent_id = ?"
+            params.append(parent_id)
+        elif parent_id is None:
+            query += " AND parent_id IS NULL"
+        
+        query += " ORDER BY created_at DESC"
+        
+        results = self.db.execute_query(query, tuple(params))
+        
+        collaborations = []
+        for row in results:
+            collab = Collaboration(
+                id=row['id'],
+                project_id=row['project_id'],
+                type=CollaborationType(row['type']),
+                user_id=row['user_id'],
+                content=row['content'],
+                created_at=row['created_at'],
+                updated_at=row['updated_at'],
+                parent_id=row['parent_id'],
+                status=row['status'],
+                metadata=json.loads(row['metadata']) if row['metadata'] else {}
+            )
+            collaborations.append(collab)
+        
+        return collaborations
+    
+    def update_collaboration(self, 
+                           collab_id: str,
+                           content: str = None,
+                           status: str = None) -> bool:
+        """협업 항목 수정"""
+        updates = []
+        params = []
+        
+        if content is not None:
+            updates.append("content = ?")
+            params.append(content)
+        
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+        
+        if not updates:
+            return False
+        
+        updates.append("updated_at = ?")
+        params.append(datetime.now())
+        
+        params.append(collab_id)
+        
+        query = f"UPDATE collaborations SET {', '.join(updates)} WHERE id = ?"
+        
+        try:
+            self.db.execute_query(query, tuple(params))
+            return True
+        except:
+            return False
+    
+    def add_reaction(self, collab_id: str, user_id: str, emoji: str):
+        """반응 추가"""
+        # 현재 반응 가져오기
+        results = self.db.execute_query(
+            "SELECT metadata FROM collaborations WHERE id = ?",
+            (collab_id,)
+        )
+        
+        if results:
+            metadata = json.loads(results[0]['metadata']) if results[0]['metadata'] else {}
+            reactions = metadata.get('reactions', {})
+            
+            if emoji not in reactions:
+                reactions[emoji] = []
+            
+            if user_id not in reactions[emoji]:
+                reactions[emoji].append(user_id)
+            
+            metadata['reactions'] = reactions
+            
+            # 업데이트
+            self.db.execute_query(
+                "UPDATE collaborations SET metadata = ? WHERE id = ?",
+                (json.dumps(metadata), collab_id)
+            )
+    
+    def join_session(self, project_id: str, user_id: str):
+        """협업 세션 참가"""
+        if user_id not in self.active_sessions[project_id]:
+            self.active_sessions[project_id].append(user_id)
+            logger.info(f"사용자 {user_id}가 프로젝트 {project_id} 세션에 참가")
+    
+    def leave_session(self, project_id: str, user_id: str):
+        """협업 세션 나가기"""
+        if user_id in self.active_sessions[project_id]:
+            self.active_sessions[project_id].remove(user_id)
+            logger.info(f"사용자 {user_id}가 프로젝트 {project_id} 세션에서 나감")
+    
+    def get_active_users(self, project_id: str) -> List[str]:
+        """활성 사용자 목록"""
+        return self.active_sessions.get(project_id, [])
+    
+    def _notify_collaborators(self, project_id: str, collaboration: Collaboration):
+        """협업자에게 알림"""
+        active_users = self.get_active_users(project_id)
+        
+        for user_id in active_users:
+            if user_id != collaboration.user_id:
+                # 실시간 알림 전송 (WebSocket 등 사용 시)
+                logger.info(f"알림: {user_id}에게 새 {collaboration.type.value} 알림")
+
+# ==================== API 키 관리 시스템 (확장) ====================
+class APIKeyManager:
+    """API 키를 중앙에서 관리하는 시스템"""
+    
+    def __init__(self):
+        # 세션 상태 초기화
+        if 'api_keys' not in st.session_state:
+            st.session_state.api_keys = {}
+        if 'api_keys_initialized' not in st.session_state:
+            st.session_state.api_keys_initialized = False
+        
+        # API 설정 정의 (확장)
+        self.api_configs = {
+            # AI APIs
+            'openai': {
+                'name': 'OpenAI',
+                'env_key': 'OPENAI_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.openai.com/v1/models',
+                'category': 'ai',
+                'description': 'GPT 모델을 사용한 고급 언어 처리',
+                'features': ['텍스트 생성', '코드 생성', '분석', '번역'],
+                'rate_limit': {'rpm': 3500, 'tpm': 90000},
+                'models': ['gpt-4', 'gpt-3.5-turbo', 'text-embedding-ada-002']
+            },
+            'gemini': {
+                'name': 'Google Gemini',
+                'env_key': 'GOOGLE_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://generativelanguage.googleapis.com/v1beta/models',
+                'category': 'ai',
+                'description': 'Google의 최신 AI 모델',
+                'features': ['다중 모달', '긴 컨텍스트', '추론', '창의성'],
+                'rate_limit': {'rpm': 60, 'rpd': 1500},
+                'models': ['gemini-pro', 'gemini-pro-vision']
+            },
+            'anthropic': {
+                'name': 'Anthropic Claude',
+                'env_key': 'ANTHROPIC_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.anthropic.com/v1/messages',
+                'category': 'ai',
+                'description': 'Claude AI 모델',
+                'features': ['긴 컨텍스트', '안전성', '추론', '코딩'],
+                'rate_limit': {'rpm': 50, 'tpm': 100000},
+                'models': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
+            },
+            # ... 기존 API들 ...
+            
+            # Database APIs (확장)
+            'materials_project': {
+                'name': 'Materials Project',
+                'env_key': 'MP_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.materialsproject.org',
+                'category': 'database',
+                'description': '재료 과학 데이터베이스',
+                'features': ['재료 특성', '계산 데이터', '구조 정보'],
+                'rate_limit': {'rpd': 1000}
+            },
+            'polymer_database': {
+                'name': 'PoLyInfo',
+                'env_key': 'POLYINFO_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://polymer.nims.go.jp/api',
+                'category': 'database',
+                'description': '고분자 물성 데이터베이스',
+                'features': ['고분자 물성', '화학 구조', '가공 조건'],
+                'rate_limit': {'rpd': 500}
+            },
+            'chemspider': {
+                'name': 'ChemSpider',
+                'env_key': 'CHEMSPIDER_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.rsc.org/compounds/v1',
+                'category': 'database',
+                'description': '화학 구조 데이터베이스',
+                'features': ['화학 구조', '물성 예측', 'InChI/SMILES'],
+                'rate_limit': {'rpm': 15}
+            }
+        }
+        
+        self.rate_limiters = {}
+        self.initialize_keys()
+    
+    def initialize_keys(self):
+        """API 키 초기화"""
+        if not st.session_state.api_keys_initialized:
+            # 1. Streamlit secrets에서 로드
+            self._load_from_secrets()
+            
+            # 2. 환경 변수에서 로드
+            self._load_from_env()
+            
+            # 3. 로컬 파일에서 로드 (개발용)
+            self._load_from_file()
+            
+            # 4. 사용자 입력 키 로드
+            self._load_user_keys()
+            
+            # 5. Rate limiter 초기화
+            self._init_rate_limiters()
+            
+            st.session_state.api_keys_initialized = True
+            logger.info("API 키 초기화 완료")
+    
+    def _init_rate_limiters(self):
+        """Rate limiter 초기화"""
+        for api_id, config in self.api_configs.items():
+            if 'rate_limit' in config:
+                self.rate_limiters[api_id] = RateLimiter(
+                    api_id,
+                    config['rate_limit']
+                )
+    
+    def _load_user_keys(self):
+        """사용자가 입력한 키 로드"""
+        if 'user_api_keys' in st.session_state:
+            for key_id, value in st.session_state.user_api_keys.items():
+                if value and key_id not in st.session_state.api_keys:
+                    st.session_state.api_keys[key_id] = value
+    
+    def validate_and_set_key(self, key_id: str, key: str) -> Tuple[bool, str]:
+        """API 키 검증 및 설정"""
+        # 형식 검증
+        if not self.validate_key_format(key_id, key):
+            return False, "API 키 형식이 올바르지 않습니다."
+        
+        # 실제 연결 테스트
+        test_result = self.test_api_connection(key_id, key)
+        
+        if test_result['status'] == 'success':
+            self.set_key(key_id, key)
+            return True, test_result['message']
+        else:
+            return False, test_result['message']
+    
+    @retry(max_attempts=3, delay=1.0)
+    async def call_api_with_limit(self, api_id: str, api_call: Callable, *args, **kwargs):
+        """Rate limiting이 적용된 API 호출"""
+        if api_id in self.rate_limiters:
+            await self.rate_limiters[api_id].acquire()
+        
+        try:
+            return await api_call(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"API 호출 실패 ({api_id}): {e}")
+            raise
+
+# ==================== Rate Limiter ====================
+class RateLimiter:
+    """API 호출 속도 제한기"""
+    
+    def __init__(self, api_id: str, limits: Dict[str, int]):
+        self.api_id = api_id
+        self.limits = limits  # {'rpm': 60, 'rpd': 1500, 'tpm': 10000}
+        self.calls = defaultdict(lambda: deque(maxlen=10000))
+        self.lock = threading.Lock()
+    
+    async def acquire(self):
+        """호출 권한 획득"""
+        while not self._can_make_request():
+            await asyncio.sleep(0.1)
+        
+        self._record_request()
+    
+    def _can_make_request(self) -> bool:
+        """요청 가능 여부 확인"""
+        now = datetime.now()
+        
+        with self.lock:
+            # 분당 제한 (rpm)
+            if 'rpm' in self.limits:
+                minute_ago = now - timedelta(minutes=1)
+                recent_calls = [t for t in self.calls['minute'] if t > minute_ago]
+                if len(recent_calls) >= self.limits['rpm']:
+                    return False
+            
+            # 일일 제한 (rpd)
+            if 'rpd' in self.limits:
+                day_ago = now - timedelta(days=1)
+                recent_calls = [t for t in self.calls['day'] if t > day_ago]
+                if len(recent_calls) >= self.limits['rpd']:
+                    return False
+            
+            # 토큰 제한 (tpm)
+            if 'tpm' in self.limits:
+                # 토큰 수는 별도로 추적 필요
+                pass
+        
+        return True
+    
+    def _record_request(self):
+        """요청 기록"""
+        now = datetime.now()
+        
+        with self.lock:
+            self.calls['minute'].append(now)
+            self.calls['day'].append(now)
+
+# ==================== API 모니터 (확장) ====================
+class APIMonitor:
+    """API 상태 모니터링 (확장판)"""
+    
+    def __init__(self):
+        if 'api_status' not in st.session_state:
+            st.session_state.api_status = {}
+        if 'api_metrics' not in st.session_state:
+            st.session_state.api_metrics = defaultdict(lambda: {
+                'total_calls': 0,
+                'successful_calls': 0,
+                'failed_calls': 0,
+                'total_response_time': 0,
+                'total_tokens': 0,
+                'total_cost': 0.0,
+                'last_call': None,
+                'errors': [],
+                'hourly_calls': defaultdict(int),
+                'daily_success_rate': [],
+                'response_times': deque(maxlen=100),
+                'token_usage': deque(maxlen=100)
+            })
+        
+        self.cost_per_token = {
+            'openai': {'input': 0.00003, 'output': 0.00006},  # GPT-4 기준
+            'gemini': {'input': 0.00001, 'output': 0.00002},
+            'anthropic': {'input': 0.00003, 'output': 0.00015}
+        }
+    
+    def update_status(self, api_name: str, status: APIStatus, 
+                     response_time: float = 0, error_msg: str = None,
+                     tokens: Dict[str, int] = None):
+        """API 상태 업데이트 (확장)"""
+        st.session_state.api_status[api_name] = {
+            'status': status,
+            'last_update': datetime.now(),
+            'response_time': response_time,
+            'error': error_msg
+        }
+        
+        # 메트릭 업데이트
+        metrics = st.session_state.api_metrics[api_name]
+        metrics['total_calls'] += 1
+        metrics['last_call'] = datetime.now()
+        
+        # 시간별 호출 기록
+        current_hour = datetime.now().strftime("%Y-%m-%d %H:00")
+        metrics['hourly_calls'][current_hour] += 1
+        
+        if status == APIStatus.ONLINE:
+            metrics['successful_calls'] += 1
+            metrics['total_response_time'] += response_time
+            metrics['response_times'].append(response_time)
+            
+            # 토큰 및 비용 계산
+            if tokens:
+                total_tokens = tokens.get('input', 0) + tokens.get('output', 0)
+                metrics['total_tokens'] += total_tokens
+                metrics['token_usage'].append(total_tokens)
+                
+                # 비용 계산
+                if api_name in self.cost_per_token:
+                    cost = (tokens.get('input', 0) * self.cost_per_token[api_name]['input'] +
+                           tokens.get('output', 0) * self.cost_per_token[api_name]['output'])
+                    metrics['total_cost'] += cost
+        else:
+            metrics['failed_calls'] += 1
+            if error_msg:
+                metrics['errors'].append({
+                    'time': datetime.now(),
+                    'error': error_msg
+                })
+                metrics['errors'] = metrics['errors'][-10:]
+        
+        # 일별 성공률 업데이트
+        self._update_daily_success_rate(api_name)
+    
+    def _update_daily_success_rate(self, api_name: str):
+        """일별 성공률 업데이트"""
+        metrics = st.session_state.api_metrics[api_name]
+        today = datetime.now().date()
+        success_rate = self.get_success_rate(api_name)
+        
+        if metrics['daily_success_rate']:
+            last_entry = metrics['daily_success_rate'][-1]
+            if last_entry['date'] == today:
+                last_entry['rate'] = success_rate
+            else:
+                metrics['daily_success_rate'].append({
+                    'date': today,
+                    'rate': success_rate
+                })
+        else:
+            metrics['daily_success_rate'].append({
+                'date': today,
+                'rate': success_rate
+            })
+        
+        metrics['daily_success_rate'] = metrics['daily_success_rate'][-30:]
+    
+    def get_dashboard_data(self) -> Dict[str, Any]:
+        """대시보드용 데이터 준비"""
+        dashboard_data = {
+            'summary': {
+                'total_apis': len(api_key_manager.api_configs),
+                'online_apis': 0,
+                'total_calls': 0,
+                'total_cost': 0.0,
+                'avg_response_time': 0.0
+            },
+            'apis': {},
+            'trends': {
+                'hourly_calls': defaultdict(int),
+                'daily_costs': defaultdict(float)
+            }
+        }
+        
+        # API별 데이터 수집
+        for api_name in api_key_manager.api_configs:
+            status = self.get_status(api_name)
+            metrics = self.get_metrics(api_name)
+            
+            if status == APIStatus.ONLINE:
+                dashboard_data['summary']['online_apis'] += 1
+            
+            dashboard_data['summary']['total_calls'] += metrics['total_calls']
+            dashboard_data['summary']['total_cost'] += metrics['total_cost']
+            
+            dashboard_data['apis'][api_name] = {
+                'status': status,
+                'metrics': metrics,
+                'success_rate': self.get_success_rate(api_name),
+                'avg_response_time': self.get_average_response_time(api_name)
+            }
+            
+            # 트렌드 데이터
+            for hour, count in metrics['hourly_calls'].items():
+                dashboard_data['trends']['hourly_calls'][hour] += count
+        
+        # 평균 응답 시간
+        total_time = sum(d['metrics']['total_response_time'] for d in dashboard_data['apis'].values())
+        total_success = sum(d['metrics']['successful_calls'] for d in dashboard_data['apis'].values())
+        
+        if total_success > 0:
+            dashboard_data['summary']['avg_response_time'] = total_time / total_success
+        
+        return dashboard_data
+    
+    def display_enhanced_dashboard(self):
+        """향상된 상태 대시보드"""
+        data = self.get_dashboard_data()
+        
+        # 요약 메트릭
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "활성 API",
+                f"{data['summary']['online_apis']}/{data['summary']['total_apis']}",
+                delta=f"{data['summary']['online_apis']/data['summary']['total_apis']*100:.0f}%"
+            )
+        
+        with col2:
+            st.metric(
+                "총 호출 수",
+                f"{data['summary']['total_calls']:,}",
+                delta=f"+{data['summary']['total_calls']}"
+            )
+        
+        with col3:
+            st.metric(
+                "평균 응답시간",
+                f"{data['summary']['avg_response_time']:.2f}s"
+            )
+        
+        with col4:
+            st.metric(
+                "총 비용",
+                f"${data['summary']['total_cost']:.4f}"
+            )
+        
+        # 시간별 트렌드 차트
+        if data['trends']['hourly_calls']:
+            fig = self._create_trend_chart(data['trends']['hourly_calls'])
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # API별 상세 정보
+        st.markdown("### API별 상세 정보")
+        
+        for api_name, api_data in data['apis'].items():
+            if api_data['metrics']['total_calls'] > 0:
+                with st.expander(f"{api_key_manager.api_configs[api_name]['name']} ({api_name})"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("상태", api_data['status'].value)
+                        st.metric("성공률", f"{api_data['success_rate']:.1f}%")
+                    
+                    with col2:
+                        st.metric("평균 응답시간", f"{api_data['avg_response_time']:.2f}s")
+                        st.metric("총 토큰", f"{api_data['metrics']['total_tokens']:,}")
+                    
+                    with col3:
+                        st.metric("총 호출", api_data['metrics']['total_calls'])
+                        st.metric("비용", f"${api_data['metrics']['total_cost']:.4f}")
+                    
+                    # 최근 에러
+                    if api_data['metrics']['errors']:
+                        st.markdown("#### 최근 에러")
+                        for error in api_data['metrics']['errors'][-3:]:
+                            st.error(f"{error['time'].strftime('%H:%M:%S')} - {error['error']}")
+    
+    def _create_trend_chart(self, hourly_data: Dict[str, int]) -> go.Figure:
+        """트렌드 차트 생성"""
+        # 데이터 정렬
+        sorted_hours = sorted(hourly_data.keys())
+        hours = [h.split()[-1] for h in sorted_hours]
+        counts = [hourly_data[h] for h in sorted_hours]
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=hours,
+            y=counts,
+            mode='lines+markers',
+            name='API 호출 수',
+            line=dict(color='#667eea', width=2),
+            marker=dict(size=8)
+        ))
+        
+        fig.update_layout(
+            title="시간별 API 호출 트렌드",
+            xaxis_title="시간",
+            yaxis_title="호출 수",
+            hovermode='x unified',
+            template='plotly_white'
+        )
+        
+        return fig
+
+# 전역 API 모니터 인스턴스
+api_monitor = APIMonitor()
+
+# ==================== 번역 서비스 (확장) ====================
+class TranslationService:
+    """다국어 번역 서비스 (확장판)"""
+    
+    def __init__(self):
+        self.translator = None
+        self.available = False
+        self.cache = {}
+        self.supported_languages = SUPPORTED_LANGUAGES
+        self.language_detector = None
+        
+        # 기술 용어 사전
+        self.technical_terms = {
+            'ko': {
+                'polymer': '고분자',
+                'experiment': '실험',
+                'design': '설계',
+                'factor': '인자',
+                'response': '반응',
+                'optimization': '최적화',
+                'analysis': '분석',
+                'thermoplastic': '열가소성',
+                'thermosetting': '열경화성',
+                'elastomer': '탄성체',
+                'composite': '복합재료'
+            },
+            'en': {
+                '고분자': 'polymer',
+                '실험': 'experiment',
+                '설계': 'design',
+                '인자': 'factor',
+                '반응': 'response',
+                '최적화': 'optimization',
+                '분석': 'analysis',
+                '열가소성': 'thermoplastic',
+                '열경화성': 'thermosetting',
+                '탄성체': 'elastomer',
+                '복합재료': 'composite'
+            }
+        }
+        
+        self._initialize()
+    
+    def _initialize(self):
+        """번역 서비스 초기화"""
+        if TRANSLATION_AVAILABLE:
+            try:
+                self.translator = Translator()
+                self.available = True
+                logger.info("번역 서비스 활성화")
+                
+                # 언어 감지기 초기화
+                if NLP_AVAILABLE:
+                    import spacy
+                    try:
+                        self.language_detector = spacy.load("xx_ent_wiki_sm")
+                    except:
+                        pass
+                        
+            except Exception as e:
+                logger.error(f"번역 서비스 초기화 실패: {e}")
+    
+    def detect_language(self, text: str) -> str:
+        """언어 감지 (개선)"""
+        if not self.available or not text:
+            return 'en'
+        
+        try:
+            # langdetect 사용
+            detected = langdetect.detect(text)
+            
+            # 신뢰도 확인
+            probs = langdetect.detect_langs(text)
+            if probs and probs[0].prob > 0.9:
+                return detected
+            
+            # 불확실한 경우 추가 검증
+            if self.language_detector:
+                # spaCy를 사용한 추가 검증
+                doc = self.language_detector(text)
+                if doc.lang_:
+                    return doc.lang_
+            
+            return detected
+            
+        except Exception as e:
+            logger.warning(f"언어 감지 실패: {e}")
+            return 'en'
+    
+    def translate(self, text: str, target_lang: str = 'ko', 
+                 source_lang: str = None, preserve_terms: bool = True) -> str:
+        """텍스트 번역 (개선)"""
+        if not self.available or not text:
+            return text
+        
+        # 캐시 확인
+        cache_key = f"{text}_{source_lang}_{target_lang}_{preserve_terms}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        try:
+            if source_lang is None:
+                source_lang = self.detect_language(text)
+            
+            if source_lang == target_lang:
+                return text
+            
+            # 기술 용어 보호
+            protected_text = text
+            replacements = {}
+            
+            if preserve_terms and source_lang in self.technical_terms:
+                terms = self.technical_terms[source_lang]
+                for term, translation in terms.items():
+                    if term in protected_text:
+                        placeholder = f"__TERM_{len(replacements)}__"
+                        protected_text = protected_text.replace(term, placeholder)
+                        replacements[placeholder] = self.technical_terms.get(
+                            target_lang, {}
+                        ).get(term, translation)
+            
+            # 번역
+            result = self.translator.translate(
+                protected_text,
+                src=source_lang,
+                dest=target_lang
+            )
+            
+            translated_text = result.text
+            
+            # 보호된 용어 복원
+            for placeholder, term in replacements.items():
+                translated_text = translated_text.replace(placeholder, term)
+            
+            self.cache[cache_key] = translated_text
+            return translated_text
+            
+        except Exception as e:
+            logger.error(f"번역 실패: {e}")
+            return text
+    
+    def translate_dataframe(self, df: pd.DataFrame, columns: List[str], 
+                          target_lang: str = 'ko', 
+                          preserve_terms: bool = True) -> pd.DataFrame:
+        """데이터프레임 번역 (개선)"""
+        if not self.available:
+            return df
+        
+        df_translated = df.copy()
+        
+        # 진행률 표시
+        progress_bar = st.progress(0)
+        total_cells = len(columns) * len(df)
+        current = 0
+        
+        for col in columns:
+            if col in df.columns:
+                translated_col = f"{col}_{target_lang}"
+                df_translated[translated_col] = ""
+                
+                for idx, value in df[col].items():
+                    if pd.notna(value):
+                        df_translated.at[idx, translated_col] = self.translate(
+                            str(value), target_lang, preserve_terms=preserve_terms
+                        )
+                    
+                    current += 1
+                    progress_bar.progress(current / total_cells)
+        
+        progress_bar.empty()
+        return df_translated
+    
+    def create_multilingual_report(self, report_content: str, 
+                                 languages: List[str] = ['en', 'ko', 'ja']) -> Dict[str, str]:
+        """다국어 보고서 생성"""
+        reports = {}
+        
+        for lang in languages:
+            if lang in self.supported_languages:
+                reports[lang] = self.translate(
+                    report_content, 
+                    target_lang=lang,
+                    preserve_terms=True
+                )
+        
+        return reports
+
+# 전역 번역 서비스 인스턴스
+translation_service = TranslationService()
+
+# ==================== 고급 실험 설계 엔진 ====================
+class AdvancedDesignEngine:
+    """고급 실험 설계 엔진"""
+    
+    def __init__(self):
+        self.base_engine = ExperimentDesignEngine()
+        self.ml_models = {}
+        self.design_history = []
+        
+    def generate_adaptive_design(self, 
+                               factors: List[ExperimentFactor],
+                               responses: List[ExperimentResponse],
+                               initial_data: pd.DataFrame = None,
+                               budget: int = 50,
+                               strategy: str = 'expected_improvement') -> pd.DataFrame:
+        """적응형 실험 설계 생성"""
+        
+        # 초기 설계
+        if initial_data is None:
+            # 초기 실험점 생성 (LHS 또는 작은 factorial)
+            n_initial = min(len(factors) * 4, budget // 3)
+            initial_design = self.base_engine.generate_design(
+                factors, 
+                method='latin_hypercube',
+                n_samples=n_initial
+            )
+        else:
+            initial_design = initial_data
+            n_initial = len(initial_data)
+        
+        # 베이지안 최적화를 위한 설정
+        bounds = []
+        for factor in factors:
+            if not factor.categorical:
+                bounds.append((factor.min_value, factor.max_value))
+        
+        # 가우시안 프로세스 모델 생성
+        kernel = Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.1)
+        gp_model = GaussianProcessRegressor(
+            kernel=kernel,
+            alpha=1e-6,
+            normalize_y=True,
+            n_restarts_optimizer=10
+        )
+        
+        # 순차적 설계
+        current_design = initial_design.copy()
+        remaining_budget = budget - n_initial
+        
+        for i in range(remaining_budget):
+            # 다음 실험점 선택
+            next_point = self._select_next_point(
+                current_design,
+                factors,
+                gp_model,
+                bounds,
+                strategy
+            )
+            
+            # 설계에 추가
+            new_row = pd.DataFrame([next_point])
+            new_row['Run'] = len(current_design) + 1
+            new_row['Adaptive'] = True
+            
+            current_design = pd.concat([current_design, new_row], ignore_index=True)
+        
+        return current_design
+    
+    def _select_next_point(self, 
+                          current_design: pd.DataFrame,
+                          factors: List[ExperimentFactor],
+                          gp_model: GaussianProcessRegressor,
+                          bounds: List[Tuple[float, float]],
+                          strategy: str) -> Dict[str, Any]:
+        """다음 실험점 선택"""
+        
+        # 현재 데이터로 GP 모델 학습 (시뮬레이션)
+        X = current_design[[f.name for f in factors if not f.categorical]].values
+        
+        # 가상의 반응값 생성 (실제로는 실험 결과 사용)
+        y = np.random.randn(len(X))  # 실제 구현시 실험 결과 사용
+        
+        if len(X) > 0:
+            gp_model.fit(X, y)
+        
+        # 획득 함수 최적화
+        if strategy == 'expected_improvement':
+            acquisition_func = self._expected_improvement
+        elif strategy == 'upper_confidence_bound':
+            acquisition_func = self._upper_confidence_bound
+        else:
+            acquisition_func = self._probability_of_improvement
+        
+        # 최적화
+        result = differential_evolution(
+            lambda x: -acquisition_func(x.reshape(1, -1), gp_model, y.max() if len(y) > 0 else 0),
+            bounds,
+            seed=42,
+            maxiter=100
+        )
+        
+        # 다음 포인트 생성
+        next_point = {}
+        continuous_idx = 0
+        
+        for factor in factors:
+            if factor.categorical:
+                # 범주형 변수는 랜덤 선택
+                next_point[factor.name] = np.random.choice(factor.categories)
+            else:
+                next_point[factor.name] = result.x[continuous_idx]
+                continuous_idx += 1
+        
+        return next_point
+    
+    def _expected_improvement(self, X: np.ndarray, gp_model: GaussianProcessRegressor, 
+                            y_best: float, xi: float = 0.01) -> np.ndarray:
+        """Expected Improvement 획득 함수"""
+        mu, sigma = gp_model.predict(X, return_std=True)
+        
+        with np.errstate(divide='warn'):
+            Z = (mu - y_best - xi) / sigma
+            ei = (mu - y_best - xi) * stats.norm.cdf(Z) + sigma * stats.norm.pdf(Z)
+            ei[sigma == 0.0] = 0.0
+        
+        return ei
+    
+    def _upper_confidence_bound(self, X: np.ndarray, gp_model: GaussianProcessRegressor,
+                               beta: float = 2.0) -> np.ndarray:
+        """Upper Confidence Bound 획득 함수"""
+        mu, sigma = gp_model.predict(X, return_std=True)
+        return mu + beta * sigma
+    
+    def _probability_of_improvement(self, X: np.ndarray, gp_model: GaussianProcessRegressor,
+                                  y_best: float, xi: float = 0.01) -> np.ndarray:
+        """Probability of Improvement 획득 함수"""
+        mu, sigma = gp_model.predict(X, return_std=True)
+        
+        with np.errstate(divide='warn'):
+            Z = (mu - y_best - xi) / sigma
+            pi = stats.norm.cdf(Z)
+            pi[sigma == 0.0] = 0.0
+        
+        return pi
+    
+    def generate_mixture_design(self, 
+                              components: List[str],
+                              constraints: Dict[str, Tuple[float, float]] = None,
+                              include_process_vars: List[ExperimentFactor] = None,
+                              design_type: str = 'simplex_lattice',
+                              degree: int = 3) -> pd.DataFrame:
+        """혼합물 실험 설계 생성"""
+        
+        n_components = len(components)
+        
+        if design_type == 'simplex_lattice':
+            # Simplex-Lattice 설계
+            points = self._generate_simplex_lattice(n_components, degree)
+        elif design_type == 'simplex_centroid':
+            # Simplex-Centroid 설계
+            points = self._generate_simplex_centroid(n_components)
+        elif design_type == 'extreme_vertices':
+            # Extreme Vertices 설계
+            points = self._generate_extreme_vertices(n_components, constraints)
+        else:
+            # 기본: 균등 분포
+            points = self._generate_uniform_mixture(n_components, 20)
+        
+        # 데이터프레임 생성
+        design = pd.DataFrame(points, columns=components)
+        
+        # 제약 조건 확인 및 필터링
+        if constraints:
+            valid_rows = []
+            for idx, row in design.iterrows():
+                valid = True
+                for comp, (min_val, max_val) in constraints.items():
+                    if comp in row:
+                        if row[comp] < min_val or row[comp] > max_val:
+                            valid = False
+                            break
+                if valid:
+                    valid_rows.append(idx)
+            
+            design = design.loc[valid_rows].reset_index(drop=True)
+        
+        # 공정 변수 추가
+        if include_process_vars:
+            process_design = self.base_engine.generate_design(
+                include_process_vars,
+                method='full_factorial'
+            )
+            
+            # 혼합물 x 공정 변수 조합
+            n_mixture = len(design)
+            n_process = len(process_design)
+            
+            expanded_design = pd.DataFrame()
+            
+            for i in range(n_mixture):
+                for j in range(n_process):
+                    row = pd.concat([
+                        design.iloc[i],
+                        process_design.iloc[j].drop('Run')
+                    ])
+                    expanded_design = expanded_design.append(row, ignore_index=True)
+            
+            design = expanded_design
+        
+        # Run 번호 추가
+        design.insert(0, 'Run', range(1, len(design) + 1))
+        
+        return design
+    
+    def _generate_simplex_lattice(self, n_components: int, degree: int) -> np.ndarray:
+        """Simplex-Lattice 포인트 생성"""
+        points = []
+        
+        # 각 레벨에서의 가능한 조합 생성
+        def generate_combinations(n, q, current=[]):
+            if len(current) == n:
+                if sum(current) == q:
+                    points.append([x/q for x in current])
+                return
+            
+            for i in range(q - sum(current) + 1):
+                generate_combinations(n, q, current + [i])
+        
+        generate_combinations(n_components, degree, [])
+        
+        return np.array(points)
+    
+    def _generate_simplex_centroid(self, n_components: int) -> np.ndarray:
+        """Simplex-Centroid 포인트 생성"""
+        points = []
+        
+        # 정점
+        for i in range(n_components):
+            point = [0] * n_components
+            point[i] = 1
+            points.append(point)
+        
+        # 모든 부분집합의 중심점
+        from itertools import combinations
+        
+        for r in range(2, n_components + 1):
+            for combo in combinations(range(n_components), r):
+                point = [0] * n_components
+                for idx in combo:
+                    point[idx] = 1 / len(combo)
+                points.append(point)
+        
+        return np.array(points)
+    
+    def _generate_extreme_vertices(self, n_components: int, 
+                                 constraints: Dict[str, Tuple[float, float]]) -> np.ndarray:
+        """Extreme Vertices 설계"""
+        # 제약 조건을 만족하는 극점 찾기
+        # 간단한 구현: 그리드 서치
+        points = []
+        
+        # 각 성분의 범위
+        ranges = []
+        for i in range(n_components):
+            comp_name = f"Component_{i+1}"
+            if comp_name in constraints:
+                ranges.append(constraints[comp_name])
+            else:
+                ranges.append((0, 1))
+        
+        # 그리드 포인트 생성
+        n_points_per_dim = 5
+        grid_points = []
+        
+        for min_val, max_val in ranges:
+            grid_points.append(np.linspace(min_val, max_val, n_points_per_dim))
+        
+        # 가능한 조합 중 합이 1인 것만 선택
+        from itertools import product
+        
+        for combo in product(*grid_points):
+            if abs(sum(combo) - 1.0) < 0.01:  # 허용 오차
+                points.append(list(combo))
+        
+        return np.array(points) if points else np.array([[1/n_components] * n_components])
+    
+    def _generate_uniform_mixture(self, n_components: int, n_points: int) -> np.ndarray:
+        """균등 혼합물 포인트 생성"""
+        points = []
+        
+        for _ in range(n_points):
+            # Dirichlet 분포 사용
+            point = np.random.dirichlet(np.ones(n_components))
+            points.append(point)
+        
+        return np.array(points)
+
+# ==================== 기계학습 기반 예측 시스템 ====================
+class MLPredictionSystem:
+    """기계학습 기반 예측 시스템"""
+    
+    def __init__(self):
+        self.models = {}
+        self.scalers = {}
+        self.feature_importance = {}
+        self.model_performance = {}
+        
+    def train_models(self, 
+                    X: pd.DataFrame, 
+                    y: pd.Series,
+                    model_types: List[str] = ['rf', 'gb', 'xgb', 'nn'],
+                    cv_folds: int = 5) -> Dict[str, Dict[str, float]]:
+        """여러 모델 학습 및 평가"""
+        
+        # 데이터 전처리
+        X_scaled, scaler = self._preprocess_data(X)
+        self.scalers['main'] = scaler
+        
+        results = {}
+        
+        for model_type in model_types:
+            logger.info(f"학습 중: {model_type}")
+            
+            # 모델 생성
+            model = self._create_model(model_type, X.shape[1])
+            
+            # 교차 검증
+            cv_scores = cross_val_score(
+                model, X_scaled, y,
+                cv=cv_folds,
+                scoring='r2',
+                n_jobs=-1
+            )
+            
+            # 전체 데이터로 학습
+            model.fit(X_scaled, y)
+            
+            # 예측 및 평가
+            y_pred = model.predict(X_scaled)
+            
+            metrics = {
+                'r2': r2_score(y, y_pred),
+                'mse': mean_squared_error(y, y_pred),
+                'mae': mean_absolute_error(y, y_pred),
+                'cv_mean': cv_scores.mean(),
+                'cv_std': cv_scores.std()
+            }
+            
+            # 모델 저장
+            self.models[model_type] = model
+            self.model_performance[model_type] = metrics
+            results[model_type] = metrics
+            
+            # 특성 중요도
+            if hasattr(model, 'feature_importances_'):
+                self.feature_importance[model_type] = dict(
+                    zip(X.columns, model.feature_importances_)
+                )
+        
+        return results
+    
+    def _preprocess_data(self, X: pd.DataFrame) -> Tuple[np.ndarray, StandardScaler]:
+        """데이터 전처리"""
+        # 범주형 변수 인코딩
+        X_encoded = pd.get_dummies(X, drop_first=True)
+        
+        # 스케일링
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_encoded)
+        
+        return X_scaled, scaler
+    
+    def _create_model(self, model_type: str, n_features: int):
+        """모델 생성"""
+        if model_type == 'rf':
+            return RandomForestRegressor(
+                n_estimators=100,
+                max_depth=None,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                random_state=42,
+                n_jobs=-1
+            )
+        
+        elif model_type == 'gb':
+            return GradientBoostingRegressor(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=3,
+                random_state=42
+            )
+        
+        elif model_type == 'xgb':
+            return xgb.XGBRegressor(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=3,
+                random_state=42,
+                n_jobs=-1
+            )
+        
+        elif model_type == 'nn':
+            return MLPRegressor(
+                hidden_layer_sizes=(n_features * 2, n_features),
+                activation='relu',
+                solver='adam',
+                alpha=0.0001,
+                max_iter=1000,
+                random_state=42
+            )
+        
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+    
+    def predict(self, X: pd.DataFrame, model_type: str = None, 
+               return_uncertainty: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """예측 수행"""
+        
+        if model_type is None:
+            # 가장 성능이 좋은 모델 선택
+            model_type = max(self.model_performance.items(), 
+                           key=lambda x: x[1]['cv_mean'])[0]
+        
+        if model_type not in self.models:
+            raise ValueError(f"Model {model_type} not trained")
+        
+        # 전처리
+        X_encoded = pd.get_dummies(X, drop_first=True)
+        X_scaled = self.scalers['main'].transform(X_encoded)
+        
+        model = self.models[model_type]
+        
+        if return_uncertainty:
+            if model_type == 'rf':
+                # Random Forest의 경우 개별 트리 예측으로 불확실성 계산
+                predictions = []
+                for tree in model.estimators_:
+                    predictions.append(tree.predict(X_scaled))
+                
+                predictions = np.array(predictions)
+                mean_pred = predictions.mean(axis=0)
+                std_pred = predictions.std(axis=0)
+                
+                return mean_pred, std_pred
+            else:
+                # 다른 모델의 경우 기본 예측만
+                pred = model.predict(X_scaled)
+                return pred, np.zeros_like(pred)
+        else:
+            return model.predict(X_scaled)
+    
+    def explain_predictions(self, X: pd.DataFrame, model_type: str = None) -> pd.DataFrame:
+        """예측 설명 (SHAP values 계산)"""
+        try:
+            import shap
+            
+            if model_type is None:
+                model_type = max(self.model_performance.items(), 
+                               key=lambda x: x[1]['cv_mean'])[0]
+            
+            model = self.models[model_type]
+            X_encoded = pd.get_dummies(X, drop_first=True)
+            X_scaled = self.scalers['main'].transform(X_encoded)
+            
+            # SHAP 설명자 생성
+            if model_type in ['rf', 'gb', 'xgb']:
+                explainer = shap.TreeExplainer(model)
+            else:
+                explainer = shap.KernelExplainer(model.predict, X_scaled[:100])
+            
+            # SHAP values 계산
+            shap_values = explainer.shap_values(X_scaled)
+            
+            # DataFrame으로 변환
+            shap_df = pd.DataFrame(
+                shap_values,
+                columns=X_encoded.columns,
+                index=X.index
+            )
+            
+            return shap_df
+            
+        except ImportError:
+            logger.warning("SHAP 라이브러리가 설치되지 않았습니다.")
+            return pd.DataFrame()
+    
+    def optimize_hyperparameters(self, X: pd.DataFrame, y: pd.Series, 
+                               model_type: str, n_trials: int = 50) -> Dict[str, Any]:
+        """베이지안 최적화를 통한 하이퍼파라미터 튜닝"""
+        try:
+            import optuna
+            
+            X_scaled, _ = self._preprocess_data(X)
+            
+            def objective(trial):
+                # 모델별 하이퍼파라미터 공간 정의
+                if model_type == 'rf':
+                    params = {
+                        'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                        'max_depth': trial.suggest_int('max_depth', 3, 20),
+                        'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+                        'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10)
+                    }
+                    model = RandomForestRegressor(**params, random_state=42)
+                
+                elif model_type == 'xgb':
+                    params = {
+                        'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                        'max_depth': trial.suggest_int('max_depth', 3, 10),
+                        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
+                        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0)
+                    }
+                    model = xgb.XGBRegressor(**params, random_state=42)
+                
+                else:
+                    return 0
+                
+                # 교차 검증
+                scores = cross_val_score(model, X_scaled, y, cv=5, scoring='r2')
+                return scores.mean()
+            
+            # 최적화 실행
+            study = optuna.create_study(direction='maximize')
+            study.optimize(objective, n_trials=n_trials)
+            
+            return {
+                'best_params': study.best_params,
+                'best_score': study.best_value,
+                'optimization_history': study.trials_dataframe()
+            }
+            
+        except ImportError:
+            logger.warning("Optuna 라이브러리가 설치되지 않았습니다.")
+            return {}
+
+# ==================== 통계 분석 엔진 (확장) ====================
+class AdvancedStatisticalAnalyzer:
+    """고급 통계 분석 엔진"""
+    
+    def __init__(self):
+        self.basic_analyzer = StatisticalAnalyzer()
+        self.results_cache = {}
+        
+    def comprehensive_analysis(self, 
+                             design: pd.DataFrame, 
+                             results: pd.DataFrame,
+                             responses: List[ExperimentResponse],
+                             alpha: float = 0.05) -> Dict[str, Any]:
+        """종합 통계 분석"""
+        
+        analysis_results = {
+            'timestamp': datetime.now(),
+            'design_info': self._analyze_design_properties(design),
+            'descriptive': {},
+            'inferential': {},
+            'regression': {},
+            'diagnostics': {},
+            'recommendations': []
+        }
+        
+        # 각 반응 변수별 분석
+        for response in responses:
+            if response.name not in results.columns:
+                continue
+            
+            response_data = results[response.name].dropna()
+            
+            # 1. 기술 통계
+            analysis_results['descriptive'][response.name] = self._enhanced_descriptive_stats(
+                response_data, response
+            )
+            
+            # 2. 정규성 및 분포 검정
+            analysis_results['diagnostics'][response.name] = self._distribution_tests(
+                response_data
+            )
+            
+            # 3. ANOVA 및 효과 분석
+            analysis_results['inferential'][response.name] = self._comprehensive_anova(
+                design, response_data, alpha
+            )
+            
+            # 4. 회귀 분석
+            analysis_results['regression'][response.name] = self._advanced_regression(
+                design, response_data, response
+            )
+            
+            # 5. 최적화 권장사항
+            recommendations = self._generate_recommendations(
+                analysis_results, response
+            )
+            analysis_results['recommendations'].extend(recommendations)
+        
+        # 다중 반응 분석
+        if len(responses) > 1:
+            analysis_results['multi_response'] = self._multi_response_analysis(
+                design, results, responses
+            )
+        
+        return analysis_results
+    
+    def _analyze_design_properties(self, design: pd.DataFrame) -> Dict[str, Any]:
+        """설계 특성 분석"""
+        factor_cols = [col for col in design.columns if col not in ['Run', 'Block', 'Adaptive']]
+        
+        properties = {
+            'n_runs': len(design),
+            'n_factors': len(factor_cols),
+            'factors': factor_cols,
+            'design_type': self._identify_design_type(design),
+            'balance': self._check_balance(design, factor_cols),
+            'orthogonality': self._check_orthogonality(design, factor_cols),
+            'power': self._calculate_statistical_power(design)
+        }
+        
+        return properties
+    
+    def _identify_design_type(self, design: pd.DataFrame) -> str:
+        """설계 유형 식별"""
+        n_runs = len(design)
+        factor_cols = [col for col in design.columns if col not in ['Run', 'Block', 'Adaptive']]
+        n_factors = len(factor_cols)
+        
+        # 각 인자의 수준 수 확인
+        levels = []
+        for col in factor_cols:
+            levels.append(len(design[col].unique()))
+        
+        # 완전 요인 설계 확인
+        expected_full = np.prod(levels)
+        if n_runs == expected_full:
+            return "Full Factorial"
+        
+        # 부분 요인 설계 확인
+        if all(l == 2 for l in levels) and n_runs < expected_full:
+            resolution = self._estimate_resolution(design, factor_cols)
+            return f"Fractional Factorial (Resolution {resolution})"
+        
+        # 중심점 포함 확인
+        center_points = []
+        for col in factor_cols:
+            if design[col].dtype in ['float64', 'int64']:
+                mid_value = (design[col].min() + design[col].max()) / 2
+                center_points.append(len(design[design[col] == mid_value]))
+        
+        if min(center_points) >= 3:
+            if n_runs == 2**n_factors + 2*n_factors + min(center_points):
+                return "Central Composite Design"
+            elif self._is_box_behnken(design, factor_cols):
+                return "Box-Behnken Design"
+        
+        # Plackett-Burman 확인
+        pb_runs = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48]
+        if n_runs in pb_runs and all(l == 2 for l in levels):
+            return "Plackett-Burman Design"
+        
+        # 기타
+        if 'Adaptive' in design.columns and design['Adaptive'].any():
+            return "Adaptive/Sequential Design"
+        
+        return "Custom Design"
+    
+    def _check_balance(self, design: pd.DataFrame, factor_cols: List[str]) -> Dict[str, bool]:
+        """균형성 확인"""
+        balance_info = {}
+        
+        for col in factor_cols:
+            value_counts = design[col].value_counts()
+            is_balanced = value_counts.std() / value_counts.mean() < 0.1 if len(value_counts) > 1 else True
+            balance_info[col] = is_balanced
+        
+        balance_info['overall'] = all(balance_info.values())
+        return balance_info
+    
+    def _check_orthogonality(self, design: pd.DataFrame, factor_cols: List[str]) -> float:
+        """직교성 확인"""
+        # 수치형 인자만 선택
+        numeric_cols = [col for col in factor_cols if design[col].dtype in ['float64', 'int64']]
+        
+        if len(numeric_cols) < 2:
+            return 1.0
+        
+        # 코드화 (-1, 1)
+        coded_design = design[numeric_cols].copy()
+        for col in numeric_cols:
+            min_val = coded_design[col].min()
+            max_val = coded_design[col].max()
+            if max_val > min_val:
+                coded_design[col] = 2 * (coded_design[col] - min_val) / (max_val - min_val) - 1
+        
+        # 상관 행렬
+        corr_matrix = coded_design.corr()
+        
+        # 비대각 원소의 평균 절대값
+        n = len(corr_matrix)
+        off_diagonal_sum = 0
+        count = 0
+        
+        for i in range(n):
+            for j in range(i + 1, n):
+                off_diagonal_sum += abs(corr_matrix.iloc[i, j])
+                count += 1
+        
+        orthogonality = 1 - (off_diagonal_sum / count) if count > 0 else 1.0
+        return orthogonality
+    
+    def _calculate_statistical_power(self, design: pd.DataFrame) -> Dict[str, float]:
+        """통계적 검정력 계산"""
+        n = len(design)
+        factor_cols = [col for col in design.columns if col not in ['Run', 'Block', 'Adaptive']]
+        k = len(factor_cols)
+        
+        # 주효과 검정력
+        effect_size = 0.25  # Cohen's f
+        alpha = 0.05
+        
+        # 비중심 모수
+        lambda_main = n * effect_size**2
+        
+        # F 분포 임계값
+        df1_main = k
+        df2_main = n - k - 1
+        
+        power_results = {}
+        
+        if df2_main > 0:
+            f_crit_main = stats.f.ppf(1 - alpha, df1_main, df2_main)
+            power_main = 1 - stats.ncf.cdf(f_crit_main, df1_main, df2_main, lambda_main)
+            power_results['main_effects'] = power_main
+        
+        # 2차 상호작용 검정력
+        if k >= 2:
+            df1_int = k * (k - 1) // 2
+            df2_int = n - df1_int - k - 1
+            
+            if df2_int > 0:
+                lambda_int = n * (effect_size/2)**2  # 상호작용은 주효과의 절반으로 가정
+                f_crit_int = stats.f.ppf(1 - alpha, df1_int, df2_int)
+                power_int = 1 - stats.ncf.cdf(f_crit_int, df1_int, df2_int, lambda_int)
+                power_results['interactions'] = power_int
+        
+        return power_results
+    
+    def _enhanced_descriptive_stats(self, data: pd.Series, 
+                                  response: ExperimentResponse) -> Dict[str, Any]:
+        """향상된 기술 통계"""
+        stats_dict = {
+            'count': len(data),
+            'mean': data.mean(),
+            'std': data.std(),
+            'min': data.min(),
+            'max': data.max(),
+            'range': data.max() - data.min(),
+            'cv': (data.std() / data.mean() * 100) if data.mean() != 0 else np.inf,
+            'q1': data.quantile(0.25),
+            'median': data.median(),
+            'q3': data.quantile(0.75),
+            'iqr': data.quantile(0.75) - data.quantile(0.25),
+            'skewness': stats.skew(data),
+            'kurtosis': stats.kurtosis(data),
+            'outliers': self._detect_outliers(data)
+        }
+        
+        # 목표값과의 비교
+        if response.target_value is not None:
+            stats_dict['target_deviation'] = {
+                'mean_deviation': abs(data.mean() - response.target_value),
+                'percent_in_spec': self._calculate_in_spec_percentage(data, response),
+                'process_capability': self._calculate_capability_indices(data, response)
+            }
+        
+        # 신뢰구간
+        confidence_level = 0.95
+        stats_dict['confidence_interval'] = stats.t.interval(
+            confidence_level,
+            len(data) - 1,
+            loc=data.mean(),
+            scale=stats.sem(data)
+        )
+        
+        return stats_dict
+    
+    def _detect_outliers(self, data: pd.Series) -> Dict[str, List[float]]:
+        """이상치 검출"""
+        outliers = {}
+        
+        # IQR 방법
+        Q1 = data.quantile(0.25)
+        Q3 = data.quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        iqr_outliers = data[(data < lower_bound) | (data > upper_bound)].tolist()
+        outliers['iqr_method'] = iqr_outliers
+        
+        # Z-score 방법
+        z_scores = np.abs(stats.zscore(data))
+        z_outliers = data[z_scores > 3].tolist()
+        outliers['z_score_method'] = z_outliers
+        
+        # Modified Z-score (MAD 기반)
+        median = data.median()
+        mad = np.median(np.abs(data - median))
+        modified_z_scores = 0.6745 * (data - median) / mad if mad > 0 else np.zeros_like(data)
+        mad_outliers = data[np.abs(modified_z_scores) > 3.5].tolist()
+        outliers['mad_method'] = mad_outliers
+        
+        # Isolation Forest
+        try:
+            from sklearn.ensemble import IsolationForest
+            
+            iso_forest = IsolationForest(contamination=0.1, random_state=42)
+            outlier_labels = iso_forest.fit_predict(data.values.reshape(-1, 1))
+            iso_outliers = data[outlier_labels == -1].tolist()
+            outliers['isolation_forest'] = iso_outliers
+        except:
+            pass
+        
+        return outliers
+    
+    def _calculate_in_spec_percentage(self, data: pd.Series, 
+                                    response: ExperimentResponse) -> float:
+        """규격 내 비율 계산"""
+        lower, upper = response.specification_limits
+        
+        if lower is None and upper is None:
+            return 100.0
+        
+        in_spec = data.copy()
+        
+        if lower is not None:
+            in_spec = in_spec[in_spec >= lower]
+        
+        if upper is not None:
+            in_spec = in_spec[in_spec <= upper]
+        
+        return len(in_spec) / len(data) * 100
+    
+    def _calculate_capability_indices(self, data: pd.Series, 
+                                    response: ExperimentResponse) -> Dict[str, float]:
+        """공정능력지수 계산"""
+        lower, upper = response.specification_limits
+        
+        if lower is None and upper is None:
+            return {}
+        
+        indices = {}
+        
+        # 기본 통계
+        mean = data.mean()
+        std = data.std()
+        
+        if std == 0:
+            return {'error': 'Standard deviation is zero'}
+        
+        # Cp (잠재 능력)
+        if lower is not None and upper is not None:
+            cp = (upper - lower) / (6 * std)
+            indices['Cp'] = cp
+        
+        # Cpk (실제 능력)
+        if lower is not None and upper is not None:
+            cpu = (upper - mean) / (3 * std)
+            cpl = (mean - lower) / (3 * std)
+            cpk = min(cpu, cpl)
+            indices['Cpk'] = cpk
+            indices['Cpu'] = cpu
+            indices['Cpl'] = cpl
+        elif lower is not None:
+            cpl = (mean - lower) / (3 * std)
+            indices['Cpl'] = cpl
+        elif upper is not None:
+            cpu = (upper - mean) / (3 * std)
+            indices['Cpu'] = cpu
+        
+        # Cpm (목표값 고려)
+        if response.target_value is not None:
+            target = response.target_value
+            
+            if lower is not None and upper is not None:
+                tau = np.sqrt(std**2 + (mean - target)**2)
+                cpm = (upper - lower) / (6 * tau)
+                indices['Cpm'] = cpm
+        
+        # 예상 불량률 (ppm)
+        if lower is not None and upper is not None:
+            z_lower = (lower - mean) / std
+            z_upper = (upper - mean) / std
+            
+            p_lower = stats.norm.cdf(z_lower)
+            p_upper = 1 - stats.norm.cdf(z_upper)
+            
+            ppm = (p_lower + p_upper) * 1e6
+            indices['expected_ppm'] = ppm
+        
+        return indices
+    
+    def _distribution_tests(self, data: pd.Series) -> Dict[str, Any]:
+        """분포 검정"""
+        tests = {}
+        
+        # 정규성 검정
+        # Shapiro-Wilk
+        if len(data) >= 3:
+            shapiro_stat, shapiro_p = stats.shapiro(data)
+            tests['shapiro_wilk'] = {
+                'statistic': shapiro_stat,
+                'p_value': shapiro_p,
+                'normal': shapiro_p > 0.05
+            }
+        
+        # Anderson-Darling
+        if len(data) >= 7:
+            anderson_result = stats.anderson(data)
+            tests['anderson_darling'] = {
+                'statistic': anderson_result.statistic,
+                'critical_values': dict(zip(
+                    anderson_result.significance_level,
+                    anderson_result.critical_values
+                )),
+                'normal': anderson_result.statistic < anderson_result.critical_values[2]  # 5% level
+            }
+        
+        # Kolmogorov-Smirnov
+        ks_stat, ks_p = stats.kstest(data, 'norm', args=(data.mean(), data.std()))
+        tests['kolmogorov_smirnov'] = {
+            'statistic': ks_stat,
+            'p_value': ks_p,
+            'normal': ks_p > 0.05
+        }
+        
+        # 다른 분포 적합도 검정
+        distributions = {
+            'exponential': stats.expon,
+            'lognormal': stats.lognorm,
+            'weibull': stats.weibull_min,
+            'gamma': stats.gamma
+        }
+        
+        best_fit = {'distribution': 'normal', 'aic': float('inf')}
+        
+        for dist_name, dist_func in distributions.items():
+            try:
+                # 파라미터 추정
+                params = dist_func.fit(data)
+                
+                # Log-likelihood
+                log_likelihood = np.sum(dist_func.logpdf(data, *params))
+                
+                # AIC
+                k = len(params)
+                aic = 2 * k - 2 * log_likelihood
+                
+                if aic < best_fit['aic']:
+                    best_fit = {
+                        'distribution': dist_name,
+                        'aic': aic,
+                        'parameters': params
+                    }
+            except:
+                continue
+        
+        tests['best_fit_distribution'] = best_fit
+        
+        return tests
+    
+    def _comprehensive_anova(self, design: pd.DataFrame, response_data: pd.Series, 
+                           alpha: float = 0.05) -> Dict[str, Any]:
+        """종합 ANOVA 분석"""
+        results = {
+            'main_effects': {},
+            'interactions': {},
+            'model_adequacy': {},
+            'post_hoc': {}
+        }
+        
+        # 인자 식별
+        factor_cols = [col for col in design.columns 
+                      if col not in ['Run', 'Block', 'Adaptive'] and col in design.columns]
+        
+        # 각 인자별 주효과
+        for factor in factor_cols:
+            groups = []
+            levels = design[factor].unique()
+            
+            for level in levels:
+                mask = design[factor] == level
+                if mask.sum() > 0:
+                    groups.append(response_data[mask].values)
+            
+            if len(groups) >= 2:
+                # One-way ANOVA
+                f_stat, p_value = stats.f_oneway(*groups)
+                
+                # 효과 크기
+                ss_between = sum(len(g) * (np.mean(g) - response_data.mean())**2 for g in groups)
+                ss_total = sum((response_data - response_data.mean())**2)
+                eta_squared = ss_between / ss_total if ss_total > 0 else 0
+                
+                # 검정력
+                effect_size = np.sqrt(eta_squared / (1 - eta_squared)) if eta_squared < 1 else np.inf
+                df1 = len(groups) - 1
+                df2 = len(response_data) - len(groups)
+                
+                if df2 > 0:
+                    lambda_nc = len(response_data) * effect_size**2
+                    f_crit = stats.f.ppf(1 - alpha, df1, df2)
+                    power = 1 - stats.ncf.cdf(f_crit, df1, df2, lambda_nc)
+                else:
+                    power = 0
+                
+                results['main_effects'][factor] = {
+                    'f_statistic': f_stat,
+                    'p_value': p_value,
+                    'significant': p_value < alpha,
+                    'eta_squared': eta_squared,
+                    'power': power,
+                    'levels': list(levels),
+                    'means': {str(level): np.mean(groups[i]) for i, level in enumerate(levels)}
+                }
+                
+                # 사후 검정 (Tukey HSD)
+                if p_value < alpha and len(groups) > 2:
+                    results['post_hoc'][factor] = self._tukey_hsd(groups, levels, alpha)
+        
+        # 2차 상호작용
+        if len(factor_cols) >= 2:
+            from itertools import combinations
+            
+            for f1, f2 in combinations(factor_cols, 2):
+                interaction_key = f"{f1}*{f2}"
+                
+                # 2-way ANOVA를 위한 데이터 준비
+                try:
+                    interaction_results = self._two_way_anova(
+                        design, response_data, f1, f2, alpha
+                    )
+                    
+                    if interaction_results:
+                        results['interactions'][interaction_key] = interaction_results
+                except:
+                    continue
+        
+        # 모델 적합도
+        results['model_adequacy'] = self._assess_model_adequacy(
+            design, response_data, factor_cols
+        )
+        
+        return results
+    
+    def _tukey_hsd(self, groups: List[np.ndarray], levels: List[Any], 
+                  alpha: float = 0.05) -> List[Dict[str, Any]]:
+        """Tukey HSD 사후 검정"""
+        from statsmodels.stats.multicomp import pairwise_tukeyhsd
+        
+        # 데이터 준비
+        data_list = []
+        group_list = []
+        
+        for i, (group, level) in enumerate(zip(groups, levels)):
+            data_list.extend(group)
+            group_list.extend([str(level)] * len(group))
+        
+        # Tukey HSD
+        tukey_result = pairwise_tukeyhsd(data_list, group_list, alpha=alpha)
+        
+        # 결과 정리
+        comparisons = []
+        for i in range(len(tukey_result.reject)):
+            comparisons.append({
+                'group1': tukey_result.groupsunique[tukey_result._results_table[i+1][0]],
+                'group2': tukey_result.groupsunique[tukey_result._results_table[i+1][1]],
+                'mean_diff': tukey_result._results_table[i+1][2],
+                'p_adj': tukey_result._results_table[i+1][5],
+                'reject': tukey_result.reject[i]
+            })
+        
+        return comparisons
+    
+    def _two_way_anova(self, design: pd.DataFrame, response_data: pd.Series,
+                      factor1: str, factor2: str, alpha: float = 0.05) -> Dict[str, Any]:
+        """이원 분산분석"""
+        import statsmodels.api as sm
+        from statsmodels.formula.api import ols
+        
+        # 데이터프레임 준비
+        anova_df = design[[factor1, factor2]].copy()
+        anova_df['response'] = response_data
+        
+        # 모델 적합
+        formula = f'response ~ C({factor1}) + C({factor2}) + C({factor1}):C({factor2})'
+        model = ols(formula, data=anova_df).fit()
+        
+        # ANOVA 테이블
+        anova_table = sm.stats.anova_lm(model, typ=2)
+        
+        # 결과 정리
+        interaction_row = f'C({factor1}):C({factor2})'
+        
+        if interaction_row in anova_table.index:
+            return {
+                'f_statistic': anova_table.loc[interaction_row, 'F'],
+                'p_value': anova_table.loc[interaction_row, 'PR(>F)'],
+                'significant': anova_table.loc[interaction_row, 'PR(>F)'] < alpha,
+                'sum_sq': anova_table.loc[interaction_row, 'sum_sq'],
+                'mean_sq': anova_table.loc[interaction_row, 'mean_sq']
+            }
+        
+        return None
+    
+    def _assess_model_adequacy(self, design: pd.DataFrame, response_data: pd.Series,
+                              factor_cols: List[str]) -> Dict[str, Any]:
+        """모델 적합도 평가"""
+        from sklearn.linear_model import LinearRegression
+        
+        # 설계 행렬 준비
+        X = pd.get_dummies(design[factor_cols], drop_first=True)
+        y = response_data.values
+        
+        # 선형 모델 적합
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        # 예측값과 잔차
+        y_pred = model.predict(X)
+        residuals = y - y_pred
+        
+        # 적합도 지표
+        r_squared = r2_score(y, y_pred)
+        adj_r_squared = 1 - (1 - r_squared) * (len(y) - 1) / (len(y) - X.shape[1] - 1)
+        
+        # 잔차 분석
+        residual_analysis = {
+            'mean': residuals.mean(),
+            'std': residuals.std(),
+            'normality': stats.shapiro(residuals)[1] if len(residuals) >= 3 else None,
+            'homoscedasticity': self._breusch_pagan_test(X, residuals),
+            'autocorrelation': self._durbin_watson(residuals)
+        }
+        
+        # Lack of Fit 검정
+        lack_of_fit = self._lack_of_fit_test(design, response_data, factor_cols)
+        
+        return {
+            'r_squared': r_squared,
+            'adjusted_r_squared': adj_r_squared,
+            'residual_analysis': residual_analysis,
+            'lack_of_fit': lack_of_fit
+        }
+    
+    def _breusch_pagan_test(self, X: pd.DataFrame, residuals: np.ndarray) -> Dict[str, float]:
+        """Breusch-Pagan 이분산성 검정"""
+        # 잔차 제곱
+        residuals_squared = residuals ** 2
+        
+        # 보조 회귀
+        aux_model = LinearRegression()
+        aux_model.fit(X, residuals_squared)
+        aux_pred = aux_model.predict(X)
+        
+        # LM 통계량
+        n = len(residuals)
+        rss = np.sum((residuals_squared - aux_pred) ** 2)
+        tss = np.sum((residuals_squared - residuals_squared.mean()) ** 2)
+        r_squared_aux = 1 - rss / tss if tss > 0 else 0
+        
+        lm_statistic = n * r_squared_aux
+        p_value = 1 - stats.chi2.cdf(lm_statistic, X.shape[1])
+        
+        return {
+            'statistic': lm_statistic,
+            'p_value': p_value,
+            'homoscedastic': p_value > 0.05
+        }
+    
+    def _durbin_watson(self, residuals: np.ndarray) -> float:
+        """Durbin-Watson 자기상관 검정"""
+        diff = np.diff(residuals)
+        dw = np.sum(diff ** 2) / np.sum(residuals ** 2)
+        return dw
+    
+    def _lack_of_fit_test(self, design: pd.DataFrame, response_data: pd.Series,
+                         factor_cols: List[str]) -> Dict[str, Any]:
+        """적합결여 검정"""
+        # 반복실험 찾기
+        design_with_response = design[factor_cols].copy()
+        design_with_response['response'] = response_data
+        
+        # 그룹화
+        grouped = design_with_response.groupby(factor_cols)
+        
+        pure_error_ss = 0
+        pure_error_df = 0
+        
+        for name, group in grouped:
+            if len(group) > 1:
+                group_mean = group['response'].mean()
+                pure_error_ss += np.sum((group['response'] - group_mean) ** 2)
+                pure_error_df += len(group) - 1
+        
+        if pure_error_df == 0:
+            return {'test_possible': False, 'reason': 'No replicates found'}
+        
+        # 전체 오차
+        total_mean = response_data.mean()
+        total_ss = np.sum((response_data - total_mean) ** 2)
+        
+        # 모델 적합
+        X = pd.get_dummies(design[factor_cols], drop_first=True)
+        model = LinearRegression()
+        model.fit(X, response_data)
+        y_pred = model.predict(X)
+        
+        residual_ss = np.sum((response_data - y_pred) ** 2)
+        
+        # Lack of fit
+        lack_of_fit_ss = residual_ss - pure_error_ss
+        lack_of_fit_df = len(response_data) - X.shape[1] - 1 - pure_error_df
+        
+        if lack_of_fit_df <= 0:
+            return {'test_possible': False, 'reason': 'Insufficient degrees of freedom'}
+        
+        # F 검정
+        f_statistic = (lack_of_fit_ss / lack_of_fit_df) / (pure_error_ss / pure_error_df)
+        p_value = 1 - stats.f.cdf(f_statistic, lack_of_fit_df, pure_error_df)
+        
+        return {
+            'test_possible': True,
+            'f_statistic': f_statistic,
+            'p_value': p_value,
+            'adequate_fit': p_value > 0.05,
+            'pure_error_df': pure_error_df,
+            'lack_of_fit_df': lack_of_fit_df
+        }
+    
+    def _advanced_regression(self, design: pd.DataFrame, response_data: pd.Series,
+                           response: ExperimentResponse) -> Dict[str, Any]:
+        """고급 회귀 분석"""
+        factor_cols = [col for col in design.columns 
+                      if col not in ['Run', 'Block', 'Adaptive']]
+        
+        # 다항식 차수 결정
+        poly_degree = self._determine_polynomial_degree(design, response_data, factor_cols)
+        
+        # 모델 구축
+        from sklearn.preprocessing import PolynomialFeatures
+        
+        X = design[factor_cols]
+        X_encoded = pd.get_dummies(X, drop_first=True)
+        
+        # 다항식 특성 생성
+        if poly_degree > 1:
+            poly = PolynomialFeatures(degree=poly_degree, include_bias=False)
+            X_poly = poly.fit_transform(X_encoded)
+            feature_names = poly.get_feature_names_out(X_encoded.columns)
+        else:
+            X_poly = X_encoded.values
+            feature_names = X_encoded.columns.tolist()
+        
+        # 여러 회귀 방법 비교
+        models = {
+            'linear': LinearRegression(),
+            'ridge': Ridge(alpha=1.0),
+            'lasso': Lasso(alpha=0.1),
+            'elastic_net': ElasticNet(alpha=0.1, l1_ratio=0.5)
+        }
+        
+        best_model = None
+        best_score = -np.inf
+        model_results = {}
+        
+        for name, model in models.items():
+            try:
+                # 교차 검증
+                cv_scores = cross_val_score(model, X_poly, response_data, cv=5, scoring='r2')
+                
+                # 전체 데이터로 학습
+                model.fit(X_poly, response_data)
+                y_pred = model.predict(X_poly)
+                
+                # 평가
+                r2 = r2_score(response_data, y_pred)
+                
+                model_results[name] = {
+                    'r2': r2,
+                    'cv_mean': cv_scores.mean(),
+                    'cv_std': cv_scores.std(),
+                    'coefficients': dict(zip(feature_names, model.coef_)) if hasattr(model, 'coef_') else {}
+                }
+                
+                if cv_scores.mean() > best_score:
+                    best_score = cv_scores.mean()
+                    best_model = name
+                    
+            except:
+                continue
+        
+        # 최종 모델로 상세 분석
+        if best_model:
+            final_model = models[best_model]
+            final_model.fit(X_poly, response_data)
+            
+            # 반응표면 방정식
+            equation = self._generate_regression_equation(
+                final_model, feature_names, poly_degree
+            )
+            
+            # 최적 조건 예측
+            optimal_conditions = self._find_optimal_conditions(
+                final_model, X_encoded, response, poly
+            )
+            
+            model_results['best_model'] = best_model
+            model_results['equation'] = equation
+            model_results['optimal_conditions'] = optimal_conditions
+        
+        return model_results
+    
+    def _determine_polynomial_degree(self, design: pd.DataFrame, response_data: pd.Series,
+                                   factor_cols: List[str]) -> int:
+        """적절한 다항식 차수 결정"""
+        n_samples = len(design)
+        n_factors = len(factor_cols)
+        
+        # 휴리스틱 규칙
+        if n_samples < 10:
+            return 1
+        elif n_samples < 20:
+            return min(2, n_factors)
+        else:
+            # AIC 기반 선택
+            best_aic = np.inf
+            best_degree = 1
+            
+            for degree in range(1, min(4, n_factors + 1)):
+                try:
+                    from sklearn.preprocessing import PolynomialFeatures
+                    
+                    X = pd.get_dummies(design[factor_cols], drop_first=True)
+                    poly = PolynomialFeatures(degree=degree, include_bias=False)
+                    X_poly = poly.fit_transform(X)
+                    
+                    if X_poly.shape[1] >= n_samples:
+                        break
+                    
+                    model = LinearRegression()
+                    model.fit(X_poly, response_data)
+                    y_pred = model.predict(X_poly)
+                    
+                    # AIC 계산
+                    rss = np.sum((response_data - y_pred) ** 2)
+                    k = X_poly.shape[1] + 1  # 파라미터 수
+                    
+                    if n_samples > k + 1:
+                        aic = n_samples * np.log(rss / n_samples) + 2 * k
+                        
+                        if aic < best_aic:
+                            best_aic = aic
+                            best_degree = degree
+                except:
+                    break
+            
+            return best_degree
+    
+    def _generate_regression_equation(self, model, feature_names: List[str], 
+                                    degree: int) -> str:
+        """회귀 방정식 생성"""
+        equation_parts = []
+        
+        # 절편
+        if hasattr(model, 'intercept_'):
+            equation_parts.append(f"{model.intercept_:.4f}")
+        
+        # 계수
+        if hasattr(model, 'coef_'):
+            for feature, coef in zip(feature_names, model.coef_):
+                if abs(coef) > 1e-6:
+                    sign = "+" if coef > 0 else "-"
+                    
+                    if equation_parts or sign == "-":
+                        equation_parts.append(f" {sign} {abs(coef):.4f}*{feature}")
+                    else:
+                        equation_parts.append(f"{coef:.4f}*{feature}")
+        
+        return "Y = " + "".join(equation_parts)
+    
+    def _find_optimal_conditions(self, model, X_encoded: pd.DataFrame, 
+                               response: ExperimentResponse,
+                               poly_transformer=None) -> Dict[str, Any]:
+        """최적 조건 찾기"""
+        bounds = []
+        for col in X_encoded.columns:
+            if X_encoded[col].dtype in ['float64', 'int64']:
+                bounds.append((X_encoded[col].min(), X_encoded[col].max()))
+            else:
+                bounds.append((0, 1))  # 더미 변수
+        
+        # 목적 함수
+        def objective(x):
+            if poly_transformer:
+                x_poly = poly_transformer.transform(x.reshape(1, -1))
+            else:
+                x_poly = x.reshape(1, -1)
+            
+            pred = model.predict(x_poly)[0]
+            
+            # 최적화 방향
+            if response.maximize:
+                return -pred
+            elif response.minimize:
+                return pred
+            elif response.target_value is not None:
+                return abs(pred - response.target_value)
+            else:
+                return pred
+        
+        # 최적화
+        result = differential_evolution(objective, bounds, seed=42, maxiter=1000)
+        
+        # 최적 조건
+        optimal_x = result.x
+        if poly_transformer:
+            optimal_pred = model.predict(poly_transformer.transform(optimal_x.reshape(1, -1)))[0]
+        else:
+            optimal_pred = model.predict(optimal_x.reshape(1, -1))[0]
+        
+        optimal_conditions = dict(zip(X_encoded.columns, optimal_x))
+        
+        return {
+            'conditions': optimal_conditions,
+            'predicted_value': optimal_pred,
+            'optimization_success': result.success,
+            'iterations': result.nit
+        }
+    
+    def _multi_response_analysis(self, design: pd.DataFrame, results: pd.DataFrame,
+                               responses: List[ExperimentResponse]) -> Dict[str, Any]:
+        """다중 반응 분석"""
+        multi_results = {
+            'correlation_matrix': {},
+            'desirability': {},
+            'pareto_optimal': [],
+            'compromise_solution': {}
+        }
+        
+        # 상관 행렬
+        response_names = [r.name for r in responses if r.name in results.columns]
+        if len(response_names) >= 2:
+            corr_matrix = results[response_names].corr()
+            multi_results['correlation_matrix'] = corr_matrix.to_dict()
+        
+        # 종합 바람직함 지수
+        desirability_scores = []
+        
+        for idx, row in results.iterrows():
+            individual_desirabilities = []
+            
+            for response in responses:
+                if response.name in row:
+                    d = response.calculate_desirability(row[response.name])
+                    individual_desirabilities.append(d * response.weight)
+            
+            if individual_desirabilities:
+                # 기하평균
+                overall_desirability = np.prod(individual_desirabilities) ** (1/len(individual_desirabilities))
+                desirability_scores.append(overall_desirability)
+            else:
+                desirability_scores.append(0)
+        
+        multi_results['desirability']['scores'] = desirability_scores
+        multi_results['desirability']['best_run'] = int(np.argmax(desirability_scores))
+        multi_results['desirability']['best_score'] = max(desirability_scores)
+        
+        # Pareto 최적해
+        pareto_front = self._find_pareto_front(results, responses)
+        multi_results['pareto_optimal'] = pareto_front
+        
+        # 타협해 (TOPSIS)
+        compromise = self._topsis_analysis(results, responses)
+        multi_results['compromise_solution'] = compromise
+        
+        return multi_results
+    
+    def _find_pareto_front(self, results: pd.DataFrame, 
+                          responses: List[ExperimentResponse]) -> List[int]:
+        """Pareto 최적해 찾기"""
+        # 목적 함수 값 추출
+        objectives = []
+        
+        for response in responses:
+            if response.name in results.columns:
+                values = results[response.name].values
+                
+                # 최대화는 음수로 변환 (최소화로 통일)
+                if response.maximize:
+                    objectives.append(-values)
+                else:
+                    objectives.append(values)
+        
+        if not objectives:
+            return []
+        
+        objectives = np.array(objectives).T
+        n_points = len(objectives)
+        
+        # Pareto 지배 확인
+        pareto_front = []
+        
+        for i in range(n_points):
+            dominated = False
+            
+            for j in range(n_points):
+                if i != j:
+                    # j가 i를 지배하는지 확인
+                    if all(objectives[j] <= objectives[i]) and any(objectives[j] < objectives[i]):
+                        dominated = True
+                        break
+            
+            if not dominated:
+                pareto_front.append(i)
+        
+        return pareto_front
+    
+    def _topsis_analysis(self, results: pd.DataFrame, 
+                        responses: List[ExperimentResponse]) -> Dict[str, Any]:
+        """TOPSIS 다기준 의사결정"""
+        # 결정 행렬 구성
+        decision_matrix = []
+        weights = []
+        directions = []  # True: maximize, False: minimize
+        
+        for response in responses:
+            if response.name in results.columns:
+                decision_matrix.append(results[response.name].values)
+                weights.append(response.weight)
+                directions.append(response.maximize)
+        
+        if not decision_matrix:
+            return {}
+        
+        decision_matrix = np.array(decision_matrix).T
+        weights = np.array(weights)
+        weights = weights / weights.sum()  # 정규화
+        
+        # 정규화
+        norm_matrix = decision_matrix / np.sqrt((decision_matrix ** 2).sum(axis=0))
+        
+        # 가중치 적용
+        weighted_matrix = norm_matrix * weights
+        
+        # 이상적인 해와 반이상적인 해
+        ideal_solution = []
+        anti_ideal_solution = []
+        
+        for j, maximize in enumerate(directions):
+            if maximize:
+                ideal_solution.append(weighted_matrix[:, j].max())
+                anti_ideal_solution.append(weighted_matrix[:, j].min())
+            else:
+                ideal_solution.append(weighted_matrix[:, j].min())
+                anti_ideal_solution.append(weighted_matrix[:, j].max())
+        
+        ideal_solution = np.array(ideal_solution)
+        anti_ideal_solution = np.array(anti_ideal_solution)
+        
+        # 거리 계산
+        dist_to_ideal = np.sqrt(((weighted_matrix - ideal_solution) ** 2).sum(axis=1))
+        dist_to_anti_ideal = np.sqrt(((weighted_matrix - anti_ideal_solution) ** 2).sum(axis=1))
+        
+        # 상대적 근접도
+        relative_closeness = dist_to_anti_ideal / (dist_to_ideal + dist_to_anti_ideal + 1e-10)
+        
+        # 최적해
+        best_idx = np.argmax(relative_closeness)
+        
+        return {
+            'best_run': int(best_idx),
+            'closeness_scores': relative_closeness.tolist(),
+            'ideal_solution': ideal_solution.tolist(),
+            'anti_ideal_solution': anti_ideal_solution.tolist()
+        }
+    
+    def _generate_recommendations(self, analysis_results: Dict[str, Any],
+                                response: ExperimentResponse) -> List[str]:
+        """분석 기반 권장사항 생성"""
+        recommendations = []
+        
+        # 통계적 유의성 기반
+        if response.name in analysis_results['inferential']:
+            anova_results = analysis_results['inferential'][response.name]
+            
+            significant_factors = [
+                factor for factor, result in anova_results['main_effects'].items()
+                if result['significant']
+            ]
+            
+            if significant_factors:
+                recommendations.append(
+                    f"✅ {response.name}에 유의한 영향을 미치는 인자: {', '.join(significant_factors)}"
+                )
+                
+                # 최적 수준 추천
+                for factor in significant_factors:
+                    means = anova_results['main_effects'][factor]['means']
+                    
+                    if response.maximize:
+                        best_level = max(means.items(), key=lambda x: x[1])
+                        recommendations.append(
+                            f"   → {factor}는 {best_level[0]} 수준에서 최대값 달성"
+                        )
+                    elif response.minimize:
+                        best_level = min(means.items(), key=lambda x: x[1])
+                        recommendations.append(
+                            f"   → {factor}는 {best_level[0]} 수준에서 최소값 달성"
+                        )
+        
+        # 모델 적합도 기반
+        if response.name in analysis_results['regression']:
+            reg_results = analysis_results['regression'][response.name]
+            
+            if 'best_model' in reg_results:
+                r2 = reg_results[reg_results['best_model']]['r2']
+                
+                if r2 < 0.7:
+                    recommendations.append(
+                        f"⚠️ 모델 설명력이 낮음 (R² = {r2:.3f}). 추가 인자나 비선형 항 고려 필요"
+                    )
+                
+                if 'optimal_conditions' in reg_results:
+                    opt_cond = reg_results['optimal_conditions']
+                    recommendations.append(
+                        f"🎯 예측 최적 조건: {opt_cond['predicted_value']:.3f} {response.unit}"
+                    )
+        
+        # 공정능력 기반
+        if response.name in analysis_results['descriptive']:
+            desc_stats = analysis_results['descriptive'][response.name]
+            
+            if 'target_deviation' in desc_stats:
+                capability = desc_stats['target_deviation'].get('process_capability', {})
+                
+                if 'Cpk' in capability:
+                    cpk = capability['Cpk']
+                    
+                    if cpk < 1.0:
+                        recommendations.append(
+                            f"❌ 공정능력 부족 (Cpk = {cpk:.2f}). 변동 감소 필요"
+                        )
+                    elif cpk < 1.33:
+                        recommendations.append(
+                            f"⚠️ 공정능력 개선 필요 (Cpk = {cpk:.2f})"
+                        )
+                    else:
+                        recommendations.append(
+                            f"✅ 우수한 공정능력 (Cpk = {cpk:.2f})"
+                        )
+        
+        return recommendations
+
+# ==================== 시각화 엔진 (확장) ====================
+class EnhancedVisualizationEngine:
+    """향상된 시각화 엔진"""
+    
+    def __init__(self):
+        self.color_palettes = {
+            'default': px.colors.qualitative.Plotly,
+            'sequential': px.colors.sequential.Viridis,
+            'diverging': px.colors.diverging.RdBu,
+            'polymer': ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'],
+            'professional': ['#003f5c', '#58508d', '#bc5090', '#ff6361', '#ffa600']
+        }
+        
+        self.plot_templates = {
+            'clean': dict(
+                layout=go.Layout(
+                    font=dict(family="Arial", size=12),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    margin=dict(l=60, r=60, t=80, b=60)
+                )
+            ),
+            'dark': dict(
+                layout=go.Layout(
+                    font=dict(family="Arial", size=12, color='white'),
+                    plot_bgcolor='#1e1e1e',
+                    paper_bgcolor='#1e1e1e',
+                    margin=dict(l=60, r=60, t=80, b=60)
+                )
+            )
+        }
+    
+    def create_main_effects_plot(self, analysis_results: Dict[str, Any],
+                                response_name: str) -> go.Figure:
+        """주효과 플롯 생성"""
+        if response_name not in analysis_results['inferential']:
+            return go.Figure()
+        
+        main_effects = analysis_results['inferential'][response_name]['main_effects']
+        
+        # 서브플롯 생성
+        n_factors = len(main_effects)
+        cols = min(3, n_factors)
+        rows = (n_factors + cols - 1) // cols
+        
+        fig = make_subplots(
+            rows=rows, cols=cols,
+            subplot_titles=list(main_effects.keys()),
+            vertical_spacing=0.15,
+            horizontal_spacing=0.1
+        )
+        
+        # 각 인자별 플롯
+        for idx, (factor, data) in enumerate(main_effects.items()):
+            row = idx // cols + 1
+            col = idx % cols + 1
+            
+            levels = list(data['means'].keys())
+            means = list(data['means'].values())
+            
+            # 신뢰구간 계산 (간단한 버전)
+            std_err = np.std(means) / np.sqrt(len(means))
+            ci = 1.96 * std_err
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=levels,
+                    y=means,
+                    mode='lines+markers',
+                    marker=dict(size=10, color='#1f77b4'),
+                    line=dict(width=2),
+                    error_y=dict(
+                        type='constant',
+                        value=ci,
+                        visible=True
+                    ),
+                    name=factor,
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+            
+            # 유의성 표시
+            if data['significant']:
+                fig.add_annotation(
+                    x=levels[len(levels)//2],
+                    y=max(means) + ci,
+                    text="*",
+                    showarrow=False,
+                    font=dict(size=20, color='red'),
+                    row=row, col=col
+                )
+        
+        fig.update_layout(
+            title=f"주효과 플롯: {response_name}",
+            height=300 * rows,
+            showlegend=False,
+            template='plotly_white'
+        )
+        
+        # Y축 레이블
+        fig.update_yaxes(title_text=response_name)
+        
+        return fig
+    
+    def create_interaction_plot(self, design: pd.DataFrame, results: pd.DataFrame,
+                              factor1: str, factor2: str, response: str) -> go.Figure:
+        """상호작용 플롯 생성"""
+        # 데이터 준비
+        plot_data = design[[factor1, factor2]].copy()
+        plot_data[response] = results[response]
+        
+        # 평균 계산
+        interaction_means = plot_data.groupby([factor1, factor2])[response].agg(['mean', 'std', 'count'])
+        
+        fig = go.Figure()
+        
+        # factor2의 각 수준별로 선 그리기
+        for level2 in plot_data[factor2].unique():
+            data_subset = interaction_means.xs(level2, level=1)
+            
+            # 신뢰구간
+            ci = 1.96 * data_subset['std'] / np.sqrt(data_subset['count'])
+            
+            fig.add_trace(go.Scatter(
+                x=data_subset.index,
+                y=data_subset['mean'],
+                mode='lines+markers',
+                name=f"{factor2}={level2}",
+                error_y=dict(
+                    type='data',
+                    array=ci,
+                    visible=True
+                )
+            ))
+        
+        fig.update_layout(
+            title=f"상호작용 플롯: {factor1} × {factor2}",
+            xaxis_title=factor1,
+            yaxis_title=response,
+            hovermode='x unified',
+            template='plotly_white'
+        )
+        
+        return fig
+    
+    def create_response_surface_3d(self, model, factor1_range: Tuple[float, float],
+                                 factor2_range: Tuple[float, float],
+                                 factor_names: List[str],
+                                 response_name: str,
+                                 other_factors: Dict[str, float] = None) -> go.Figure:
+        """3D 반응표면 플롯"""
+        # 그리드 생성
+        n_points = 50
+        x = np.linspace(factor1_range[0], factor1_range[1], n_points)
+        y = np.linspace(factor2_range[0], factor2_range[1], n_points)
+        X, Y = np.meshgrid(x, y)
+        
+        # 예측을 위한 데이터 준비
+        prediction_points = []
+        
+        for i in range(n_points):
+            for j in range(n_points):
+                point = other_factors.copy() if other_factors else {}
+                point[factor_names[0]] = X[i, j]
+                point[factor_names[1]] = Y[i, j]
+                prediction_points.append(point)
+        
+        # DataFrame으로 변환
+        pred_df = pd.DataFrame(prediction_points)
+        
+        # 예측
+        Z = model.predict(pred_df).reshape(n_points, n_points)
+        
+        # 3D Surface plot
+        fig = go.Figure(data=[
+            go.Surface(
+                x=x,
+                y=y,
+                z=Z,
+                colorscale='Viridis',
+                contours=dict(
+                    z=dict(show=True, usecolormap=True, highlightcolor="limegreen", project_z=True)
+                )
+            )
+        ])
+        
+        # 레이아웃
+        fig.update_layout(
+            title=f"반응표면: {response_name}",
+            scene=dict(
+                xaxis_title=factor_names[0],
+                yaxis_title=factor_names[1],
+                zaxis_title=response_name,
+                camera=dict(
+                    eye=dict(x=1.5, y=1.5, z=1.2)
+                )
+            ),
+            width=800,
+            height=600
+        )
+        
+        return fig
+    
+    def create_contour_plot(self, model, factor1_range: Tuple[float, float],
+                          factor2_range: Tuple[float, float],
+                          factor_names: List[str],
+                          response_name: str,
+                          other_factors: Dict[str, float] = None,
+                          show_optimum: bool = True) -> go.Figure:
+        """등고선 플롯"""
+        # 그리드 생성
+        n_points = 100
+        x = np.linspace(factor1_range[0], factor1_range[1], n_points)
+        y = np.linspace(factor2_range[0], factor2_range[1], n_points)
+        X, Y = np.meshgrid(x, y)
+        
+        # 예측
+        prediction_points = []
+        for i in range(n_points):
+            for j in range(n_points):
+                point = other_factors.copy() if other_factors else {}
+                point[factor_names[0]] = X[i, j]
+                point[factor_names[1]] = Y[i, j]
+                prediction_points.append(point)
+        
+        pred_df = pd.DataFrame(prediction_points)
+        Z = model.predict(pred_df).reshape(n_points, n_points)
+        
+        # Contour plot
+        fig = go.Figure()
+        
+        # Filled contour
+        fig.add_trace(go.Contour(
+            x=x,
+            y=y,
+            z=Z,
+            colorscale='Viridis',
+            contours=dict(
+                coloring='heatmap',
+                showlabels=True,
+                labelfont=dict(size=12, color='white')
+            ),
+            colorbar=dict(title=response_name)
+        ))
+        
+        # 최적점 표시
+        if show_optimum:
+            # 간단한 최적점 찾기 (그리드 서치)
+            opt_idx = np.unravel_index(Z.argmax(), Z.shape)
+            opt_x = X[opt_idx]
+            opt_y = Y[opt_idx]
+            opt_z = Z[opt_idx]
+            
+            fig.add_trace(go.Scatter(
+                x=[opt_x],
+                y=[opt_y],
+                mode='markers',
+                marker=dict(
+                    size=15,
+                    color='red',
+                    symbol='star',
+                    line=dict(color='white', width=2)
+                ),
+                name=f'최적점 ({opt_z:.2f})',
+                showlegend=True
+            ))
+        
+        fig.update_layout(
+            title=f"등고선 플롯: {response_name}",
+            xaxis_title=factor_names[0],
+            yaxis_title=factor_names[1],
+            template='plotly_white',
+            width=700,
+            height=600
+        )
+        
+        return fig
+    
+    def create_pareto_chart(self, data: Dict[str, float], title: str = "Pareto Chart") -> go.Figure:
+        """파레토 차트"""
+        # 데이터 정렬
+        sorted_items = sorted(data.items(), key=lambda x: abs(x[1]), reverse=True)
+        
+        categories = [item[0] for item in sorted_items]
+        values = [abs(item[1]) for item in sorted_items]
+        
+        # 누적 비율 계산
+        total = sum(values)
+        cumulative = []
+        cum_sum = 0
+        
+        for val in values:
+            cum_sum += val
+            cumulative.append(cum_sum / total * 100)
+        
+        # 그래프 생성
+        fig = go.Figure()
+        
+        # 막대 그래프
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=values,
+            name='효과',
+            marker_color='lightblue',
+            yaxis='y'
+        ))
+        
+        # 누적 선 그래프
+        fig.add_trace(go.Scatter(
+            x=categories,
+            y=cumulative,
+            name='누적 %',
+            mode='lines+markers',
+            line=dict(color='red', width=2),
+            marker=dict(size=8),
+            yaxis='y2'
+        ))
+        
+        # 80% 선
+        fig.add_hline(y=80, line_dash="dash", line_color="gray", 
+                     annotation_text="80%", yref='y2')
+        
+        # 레이아웃
+        fig.update_layout(
+            title=title,
+            xaxis=dict(title='요인'),
+            yaxis=dict(title='효과 크기', side='left'),
+            yaxis2=dict(title='누적 비율 (%)', side='right', overlaying='y', range=[0, 100]),
+            hovermode='x unified',
+            template='plotly_white'
+        )
+        
+        return fig
+    
+    def create_residual_plots(self, actual: np.ndarray, predicted: np.ndarray,
+                            feature_names: List[str] = None) -> go.Figure:
+        """잔차 진단 플롯"""
+        residuals = actual - predicted
+        
+        # 4개 서브플롯
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('잔차 vs 적합값', '정규 Q-Q 플롯', 
+                          '척도-위치 플롯', '잔차 vs 레버리지'),
+            vertical_spacing=0.15,
+            horizontal_spacing=0.1
+        )
+        
+        # 1. 잔차 vs 적합값
+        fig.add_trace(
+            go.Scatter(
+                x=predicted,
+                y=residuals,
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                showlegend=False
+            ),
+            row=1, col=1
+        )
+        fig.add_hline(y=0, line_dash="dash", line_color="red", row=1, col=1)
+        
+        # 2. Q-Q 플롯
+        qq_data = stats.probplot(residuals, dist="norm")
+        fig.add_trace(
+            go.Scatter(
+                x=qq_data[0][0],
+                y=qq_data[0][1],
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+        
+        # Q-Q 라인
+        fig.add_trace(
+            go.Scatter(
+                x=qq_data[0][0],
+                y=qq_data[1][1] + qq_data[1][0] * qq_data[0][0],
+                mode='lines',
+                line=dict(color='red', dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+        
+        # 3. 척도-위치 플롯
+        standardized_residuals = residuals / np.std(residuals)
+        sqrt_abs_residuals = np.sqrt(np.abs(standardized_residuals))
+        
+        fig.add_trace(
+            go.Scatter(
+                x=predicted,
+                y=sqrt_abs_residuals,
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        # 평활선 추가 (LOWESS)
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+        smoothed = lowess(sqrt_abs_residuals, predicted, frac=0.6)
+        
+        fig.add_trace(
+            go.Scatter(
+                x=smoothed[:, 0],
+                y=smoothed[:, 1],
+                mode='lines',
+                line=dict(color='red', width=2),
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        # 4. 잔차 vs 레버리지
+        # 간단한 레버리지 계산 (실제로는 hat matrix 필요)
+        n = len(residuals)
+        leverage = np.ones(n) / n  # 단순화
+        
+        fig.add_trace(
+            go.Scatter(
+                x=leverage,
+                y=standardized_residuals,
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                showlegend=False
+            ),
+            row=2, col=2
+        )
+        
+        # Cook's distance 임계선
+        fig.add_hline(y=2, line_dash="dash", line_color="red", row=2, col=2)
+        fig.add_hline(y=-2, line_dash="dash", line_color="red", row=2, col=2)
+        
+        # 축 레이블
+        fig.update_xaxes(title_text="적합값", row=1, col=1)
+        fig.update_yaxes(title_text="잔차", row=1, col=1)
+        
+        fig.update_xaxes(title_text="이론적 분위수", row=1, col=2)
+        fig.update_yaxes(title_text="표본 분위수", row=1, col=2)
+        
+        fig.update_xaxes(title_text="적합값", row=2, col=1)
+        fig.update_yaxes(title_text="√|표준화 잔차|", row=2, col=1)
+        
+        fig.update_xaxes(title_text="레버리지", row=2, col=2)
+        fig.update_yaxes(title_text="표준화 잔차", row=2, col=2)
+        
+        fig.update_layout(
+            title="잔차 진단 플롯",
+            height=800,
+            showlegend=False,
+            template='plotly_white'
+        )
+        
+        return fig
+    
+    def create_optimization_history_plot(self, optimization_results: Dict[str, Any]) -> go.Figure:
+        """최적화 이력 플롯"""
+        if 'optimization_history' not in optimization_results:
+            return go.Figure()
+        
+        history = optimization_results['optimization_history']
+        
+        fig = go.Figure()
+        
+        # 목적 함수 값 추이
+        fig.add_trace(go.Scatter(
+            x=list(range(len(history))),
+            y=[h['value'] for h in history],
+            mode='lines+markers',
+            name='목적 함수 값',
+            line=dict(color='blue', width=2)
+        ))
+        
+        # 최적값 추이
+        best_values = []
+        current_best = float('inf')
+        
+        for h in history:
+            current_best = min(current_best, h['value'])
+            best_values.append(current_best)
+        
+        fig.add_trace(go.Scatter(
+            x=list(range(len(history))),
+            y=best_values,
+            mode='lines',
+            name='최적값',
+            line=dict(color='red', width=2, dash='dash')
+        ))
+        
+        fig.update_layout(
+            title="최적화 수렴 이력",
+            xaxis_title="반복 횟수",
+            yaxis_title="목적 함수 값",
+            hovermode='x unified',
+            template='plotly_white'
+        )
+        
+        return fig
+    
+    def create_3d_molecule_view(self, smiles: str = None, sdf_file: str = None) -> str:
+        """3D 분자 시각화"""
+        if not PY3DMOL_AVAILABLE:
+            return "<p>3D 분자 시각화를 위해 py3Dmol 라이브러리가 필요합니다.</p>"
+        
+        if not RDKIT_AVAILABLE:
+            return "<p>분자 처리를 위해 RDKit 라이브러리가 필요합니다.</p>"
+        
+        # 분자 생성
+        if smiles:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                return "<p>유효하지 않은 SMILES 문자열입니다.</p>"
+            
+            # 3D 좌표 생성
+            mol = Chem.AddHs(mol)
+            AllChem.EmbedMolecule(mol, randomSeed=42)
+            AllChem.MMFFOptimizeMolecule(mol)
+            
+            # SDF 형식으로 변환
+            mol_block = Chem.MolToMolBlock(mol)
+        
+        elif sdf_file:
+            with open(sdf_file, 'r') as f:
+                mol_block = f.read()
+        
+        else:
+            return "<p>SMILES 또는 SDF 파일이 필요합니다.</p>"
+        
+        # 3D 뷰어 생성
+        viewer = py3Dmol.view(width=800, height=600)
+        viewer.addModel(mol_block, 'sdf')
+        viewer.setStyle({'stick': {}})
+        viewer.setBackgroundColor('white')
+        viewer.zoomTo()
+        
+        return viewer.render()
 
