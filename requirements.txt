@@ -13,7 +13,7 @@ xgboost>=2.0.0
 lightgbm>=4.0.0
 statsmodels>=0.14.0
 optuna>=3.4.0
-shap>=0.43.0
+shap>=0.48.0
 
 # ==================== Streamlit 확장 ====================
 streamlit-option-menu>=0.3.6
