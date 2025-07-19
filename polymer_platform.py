@@ -273,7 +273,36 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 from streamlit_drawable_canvas import st_canvas
 from streamlit_ace import st_ace
-from streamlit_aggrid import AgGrid, GridOptionsBuilder
+try:
+    from streamlit_aggrid import AgGrid, GridOptionsBuilder
+    AGGRID_AVAILABLE = True
+except ImportError:
+    try:
+        # 새로운 버전의 import 방식 시도
+        from st_aggrid import AgGrid, GridOptionsBuilder
+        AGGRID_AVAILABLE = True
+    except ImportError:
+        AGGRID_AVAILABLE = False
+        # AgGrid 대체 구현
+        class AgGrid:
+            def __init__(self, *args, **kwargs):
+                st.warning("streamlit-aggrid를 사용할 수 없습니다. 기본 데이터프레임으로 표시합니다.")
+                if args and isinstance(args[0], pd.DataFrame):
+                    st.dataframe(args[0], use_container_width=True)
+        
+        class GridOptionsBuilder:
+            @staticmethod
+            def from_dataframe(df):
+                return GridOptionsBuilder()
+            
+            def configure_pagination(self, *args, **kwargs):
+                return self
+            
+            def configure_selection(self, *args, **kwargs):
+                return self
+            
+            def build(self):
+                return {}
 from streamlit_elements import elements, mui, html
 from streamlit_timeline import timeline
 from streamlit_folium import folium_static
