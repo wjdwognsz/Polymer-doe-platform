@@ -216,7 +216,8 @@ from scipy.stats import (
 from scipy.optimize import minimize, differential_evolution, dual_annealing
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
-from sklearn.decomposition import PCA, ICA, NMF
+#from sklearn.decomposition import PCA, ICA, NMF
+from sklearn.decomposition import PCA, FastICA, NMF
 from sklearn.manifold import TSNE, MDS
 from sklearn.model_selection import (
     train_test_split, cross_val_score, KFold, 
