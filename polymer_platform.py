@@ -7424,7 +7424,7 @@ class DatabaseIntegrationManager:
 # Polymer-doe-platform - Part 8
 # ==================== 데이터베이스 클라이언트 구현 ====================
 class BaseDBClient:
-    """모든 데이터베이스 클라이언트의 기본 클래스"""
+    """데이터베이스 클라이언트 기본 클래스"""
     
     def __init__(self, name: str, base_url: str, requires_auth: bool = False):
         self.name = name
@@ -7458,17 +7458,46 @@ class BaseDBClient:
     
     async def _get_auth_credentials(self) -> Optional[Dict]:
         """인증 정보 가져오기"""
-        # Streamlit secrets에서 가져오기
-        try:
-            if self.name == 'materials_project':
-                return {'api_key': st.secrets.get('MATERIALS_PROJECT_API_KEY')}
-            elif self.name == 'protocols_io':
-                return {'token': st.secrets.get('PROTOCOLS_IO_TOKEN')}
-            elif self.name == 'github':
-                return {'token': st.secrets.get('GITHUB_TOKEN')}
-            # 추가 데이터베이스 인증 정보...
-        except Exception:
+        global api_key_manager
+        
+        if not api_key_manager:
             return None
+        
+        # API 키 매핑
+        key_mapping = {
+            'materials_project': 'materials_project',
+            'protocols_io': 'protocols_io',
+            'github': 'github',
+            'zenodo': 'zenodo',
+            'figshare': 'figshare',
+            'materials_commons': 'materials_commons',
+            'chemspider': 'chemspider',
+            'polyinfo': 'polymer_database'  # PoLyInfo는 polymer_database로 저장됨
+        }
+        
+        api_key_id = key_mapping.get(self.name)
+        if api_key_id and api_key_manager.is_key_set(api_key_id):
+            key = api_key_manager.get_key(api_key_id)
+            
+            # 각 API별 인증 정보 형식
+            if self.name == 'materials_project':
+                return {'api_key': key}
+            elif self.name == 'github':
+                return {'token': key}
+            elif self.name == 'zenodo':
+                return {'access_token': key}
+            elif self.name == 'figshare':
+                return {'token': key}
+            elif self.name == 'protocols_io':
+                return {'token': key}
+            elif self.name == 'materials_commons':
+                return {'api_key': key}
+            elif self.name == 'chemspider':
+                return {'api_key': key}
+            elif self.name == 'polyinfo':
+                return {'api_key': key}
+        
+        return None
     
     async def _test_connection(self):
         """연결 테스트 (하위 클래스에서 구현)"""
