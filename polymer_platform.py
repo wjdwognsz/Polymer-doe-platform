@@ -6591,17 +6591,25 @@ class MultiAIOrchestrator:
     """다중 AI 엔진을 통합 관리하는 오케스트레이터"""
     
     def __init__(self):
-        # AI 엔진 초기화 (확장된 버전)
-        self.engines = {
-            'openai': OpenAIEngine(),
-            'gemini': GeminiEngine(),
-            'anthropic': AnthropicEngine(),
-            'groq': GroqEngine(),
-            'grok': GrokEngine(),           # 추가
-            'sambanova': SambaNovaEngine(), # 추가
-            'deepseek': DeepSeekEngine(),   # 추가
-            'huggingface': HuggingFaceEngine()  # 추가
+        self.engines = {}
+    
+        # 각 엔진을 안전하게 초기화
+        engine_classes = {
+            'openai': lambda: OpenAIEngine(),
+            'gemini': lambda: GeminiEngine(),
+            'anthropic': lambda: AnthropicEngine(),
+            'groq': lambda: GroqEngine(),
+            'grok': lambda: GrokEngine(),
+            'sambanova': lambda: SambaNovaEngine(),
+            'deepseek': lambda: DeepSeekEngine(),
+            'huggingface': lambda: HuggingFaceEngine()
         }
+    
+        for name, engine_factory in engine_classes.items():
+            try:
+                self.engines[name] = engine_factory()
+            except Exception as e:
+                logger.warning(f"{name} 엔진 생성 실패: {e}")
         
         # 사용 가능한 엔진 확인
         self.available_engines = {}
