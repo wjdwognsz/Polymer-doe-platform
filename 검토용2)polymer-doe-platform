@@ -1,3 +1,4 @@
+# Polymer-doe-platform - Part 1
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -533,6 +534,7 @@ class AnalysisType(Enum):
     TIME_SERIES = "시계열분석"
     MACHINE_LEARNING = "기계학습"
 
+# Polymer-doe-platform - Part 2
 # ==================== 타입 정의 ====================
 T = TypeVar('T')
 FactorType = Union[float, int, str, bool]
@@ -1419,6 +1421,7 @@ class ConfigManager:
 # 전역 설정 인스턴스
 config_manager = ConfigManager()
 
+# Polymer-doe-platform - Part 3
 # ==================== 이벤트 시스템 ====================
 class EventType(Enum):
     """이벤트 유형"""
@@ -2538,6 +2541,7 @@ class APIKeyManager:
             logger.error(f"API 호출 실패 ({api_id}): {e}")
             raise
 
+# Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
 class RateLimiter:
     """API 호출 속도 제한기"""
@@ -3557,6 +3561,7 @@ class MLPredictionSystem:
             logger.warning("Optuna 라이브러리가 설치되지 않았습니다.")
             return {}
 
+# Polymer-doe-platform - Part 5
 # ==================== 통계 분석 엔진 (확장) ====================
 class AdvancedStatisticalAnalyzer:
     """고급 통계 분석 엔진"""
@@ -5223,3 +5228,1428 @@ class EnhancedVisualizationEngine:
         
         return viewer.render()
 
+# Polymer-doe-platform - Part 6
+# ==================== AI 엔진 통합 시스템 ====================
+class BaseAIEngine:
+    """모든 AI 엔진의 기본 클래스"""
+    
+    def __init__(self, name: str, api_key_id: str):
+        self.name = name
+        self.api_key_id = api_key_id
+        self.api_key = None
+        self.client = None
+        self.available = False
+        self.rate_limiter = None
+        
+    def initialize(self):
+        """API 키 확인 및 클라이언트 초기화"""
+        self.api_key = api_key_manager.get_key(self.api_key_id)
+        if not self.api_key:
+            logger.warning(f"{self.name} API key not found")
+            return False
+        
+        # Rate limiter 설정
+        if self.api_key_id in api_key_manager.rate_limiters:
+            self.rate_limiter = api_key_manager.rate_limiters[self.api_key_id]
+        
+        return True
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        """비동기 생성 (하위 클래스에서 구현)"""
+        raise NotImplementedError
+    
+    def generate(self, prompt: str, **kwargs) -> AIResponse:
+        """동기 생성 래퍼"""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(self.generate_async(prompt, **kwargs))
+        except Exception as e:
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
+
+class OpenAIEngine(BaseAIEngine):
+    """OpenAI GPT 엔진"""
+    
+    def __init__(self):
+        super().__init__("OpenAI", "openai")
+        self.models = ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo-preview']
+        
+    def initialize(self):
+        if super().initialize() and OPENAI_AVAILABLE:
+            try:
+                self.client = AsyncOpenAI(api_key=self.api_key)
+                self.available = True
+                return True
+            except Exception as e:
+                logger.error(f"OpenAI 초기화 실패: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        if not self.available:
+            return AIResponse(success=False, content="", model=self.name, error="Engine not available")
+        
+        # Rate limiting
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+        
+        try:
+            start_time = time.time()
+            
+            response = await self.client.chat.completions.create(
+                model=kwargs.get("model", "gpt-3.5-turbo"),
+                messages=[
+                    {"role": "system", "content": kwargs.get("system_prompt", 
+                        "당신은 고분자 실험 설계 전문가입니다. 과학적이고 정확한 답변을 제공하세요.")},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", 2000),
+                top_p=kwargs.get("top_p", 0.9),
+                frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+                presence_penalty=kwargs.get("presence_penalty", 0.0)
+            )
+            
+            response_time = time.time() - start_time
+            content = response.choices[0].message.content
+            tokens = response.usage.total_tokens if response.usage else 0
+            
+            # API 모니터 업데이트
+            api_monitor.update_status(
+                self.api_key_id, 
+                APIStatus.ONLINE, 
+                response_time,
+                tokens={'input': response.usage.prompt_tokens, 'output': response.usage.completion_tokens}
+            )
+            
+            return AIResponse(
+                success=True,
+                content=content,
+                model=response.model,
+                tokens_used=tokens,
+                response_time=response_time,
+                confidence=0.9,
+                metadata={'finish_reason': response.choices[0].finish_reason}
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
+
+class GeminiEngine(BaseAIEngine):
+    """Google Gemini 엔진"""
+    
+    def __init__(self):
+        super().__init__("Gemini", "gemini")
+        self.models = ['gemini-pro', 'gemini-pro-vision']
+        
+    def initialize(self):
+        if super().initialize() and GEMINI_AVAILABLE:
+            try:
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel('gemini-pro')
+                self.available = True
+                return True
+            except Exception as e:
+                logger.error(f"Gemini 초기화 실패: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        if not self.available:
+            return AIResponse(success=False, content="", model=self.name, error="Engine not available")
+        
+        # Rate limiting
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+        
+        try:
+            start_time = time.time()
+            
+            # 시스템 프롬프트 추가
+            full_prompt = f"{kwargs.get('system_prompt', '')}\\n\\n{prompt}"
+            
+            response = await asyncio.to_thread(
+                self.client.generate_content,
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=kwargs.get("temperature", 0.7),
+                    top_p=kwargs.get("top_p", 0.95),
+                    top_k=kwargs.get("top_k", 40),
+                    max_output_tokens=kwargs.get("max_tokens", 2000),
+                )
+            )
+            
+            response_time = time.time() - start_time
+            
+            # 토큰 수 추정 (Gemini는 정확한 토큰 수를 제공하지 않음)
+            tokens = len(full_prompt.split()) + len(response.text.split())
+            
+            api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+            
+            return AIResponse(
+                success=True,
+                content=response.text,
+                model="gemini-pro",
+                tokens_used=tokens,
+                response_time=response_time,
+                confidence=0.85
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
+
+class AnthropicEngine(BaseAIEngine):
+    """Anthropic Claude 엔진"""
+    
+    def __init__(self):
+        super().__init__("Claude", "anthropic")
+        self.models = ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']
+        
+    def initialize(self):
+        if super().initialize() and ANTHROPIC_AVAILABLE:
+            try:
+                self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
+                self.available = True
+                return True
+            except Exception as e:
+                logger.error(f"Anthropic 초기화 실패: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        if not self.available:
+            return AIResponse(success=False, content="", model=self.name, error="Engine not available")
+        
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+        
+        try:
+            start_time = time.time()
+            
+            response = await self.client.messages.create(
+                model=kwargs.get("model", "claude-3-sonnet-20240229"),
+                max_tokens=kwargs.get("max_tokens", 2000),
+                temperature=kwargs.get("temperature", 0.7),
+                system=kwargs.get("system_prompt", "당신은 고분자 실험 설계 전문가입니다."),
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            response_time = time.time() - start_time
+            content = response.content[0].text if response.content else ""
+            
+            api_monitor.update_status(
+                self.api_key_id, 
+                APIStatus.ONLINE, 
+                response_time,
+                tokens={'input': response.usage.input_tokens, 'output': response.usage.output_tokens}
+            )
+            
+            return AIResponse(
+                success=True,
+                content=content,
+                model=response.model,
+                tokens_used=response.usage.input_tokens + response.usage.output_tokens,
+                response_time=response_time,
+                confidence=0.95
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
+
+class GroqEngine(BaseAIEngine):
+    """Groq 초고속 엔진"""
+    
+    def __init__(self):
+        super().__init__("Groq", "groq")
+        self.models = ['mixtral-8x7b-32768', 'llama2-70b-4096']
+        
+    def initialize(self):
+        if super().initialize() and GROQ_AVAILABLE:
+            try:
+                self.client = Groq(api_key=self.api_key)
+                self.available = True
+                return True
+            except Exception as e:
+                logger.error(f"Groq 초기화 실패: {e}")
+                return False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        if not self.available:
+            return AIResponse(success=False, content="", model=self.name, error="Engine not available")
+        
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+        
+        try:
+            start_time = time.time()
+            
+            response = await asyncio.to_thread(
+                self.client.chat.completions.create,
+                model=kwargs.get("model", "mixtral-8x7b-32768"),
+                messages=[
+                    {"role": "system", "content": kwargs.get("system_prompt", "You are a polymer experiment design expert.")},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", 2000)
+            )
+            
+            response_time = time.time() - start_time
+            
+            api_monitor.update_status(self.api_key_id, APIStatus.ONLINE, response_time)
+            
+            return AIResponse(
+                success=True,
+                content=response.choices[0].message.content,
+                model=response.model,
+                response_time=response_time,
+                confidence=0.8
+            )
+            
+        except Exception as e:
+            api_monitor.update_status(self.api_key_id, APIStatus.ERROR, error_msg=str(e))
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
+
+# ==================== 다중 AI 오케스트레이터 ====================
+class MultiAIOrchestrator:
+    """다중 AI 엔진을 통합 관리하는 오케스트레이터"""
+    
+    def __init__(self):
+        # AI 엔진 초기화
+        self.engines = {
+            'openai': OpenAIEngine(),
+            'gemini': GeminiEngine(),
+            'anthropic': AnthropicEngine(),
+            'groq': GroqEngine()
+        }
+        
+        # 사용 가능한 엔진 확인
+        self.available_engines = {}
+        self._initialize_engines()
+        
+        # AI 역할 정의
+        self.ai_roles = {
+            'openai': {
+                'strength': '범용 언어 이해, 코드 생성, 복잡한 추론',
+                'priority': 1,
+                'specialties': ['코드', '분석', '창의성']
+            },
+            'gemini': {
+                'strength': '과학적 분석, 한국어 처리, 긴 컨텍스트',
+                'priority': 1,
+                'specialties': ['과학', '한국어', '멀티모달']
+            },
+            'anthropic': {
+                'strength': '안전성, 윤리적 추론, 상세한 설명',
+                'priority': 1,
+                'specialties': ['안전성', '설명', '정확성']
+            },
+            'groq': {
+                'strength': '초고속 응답, 실시간 처리',
+                'priority': 2,
+                'specialties': ['속도', '실시간', '간단한 작업']
+            }
+        }
+        
+        # 합의 전략
+        self.consensus_strategies = {
+            'majority': self._majority_consensus,
+            'weighted': self._weighted_consensus,
+            'best_quality': self._best_quality_consensus,
+            'ensemble': self._ensemble_consensus
+        }
+    
+    def _initialize_engines(self):
+        """사용 가능한 AI 엔진 초기화"""
+        for engine_id, engine in self.engines.items():
+            if engine.initialize():
+                self.available_engines[engine_id] = engine
+                logger.info(f"✅ {engine.name} 엔진 활성화")
+            else:
+                logger.info(f"❌ {engine.name} 엔진 비활성화")
+    
+    async def generate_with_single_ai(self, 
+                                    prompt: str, 
+                                    engine_id: str = None,
+                                    **kwargs) -> AIResponse:
+        """단일 AI로 응답 생성"""
+        if not self.available_engines:
+            return AIResponse(
+                success=False,
+                content="사용 가능한 AI 엔진이 없습니다.",
+                model="none",
+                error="No available engines"
+            )
+        
+        # 엔진 선택
+        if engine_id and engine_id in self.available_engines:
+            engine = self.available_engines[engine_id]
+        else:
+            # 우선순위가 가장 높은 엔진 선택
+            engine_id = min(
+                self.available_engines.keys(),
+                key=lambda x: self.ai_roles[x]['priority']
+            )
+            engine = self.available_engines[engine_id]
+        
+        return await engine.generate_async(prompt, **kwargs)
+    
+    async def generate_with_consensus(self, 
+                                    prompt: str, 
+                                    strategy: str = 'weighted',
+                                    min_engines: int = 2,
+                                    **kwargs) -> Dict[str, Any]:
+        """다중 AI 합의를 통한 응답 생성"""
+        if len(self.available_engines) < min_engines:
+            single_response = await self.generate_with_single_ai(prompt, **kwargs)
+            return {
+                'success': single_response.success,
+                'consensus': single_response.content,
+                'individual_responses': {list(self.available_engines.keys())[0]: single_response},
+                'consensus_method': 'single',
+                'confidence': single_response.confidence
+            }
+        
+        # 병렬로 모든 AI에게 질의
+        tasks = []
+        engine_names = []
+        
+        for engine_id, engine in self.available_engines.items():
+            tasks.append(engine.generate_async(prompt, **kwargs))
+            engine_names.append(engine_id)
+        
+        # 모든 응답 수집
+        responses = await asyncio.gather(*tasks)
+        
+        results = {}
+        successful_responses = {}
+        
+        for engine_id, response in zip(engine_names, responses):
+            results[engine_id] = response
+            if response.success:
+                successful_responses[engine_id] = response
+        
+        if not successful_responses:
+            return {
+                'success': False,
+                'consensus': '',
+                'individual_responses': results,
+                'error': '모든 AI 엔진이 실패했습니다.'
+            }
+        
+        # 합의 도출
+        consensus_func = self.consensus_strategies.get(strategy, self._weighted_consensus)
+        consensus_result = await consensus_func(successful_responses, prompt)
+        
+        return {
+            'success': True,
+            'consensus': consensus_result['content'],
+            'individual_responses': results,
+            'consensus_method': strategy,
+            'confidence': consensus_result['confidence'],
+            'participating_engines': list(successful_responses.keys())
+        }
+    
+    async def _majority_consensus(self, responses: Dict[str, AIResponse], 
+                                original_prompt: str) -> Dict[str, Any]:
+        """다수결 합의"""
+        # 응답을 주요 포인트로 분해
+        key_points = {}
+        
+        for engine_id, response in responses.items():
+            # 간단한 문장 분리
+            sentences = response.content.split('.')
+            for sentence in sentences:
+                if len(sentence.strip()) > 10:
+                    key_points[sentence.strip()] = key_points.get(sentence.strip(), 0) + 1
+        
+        # 가장 많이 언급된 포인트들 선택
+        sorted_points = sorted(key_points.items(), key=lambda x: x[1], reverse=True)
+        consensus_points = [point for point, count in sorted_points if count >= len(responses) / 2]
+        
+        consensus_content = '. '.join(consensus_points[:10]) + '.'
+        
+        return {
+            'content': consensus_content,
+            'confidence': len(consensus_points) / len(sorted_points) if sorted_points else 0
+        }
+    
+    async def _weighted_consensus(self, responses: Dict[str, AIResponse], 
+                                original_prompt: str) -> Dict[str, Any]:
+        """가중치 기반 합의"""
+        # 각 AI의 우선순위와 신뢰도를 고려
+        weighted_responses = []
+        total_weight = 0
+        
+        for engine_id, response in responses.items():
+            priority = self.ai_roles[engine_id]['priority']
+            weight = (1 / priority) * response.confidence
+            weighted_responses.append((response, weight))
+            total_weight += weight
+        
+        # 가장 높은 가중치를 가진 응답 선택
+        best_response = max(weighted_responses, key=lambda x: x[1])
+        
+        # 다른 응답들의 주요 포인트 추가
+        additional_points = []
+        for response, weight in weighted_responses:
+            if response != best_response[0]:
+                # 첫 문장 추출
+                first_sentence = response.content.split('.')[0]
+                if len(first_sentence) > 10:
+                    additional_points.append(first_sentence)
+        
+        consensus_content = best_response[0].content
+        if additional_points:
+            consensus_content += "\\n\\n추가 관점:\\n" + "\\n".join(f"- {point}" for point in additional_points[:3])
+        
+        return {
+            'content': consensus_content,
+            'confidence': best_response[1] / total_weight if total_weight > 0 else 0
+        }
+    
+    async def _best_quality_consensus(self, responses: Dict[str, AIResponse], 
+                                    original_prompt: str) -> Dict[str, Any]:
+        """품질 기반 선택"""
+        # 응답 품질 평가 기준
+        quality_scores = {}
+        
+        for engine_id, response in responses.items():
+            score = 0
+            
+            # 길이 점수 (적절한 길이)
+            length = len(response.content)
+            if 100 <= length <= 2000:
+                score += 0.3
+            elif 50 <= length < 100 or 2000 < length <= 3000:
+                score += 0.2
+            else:
+                score += 0.1
+            
+            # 구조화 점수 (문단, 리스트 등)
+            if '\\n' in response.content:
+                score += 0.2
+            if any(marker in response.content for marker in ['1.', '2.', '•', '-']):
+                score += 0.2
+            
+            # 전문 용어 사용
+            technical_terms = ['polymer', '고분자', 'experiment', '실험', 'design', '설계']
+            term_count = sum(1 for term in technical_terms if term.lower() in response.content.lower())
+            score += min(term_count * 0.1, 0.3)
+            
+            quality_scores[engine_id] = score * response.confidence
+        
+        # 최고 품질 응답 선택
+        best_engine = max(quality_scores.items(), key=lambda x: x[1])[0]
+        
+        return {
+            'content': responses[best_engine].content,
+            'confidence': quality_scores[best_engine]
+        }
+    
+    async def _ensemble_consensus(self, responses: Dict[str, AIResponse], 
+                                original_prompt: str) -> Dict[str, Any]:
+        """앙상블 합의 (통합)"""
+        # 모든 응답을 섹션별로 구조화
+        sections = {
+            'introduction': [],
+            'main_points': [],
+            'technical_details': [],
+            'recommendations': [],
+            'conclusion': []
+        }
+        
+        # 각 응답을 분석하여 섹션 분류
+        for engine_id, response in responses.items():
+            content = response.content
+            paragraphs = content.split('\\n\\n')
+            
+            for i, para in enumerate(paragraphs):
+                if i == 0:
+                    sections['introduction'].append(para)
+                elif any(word in para.lower() for word in ['recommend', '추천', '제안']):
+                    sections['recommendations'].append(para)
+                elif any(word in para.lower() for word in ['결론', 'conclusion', '요약']):
+                    sections['conclusion'].append(para)
+                elif len(para) > 100:
+                    sections['technical_details'].append(para)
+                else:
+                    sections['main_points'].append(para)
+        
+        # 각 섹션에서 최적 내용 선택
+        ensemble_content = []
+        
+        # 도입부 (가장 포괄적인 것 선택)
+        if sections['introduction']:
+            ensemble_content.append(max(sections['introduction'], key=len))
+        
+        # 주요 포인트 (중복 제거 후 통합)
+        if sections['main_points']:
+            unique_points = list(set(sections['main_points']))
+            ensemble_content.extend(unique_points[:3])
+        
+        # 기술적 세부사항 (가장 상세한 것)
+        if sections['technical_details']:
+            ensemble_content.append(max(sections['technical_details'], key=len))
+        
+        # 권장사항 (모두 포함)
+        if sections['recommendations']:
+            ensemble_content.append("권장사항:")
+            for rec in set(sections['recommendations'])[:3]:
+                ensemble_content.append(f"- {rec}")
+        
+        # 결론 (가장 간결한 것)
+        if sections['conclusion']:
+            ensemble_content.append(min(sections['conclusion'], key=len))
+        
+        final_content = '\\n\\n'.join(ensemble_content)
+        
+        return {
+            'content': final_content,
+            'confidence': sum(r.confidence for r in responses.values()) / len(responses)
+        }
+    
+    async def specialized_generation(self, 
+                                   prompt: str, 
+                                   task_type: str,
+                                   **kwargs) -> AIResponse:
+        """작업 유형에 따른 특화 생성"""
+        task_engine_map = {
+            'code': 'openai',
+            'korean': 'gemini',
+            'scientific': 'anthropic',
+            'fast': 'groq',
+            'creative': 'openai',
+            'analysis': 'anthropic',
+            'translation': 'gemini'
+        }
+        
+        preferred_engine = task_engine_map.get(task_type)
+        
+        if preferred_engine and preferred_engine in self.available_engines:
+            return await self.available_engines[preferred_engine].generate_async(prompt, **kwargs)
+        
+        # 대체 엔진 사용
+        return await self.generate_with_single_ai(prompt, **kwargs)
+    
+    async def iterative_refinement(self, 
+                                 initial_prompt: str,
+                                 refinement_steps: int = 3,
+                                 **kwargs) -> Dict[str, Any]:
+        """반복적 개선을 통한 응답 생성"""
+        current_response = await self.generate_with_single_ai(initial_prompt, **kwargs)
+        
+        if not current_response.success:
+            return {
+                'success': False,
+                'final_response': current_response,
+                'iterations': []
+            }
+        
+        iterations = [current_response]
+        
+        for step in range(refinement_steps):
+            # 개선 프롬프트 생성
+            refinement_prompt = f"""
+            다음 응답을 검토하고 개선해주세요:
+            
+            {current_response.content}
+            
+            개선 사항:
+            1. 더 구체적이고 실용적인 정보 추가
+            2. 모호한 부분 명확히
+            3. 고분자 실험 설계의 맥락에서 더 적절한 예시 제공
+            """
+            
+            # 다른 AI로 개선
+            available_engines = list(self.available_engines.keys())
+            if len(available_engines) > 1:
+                # 이전과 다른 엔진 선택
+                current_engine = available_engines[step % len(available_engines)]
+                refinement_response = await self.available_engines[current_engine].generate_async(
+                    refinement_prompt, **kwargs
+                )
+            else:
+                refinement_response = await self.generate_with_single_ai(
+                    refinement_prompt, **kwargs
+                )
+            
+            if refinement_response.success:
+                current_response = refinement_response
+                iterations.append(refinement_response)
+        
+        return {
+            'success': True,
+            'final_response': current_response,
+            'iterations': iterations,
+            'improvement_rate': self._calculate_improvement_rate(iterations)
+        }
+    
+    def _calculate_improvement_rate(self, iterations: List[AIResponse]) -> float:
+        """개선율 계산"""
+        if len(iterations) < 2:
+            return 0.0
+        
+        # 간단한 메트릭: 응답 길이와 구조화 정도
+        initial_score = len(iterations[0].content) + iterations[0].content.count('\\n') * 10
+        final_score = len(iterations[-1].content) + iterations[-1].content.count('\\n') * 10
+        
+        return (final_score - initial_score) / initial_score if initial_score > 0 else 0.0
+
+# ==================== 실시간 협업 시스템 ====================
+class RealTimeCollaborationSystem:
+    """실시간 협업 기능"""
+    
+    def __init__(self, db_manager: DatabaseManager):
+        self.db = db_manager
+        self.collaboration_manager = CollaborationManager(db_manager)
+        self.active_sessions = {}
+        self.message_queue = defaultdict(deque)
+        self.presence_tracker = defaultdict(dict)
+        
+    def create_session(self, project_id: str, user_id: str) -> str:
+        """협업 세션 생성"""
+        session_id = generate_unique_id("SESSION")
+        
+        self.active_sessions[session_id] = {
+            'project_id': project_id,
+            'users': [user_id],
+            'created_at': datetime.now(),
+            'chat_history': [],
+            'shared_cursors': {},
+            'locked_elements': {}
+        }
+        
+        self.collaboration_manager.join_session(project_id, user_id)
+        
+        # 세션 생성 이벤트
+        event_bus.publish(Event(
+            type=EventType.USER_ACTION,
+            timestamp=datetime.now(),
+            data={
+                'action': 'session_created',
+                'session_id': session_id,
+                'project_id': project_id
+            },
+            user_id=user_id,
+            session_id=session_id
+        ))
+        
+        return session_id
+    
+    def join_session(self, session_id: str, user_id: str) -> bool:
+        """세션 참가"""
+        if session_id not in self.active_sessions:
+            return False
+        
+        session = self.active_sessions[session_id]
+        
+        if user_id not in session['users']:
+            session['users'].append(user_id)
+        
+        self.collaboration_manager.join_session(session['project_id'], user_id)
+        
+        # 다른 사용자에게 알림
+        self._broadcast_to_session(session_id, {
+            'type': 'user_joined',
+            'user_id': user_id,
+            'timestamp': datetime.now().isoformat()
+        }, exclude_user=user_id)
+        
+        return True
+    
+    def leave_session(self, session_id: str, user_id: str):
+        """세션 나가기"""
+        if session_id not in self.active_sessions:
+            return
+        
+        session = self.active_sessions[session_id]
+        
+        if user_id in session['users']:
+            session['users'].remove(user_id)
+        
+        # 잠긴 요소 해제
+        for element_id, lock_user in list(session['locked_elements'].items()):
+            if lock_user == user_id:
+                del session['locked_elements'][element_id]
+        
+        # 커서 제거
+        if user_id in session['shared_cursors']:
+            del session['shared_cursors'][user_id]
+        
+        self.collaboration_manager.leave_session(session['project_id'], user_id)
+        
+        # 다른 사용자에게 알림
+        self._broadcast_to_session(session_id, {
+            'type': 'user_left',
+            'user_id': user_id,
+            'timestamp': datetime.now().isoformat()
+        }, exclude_user=user_id)
+        
+        # 빈 세션 정리
+        if not session['users']:
+            del self.active_sessions[session_id]
+    
+    def send_message(self, session_id: str, user_id: str, message: str) -> bool:
+        """채팅 메시지 전송"""
+        if session_id not in self.active_sessions:
+            return False
+        
+        session = self.active_sessions[session_id]
+        
+        chat_message = {
+            'id': generate_unique_id("MSG"),
+            'user_id': user_id,
+            'message': message,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        session['chat_history'].append(chat_message)
+        
+        # 최근 100개 메시지만 유지
+        if len(session['chat_history']) > 100:
+            session['chat_history'] = session['chat_history'][-100:]
+        
+        # 다른 사용자에게 전송
+        self._broadcast_to_session(session_id, {
+            'type': 'chat_message',
+            'data': chat_message
+        })
+        
+        return True
+    
+    def update_cursor(self, session_id: str, user_id: str, 
+                     position: Dict[str, float], element_id: str = None):
+        """커서 위치 업데이트"""
+        if session_id not in self.active_sessions:
+            return
+        
+        session = self.active_sessions[session_id]
+        
+        session['shared_cursors'][user_id] = {
+            'position': position,
+            'element_id': element_id,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # 다른 사용자에게 전송
+        self._broadcast_to_session(session_id, {
+            'type': 'cursor_update',
+            'user_id': user_id,
+            'data': session['shared_cursors'][user_id]
+        }, exclude_user=user_id)
+    
+    def lock_element(self, session_id: str, user_id: str, element_id: str) -> bool:
+        """요소 잠금"""
+        if session_id not in self.active_sessions:
+            return False
+        
+        session = self.active_sessions[session_id]
+        
+        # 이미 잠겨있는지 확인
+        if element_id in session['locked_elements']:
+            return session['locked_elements'][element_id] == user_id
+        
+        session['locked_elements'][element_id] = user_id
+        
+        # 다른 사용자에게 알림
+        self._broadcast_to_session(session_id, {
+            'type': 'element_locked',
+            'element_id': element_id,
+            'user_id': user_id
+        }, exclude_user=user_id)
+        
+        return True
+    
+    def unlock_element(self, session_id: str, user_id: str, element_id: str) -> bool:
+        """요소 잠금 해제"""
+        if session_id not in self.active_sessions:
+            return False
+        
+        session = self.active_sessions[session_id]
+        
+        # 잠금 소유자 확인
+        if element_id in session['locked_elements'] and \
+           session['locked_elements'][element_id] == user_id:
+            del session['locked_elements'][element_id]
+            
+            # 다른 사용자에게 알림
+            self._broadcast_to_session(session_id, {
+                'type': 'element_unlocked',
+                'element_id': element_id,
+                'user_id': user_id
+            })
+            
+            return True
+        
+        return False
+    
+    def sync_data_change(self, session_id: str, user_id: str, 
+                        change_type: str, change_data: Dict[str, Any]):
+        """데이터 변경 동기화"""
+        if session_id not in self.active_sessions:
+            return
+        
+        # 변경 사항 기록
+        change_event = {
+            'id': generate_unique_id("CHANGE"),
+            'user_id': user_id,
+            'type': change_type,
+            'data': change_data,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # 다른 사용자에게 전송
+        self._broadcast_to_session(session_id, {
+            'type': 'data_change',
+            'change': change_event
+        }, exclude_user=user_id)
+        
+        # 데이터베이스에 기록
+        self.db.execute_query("""
+            INSERT INTO collaborations 
+            (id, project_id, type, user_id, content, created_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            change_event['id'],
+            self.active_sessions[session_id]['project_id'],
+            'data_change',
+            user_id,
+            json.dumps(change_data),
+            datetime.now(),
+            json.dumps({'change_type': change_type})
+        ))
+    
+    def _broadcast_to_session(self, session_id: str, message: Dict[str, Any], 
+                            exclude_user: str = None):
+        """세션 내 모든 사용자에게 메시지 전송"""
+        if session_id not in self.active_sessions:
+            return
+        
+        session = self.active_sessions[session_id]
+        
+        for user_id in session['users']:
+            if user_id != exclude_user:
+                self.message_queue[user_id].append(message)
+    
+    def get_pending_messages(self, user_id: str) -> List[Dict[str, Any]]:
+        """대기 중인 메시지 가져오기"""
+        messages = list(self.message_queue[user_id])
+        self.message_queue[user_id].clear()
+        return messages
+    
+    def get_session_info(self, session_id: str) -> Dict[str, Any]:
+        """세션 정보 조회"""
+        if session_id not in self.active_sessions:
+            return None
+        
+        session = self.active_sessions[session_id]
+        
+        return {
+            'session_id': session_id,
+            'project_id': session['project_id'],
+            'users': session['users'],
+            'created_at': session['created_at'].isoformat(),
+            'active_users': len(session['users']),
+            'locked_elements': list(session['locked_elements'].keys()),
+            'chat_history_length': len(session['chat_history'])
+        }
+
+# ==================== 보고서 생성 시스템 ====================
+class ReportGenerator:
+    """고급 보고서 생성기"""
+    
+    def __init__(self):
+        self.templates = self._load_templates()
+        self.ai_orchestrator = None
+        
+    def _load_templates(self) -> Dict[str, str]:
+        """보고서 템플릿 로드"""
+        return {
+            'experiment_plan': """
+# 고분자 실험 계획서
+
+## 1. 프로젝트 개요
+- **프로젝트명**: {project_name}
+- **작성일**: {date}
+- **책임자**: {owner}
+- **프로젝트 ID**: {project_id}
+
+## 2. 연구 배경 및 목적
+{background}
+
+### 2.1 연구 목표
+{objectives}
+
+### 2.2 기대 효과
+{expected_outcomes}
+
+## 3. 실험 설계
+### 3.1 설계 방법
+- **선택된 방법**: {design_method}
+- **설계 근거**: {design_rationale}
+
+### 3.2 실험 인자
+{factors_table}
+
+### 3.3 반응 변수
+{responses_table}
+
+### 3.4 실험 매트릭스
+{design_matrix}
+
+## 4. 실험 프로토콜
+### 4.1 재료 및 장비
+{materials_equipment}
+
+### 4.2 실험 절차
+{procedure}
+
+### 4.3 안전 고려사항
+{safety_considerations}
+
+## 5. 데이터 분석 계획
+{analysis_plan}
+
+## 6. 일정 및 마일스톤
+{timeline}
+
+## 7. 참고문헌
+{references}
+""",
+            
+            'results_report': """
+# 고분자 실험 결과 보고서
+
+## 1. 요약
+{executive_summary}
+
+## 2. 실험 개요
+- **프로젝트명**: {project_name}
+- **실험 기간**: {experiment_period}
+- **완료율**: {completion_rate}%
+
+## 3. 실험 결과
+### 3.1 원시 데이터
+{raw_data_summary}
+
+### 3.2 기술 통계
+{descriptive_statistics}
+
+### 3.3 주요 발견사항
+{key_findings}
+
+## 4. 통계 분석
+### 4.1 분산 분석 (ANOVA)
+{anova_results}
+
+### 4.2 회귀 분석
+{regression_results}
+
+### 4.3 반응표면 분석
+{rsm_results}
+
+## 5. 시각화
+{visualizations}
+
+## 6. 최적 조건
+{optimal_conditions}
+
+## 7. 결론 및 권장사항
+{conclusions}
+
+## 8. 향후 연구 방향
+{future_work}
+
+## 부록
+### A. 상세 데이터
+{detailed_data}
+
+### B. 통계 분석 상세
+{statistical_details}
+""",
+            
+            'technical_summary': """
+# 기술 요약서
+
+**프로젝트**: {project_name}  
+**날짜**: {date}  
+**작성자**: {author}
+
+## 핵심 요약
+{key_summary}
+
+## 주요 성과
+1. {achievement_1}
+2. {achievement_2}
+3. {achievement_3}
+
+## 기술적 세부사항
+{technical_details}
+
+## 권장사항
+{recommendations}
+
+## 다음 단계
+{next_steps}
+"""
+        }
+    
+    def set_ai_orchestrator(self, orchestrator: MultiAIOrchestrator):
+        """AI 오케스트레이터 설정"""
+        self.ai_orchestrator = orchestrator
+    
+    async def generate_report(self, 
+                            report_type: str,
+                            data: Dict[str, Any],
+                            language: str = 'ko',
+                            use_ai_enhancement: bool = True) -> str:
+        """보고서 생성"""
+        
+        # 템플릿 선택
+        template = self.templates.get(report_type, self.templates['technical_summary'])
+        
+        # 데이터 준비
+        report_data = self._prepare_report_data(report_type, data)
+        
+        # AI 강화 (선택적)
+        if use_ai_enhancement and self.ai_orchestrator:
+            report_data = await self._enhance_with_ai(report_type, report_data)
+        
+        # 템플릿 채우기
+        try:
+            report = template.format(**report_data)
+        except KeyError as e:
+            logger.warning(f"보고서 생성 중 누락된 데이터: {e}")
+            # 누락된 키를 빈 문자열로 처리
+            for key in self._extract_template_keys(template):
+                if key not in report_data:
+                    report_data[key] = "[데이터 없음]"
+            report = template.format(**report_data)
+        
+        # 번역 (필요시)
+        if language != 'ko' and translation_service.available:
+            report = translation_service.translate(report, target_lang=language)
+        
+        return report
+    
+    def _prepare_report_data(self, report_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """보고서 데이터 준비"""
+        report_data = {
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'project_name': data.get('project_info', {}).get('name', 'Unknown Project'),
+            'project_id': data.get('project_info', {}).get('id', 'N/A'),
+            'owner': data.get('project_info', {}).get('owner', 'Unknown'),
+            'author': data.get('author', data.get('project_info', {}).get('owner', 'Unknown'))
+        }
+        
+        if report_type == 'experiment_plan':
+            report_data.update(self._prepare_experiment_plan_data(data))
+        elif report_type == 'results_report':
+            report_data.update(self._prepare_results_report_data(data))
+        else:
+            report_data.update(self._prepare_summary_data(data))
+        
+        return report_data
+    
+    def _prepare_experiment_plan_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """실험 계획서 데이터 준비"""
+        plan_data = {}
+        
+        # 배경 및 목적
+        project_info = data.get('project_info', {})
+        plan_data['background'] = project_info.get('description', '프로젝트 설명이 제공되지 않았습니다.')
+        plan_data['objectives'] = '\\n'.join(f"- {obj}" for obj in project_info.get('objectives', []))
+        plan_data['expected_outcomes'] = self._generate_expected_outcomes(project_info)
+        
+        # 실험 설계
+        design_info = data.get('design_info', {})
+        plan_data['design_method'] = design_info.get('method', 'Unknown')
+        plan_data['design_rationale'] = design_info.get('rationale', '설계 근거가 제공되지 않았습니다.')
+        
+        # 인자 테이블
+        factors = data.get('factors', [])
+        factors_table = self._create_factors_table(factors)
+        plan_data['factors_table'] = factors_table
+        
+        # 반응 변수 테이블
+        responses = data.get('responses', [])
+        responses_table = self._create_responses_table(responses)
+        plan_data['responses_table'] = responses_table
+        
+        # 실험 매트릭스
+        design_matrix = data.get('design_matrix')
+        if design_matrix is not None:
+            plan_data['design_matrix'] = self._format_design_matrix(design_matrix)
+        else:
+            plan_data['design_matrix'] = "실험 설계 매트릭스가 아직 생성되지 않았습니다."
+        
+        # 기타 섹션
+        plan_data['materials_equipment'] = self._generate_materials_list(data)
+        plan_data['procedure'] = self._generate_procedure(data)
+        plan_data['safety_considerations'] = self._generate_safety_info(data)
+        plan_data['analysis_plan'] = self._generate_analysis_plan(data)
+        plan_data['timeline'] = self._generate_timeline(data)
+        plan_data['references'] = self._format_references(data.get('references', []))
+        
+        return plan_data
+    
+    def _prepare_results_report_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """결과 보고서 데이터 준비"""
+        results_data = {}
+        
+        # 요약
+        results_data['executive_summary'] = self._generate_executive_summary(data)
+        
+        # 실험 개요
+        experiment_data = data.get('experiment_data', {})
+        results_data['experiment_period'] = self._calculate_experiment_period(experiment_data)
+        results_data['completion_rate'] = experiment_data.get('progress', 0)
+        
+        # 결과 데이터
+        results = data.get('results', pd.DataFrame())
+        if not results.empty:
+            results_data['raw_data_summary'] = self._summarize_raw_data(results)
+        else:
+            results_data['raw_data_summary'] = "결과 데이터가 없습니다."
+        
+        # 통계 분석
+        analysis = data.get('analysis_results', {})
+        results_data['descriptive_statistics'] = self._format_descriptive_stats(
+            analysis.get('descriptive', {})
+        )
+        results_data['key_findings'] = self._extract_key_findings(analysis)
+        
+        # 상세 분석
+        results_data['anova_results'] = self._format_anova_results(
+            analysis.get('inferential', {})
+        )
+        results_data['regression_results'] = self._format_regression_results(
+            analysis.get('regression', {})
+        )
+        results_data['rsm_results'] = self._format_rsm_results(
+            analysis.get('regression', {})
+        )
+        
+        # 시각화
+        results_data['visualizations'] = self._prepare_visualizations(data)
+        
+        # 최적 조건
+        results_data['optimal_conditions'] = self._format_optimal_conditions(
+            analysis.get('optimization', {})
+        )
+        
+        # 결론
+        results_data['conclusions'] = self._generate_conclusions(analysis)
+        results_data['future_work'] = self._suggest_future_work(data)
+        
+        # 부록
+        results_data['detailed_data'] = self._prepare_detailed_data(data)
+        results_data['statistical_details'] = self._prepare_statistical_details(analysis)
+        
+        return results_data
+    
+    def _create_factors_table(self, factors: List[ExperimentFactor]) -> str:
+        """인자 테이블 생성"""
+        if not factors:
+            return "실험 인자가 정의되지 않았습니다."
+        
+        table = "| 인자명 | 단위 | 최소값 | 최대값 | 수준 | 설명 |\\n"
+        table += "|--------|------|--------|--------|------|------|\\n"
+        
+        for factor in factors:
+            if factor.categorical:
+                levels = ', '.join(factor.categories)
+                min_max = "N/A"
+            else:
+                levels = ', '.join(str(l) for l in factor.levels) if factor.levels else "연속"
+                min_max = f"{factor.min_value} - {factor.max_value}"
+            
+            table += f"| {factor.name} | {factor.unit} | "
+            
+            if factor.categorical:
+                table += f"N/A | N/A | {levels} | {factor.description} |\\n"
+            else:
+                table += f"{factor.min_value} | {factor.max_value} | {levels} | {factor.description} |\\n"
+        
+        return table
+    
+    def _create_responses_table(self, responses: List[ExperimentResponse]) -> str:
+        """반응 변수 테이블 생성"""
+        if not responses:
+            return "반응 변수가 정의되지 않았습니다."
+        
+        table = "| 반응 변수 | 단위 | 목표 | 규격 | 가중치 |\\n"
+        table += "|-----------|------|------|------|--------|\\n"
+        
+        for response in responses:
+            if response.target_value:
+                target = f"{response.target_value} {response.unit}"
+            elif response.maximize:
+                target = "최대화"
+            elif response.minimize:
+                target = "최소화"
+            else:
+                target = "N/A"
+            
+            lower, upper = response.specification_limits
+            if lower is not None or upper is not None:
+                spec = f"{lower or '-∞'} ~ {upper or '∞'}"
+            else:
+                spec = "N/A"
+            
+            table += f"| {response.name} | {response.unit} | {target} | {spec} | {response.weight} |\\n"
+        
+        return table
+    
+    def _format_design_matrix(self, design_matrix: pd.DataFrame) -> str:
+        """설계 매트릭스 포맷팅"""
+        if design_matrix.empty:
+            return "설계 매트릭스가 비어있습니다."
+        
+        # 처음 10개 행만 표시
+        preview = design_matrix.head(10)
+        
+        # Markdown 테이블로 변환
+        table = preview.to_markdown(index=False)
+        
+        if len(design_matrix) > 10:
+            table += f"\\n\\n*... 총 {len(design_matrix)}개 실험 중 처음 10개만 표시*"
+        
+        return table
+    
+    async def _enhance_with_ai(self, report_type: str, 
+                             report_data: Dict[str, Any]) -> Dict[str, Any]:
+        """AI를 활용한 보고서 내용 강화"""
+        if not self.ai_orchestrator:
+            return report_data
+        
+        # 각 섹션별 AI 강화
+        enhancements = {
+            'executive_summary': "전문적이고 간결한 요약문 작성",
+            'key_findings': "통계 결과를 바탕으로 핵심 발견사항 도출",
+            'conclusions': "데이터 기반의 명확한 결론 작성",
+            'recommendations': "실용적이고 구체적인 권장사항 제시",
+            'future_work': "향후 연구 방향 제안"
+        }
+        
+        for key, instruction in enhancements.items():
+            if key in report_data and report_data[key] == "[데이터 없음]":
+                # AI로 내용 생성
+                prompt = f"""
+                다음 정보를 바탕으로 {instruction}해주세요:
+                
+                프로젝트: {report_data.get('project_name')}
+                보고서 유형: {report_type}
+                관련 데이터: {json.dumps(report_data, ensure_ascii=False, indent=2)[:1000]}
+                
+                전문적이고 구체적인 내용으로 작성해주세요.
+                """
+                
+                response = await self.ai_orchestrator.generate_with_single_ai(
+                    prompt,
+                    temperature=0.7,
+                    max_tokens=500
+                )
+                
+                if response.success:
+                    report_data[key] = response.content
+        
+        return report_data
+    
+    def _extract_template_keys(self, template: str) -> List[str]:
+        """템플릿에서 키 추출"""
+        import re
+        pattern = r'\{(\w+)\}'
+        return list(set(re.findall(pattern, template)))
+    
+    def _generate_expected_outcomes(self, project_info: Dict[str, Any]) -> str:
+        """기대 효과 생성"""
+        outcomes = []
+        
+        if 'objectives' in project_info:
+            for obj in project_info['objectives']:
+                if '향상' in obj or '개선' in obj:
+                    outcomes.append(f"- {obj}을 통한 제품 품질 향상")
+                elif '감소' in obj or '절감' in obj:
+                    outcomes.append(f"- {obj}을 통한 비용 절감")
+                else:
+                    outcomes.append(f"- {obj} 달성")
+        
+        if not outcomes:
+            outcomes = [
+                "- 최적 공정 조건 도출",
+                "- 품질 향상 및 불량률 감소",
+                "- 생산성 향상"
+            ]
+        
+        return '\\n'.join(outcomes)
+    
+    def export_to_pdf(self, report_content: str, filename: str) -> bool:
+        """PDF로 내보내기"""
+        if not PDF_AVAILABLE:
+            logger.warning("PDF 생성을 위해 pdfkit이 필요합니다.")
+            return False
+        
+        try:
+            # Markdown을 HTML로 변환
+            import markdown
+            html_content = markdown.markdown(report_content, extensions=['tables', 'fenced_code'])
+            
+            # CSS 추가
+            html_with_style = f"""
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                    h1 {{ color: #333; border-bottom: 2px solid #333; }}
+                    h2 {{ color: #666; }}
+                    table {{ border-collapse: collapse; width: 100%; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; }}
+                    code {{ background-color: #f5f5f5; padding: 2px 4px; }}
+                </style>
+            </head>
+            <body>
+                {html_content}
+            </body>
+            </html>
+            """
+            
+            # PDF 생성
+            pdfkit.from_string(html_with_style, filename)
+            return True
+            
+        except Exception as e:
+            logger.error(f"PDF 생성 실패: {e}")
+            return False
