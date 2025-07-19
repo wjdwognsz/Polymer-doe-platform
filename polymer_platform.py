@@ -364,9 +364,24 @@ except ImportError:
 
 # ==================== 번역 및 자연어 처리 ====================
 try:
-    from googletrans import Translator
+    from deep_translator import GoogleTranslator
     import langdetect
     TRANSLATION_AVAILABLE = True
+    
+    # Translator 클래스를 GoogleTranslator로 매핑
+    class Translator:
+        def __init__(self):
+            pass
+        
+        def translate(self, text, dest='en', src='auto'):
+            translator = GoogleTranslator(source=src, target=dest)
+            result = translator.translate(text)
+            # googletrans와 비슷한 형식으로 반환
+            class TranslationResult:
+                def __init__(self, text):
+                    self.text = text
+            return TranslationResult(result)
+            
 except ImportError:
     TRANSLATION_AVAILABLE = False
 
