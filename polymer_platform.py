@@ -13702,7 +13702,28 @@ class PolymerDOEApp:
                 st.session_state.api_monitor = api_monitor
                 
             logger.info("시스템 초기화 완료")
-            
+
+            if api_key_manager:
+                logger.info("=== API 키 디버깅 정보 ===")
+                logger.info(f"저장된 API 키 목록: {list(api_key_manager.api_keys.keys())}")
+    
+                # 각 키의 존재 여부 확인
+                test_keys = ['google_gemini', 'xai_grok', 'groq', 'sambanova', 'deepseek', 'huggingface']
+                for key in test_keys:
+                    if api_key_manager.is_key_set(key):
+                        logger.info(f"✓ {key} 키 존재")
+                    else:
+                        logger.info(f"✗ {key} 키 없음")
+    
+                # streamlit secrets 직접 확인
+                logger.info("=== Streamlit Secrets 확인 ===")
+                if hasattr(st, 'secrets'):
+                    for key in st.secrets:
+                        if 'api' in key.lower() or 'key' in key.lower():
+                            logger.info(f"Secret 키: {key}")
+    
+                logger.info("=== API 키 디버깅 완료 ===")
+        
         except Exception as e:
             logger.error(f"초기화 오류: {e}")
             st.error(f"시스템 초기화 중 오류가 발생했습니다: {str(e)}")
