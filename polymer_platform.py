@@ -5447,6 +5447,94 @@ class EnhancedVisualizationEngine:
         return viewer.render()
 
 # Polymer-doe-platform - Part 6
+# ==================== AI 엔진 통합 시스템 (총 정리) ====================
+# ==================== AI 엔진 사용량 추적기 ====================
+class UsageTracker:
+    """API 사용량 추적 클래스"""
+    
+    def __init__(self, name: str):
+        self.name = name
+        self.usage_count = 0
+        self.usage_history = []
+        self.daily_limit = 1000
+        self.last_reset = datetime.now()
+    
+    def track_usage(self, tokens: int = 1):
+        """사용량 추적"""
+        self.usage_count += tokens
+        self.usage_history.append({
+            'timestamp': datetime.now(),
+            'tokens': tokens
+        })
+    
+    def reset_daily(self):
+        """일일 사용량 리셋"""
+        now = datetime.now()
+        if (now - self.last_reset).days >= 1:
+            self.usage_count = 0
+            self.last_reset = now
+            self.usage_history = []
+    
+    def is_within_limit(self) -> bool:
+        """사용량 한도 확인"""
+        self.reset_daily()
+        return self.usage_count < self.daily_limit
+
+# ==================== AI 응답 캐시 ====================
+class AIResponseCache:
+    """AI 응답 캐싱 클래스"""
+    
+    def __init__(self, name: str):
+        self.name = name
+        self.cache = {}
+        self.max_size = 100
+    
+    def get(self, key: str) -> Optional[str]:
+        """캐시에서 응답 가져오기"""
+        if key in self.cache:
+            return self.cache[key]['response']
+        return None
+    
+    def set(self, key: str, response: str):
+        """캐시에 응답 저장"""
+        if len(self.cache) >= self.max_size:
+            # 가장 오래된 항목 제거
+            oldest_key = min(self.cache.keys(), 
+                           key=lambda k: self.cache[k]['timestamp'])
+            del self.cache[oldest_key]
+        
+        self.cache[key] = {
+            'response': response,
+            'timestamp': datetime.now()
+        }
+
+# ==================== 속도 제한기 ====================
+class RateLimiter:
+    """API 호출 속도 제한 클래스"""
+    
+    def __init__(self, name: str, calls_per_minute: int = 10):
+        self.name = name
+        self.calls_per_minute = calls_per_minute
+        self.call_times = deque()
+    
+    async def acquire(self):
+        """호출 허가 대기"""
+        now = datetime.now()
+        
+        # 1분 이상 지난 호출 기록 제거
+        while self.call_times and (now - self.call_times[0]).seconds >= 60:
+            self.call_times.popleft()
+        
+        # 제한에 도달한 경우 대기
+        if len(self.call_times) >= self.calls_per_minute:
+            wait_time = 60 - (now - self.call_times[0]).seconds
+            if wait_time > 0:
+                await asyncio.sleep(wait_time)
+                return await self.acquire()
+        
+        # 호출 기록
+        self.call_times.append(now)
+
 # ==================== AI 엔진 통합 시스템 ====================
 class BaseAIEngine:
     """모든 AI 엔진의 기본 클래스"""
@@ -8531,6 +8619,186 @@ class CostEstimator:
                 material_cost += additive_cost
         
         return material_cost
+
+# ==================== 사용자 인터페이스 시스템 (총 정리) ====================
+# ==================== 고분자 데이터베이스 ====================
+class PolymerDatabase:
+    """고분자 데이터베이스 클래스"""
+    
+    def __init__(self):
+        self.polymers_data = {
+            'PET': {
+                'name': '폴리에틸렌 테레프탈레이트',
+                'type': '열가소성',
+                'properties': {
+                    'Tg': 75,  # °C
+                    'Tm': 260,  # °C
+                    'density': 1.38,  # g/cm³
+                    'tensile_strength': 55  # MPa
+                },
+                'applications': ['병', '섬유', '필름'],
+                'processing': ['사출성형', '블로우성형', '압출']
+            },
+            'PP': {
+                'name': '폴리프로필렌',
+                'type': '열가소성',
+                'properties': {
+                    'Tg': -10,
+                    'Tm': 165,
+                    'density': 0.90,
+                    'tensile_strength': 35
+                },
+                'applications': ['포장재', '자동차부품', '섬유'],
+                'processing': ['사출성형', '압출', '블로우성형']
+            },
+            'PMMA': {
+                'name': '폴리메틸메타크릴레이트',
+                'type': '열가소성',
+                'properties': {
+                    'Tg': 105,
+                    'Tm': None,  # 비결정성
+                    'density': 1.18,
+                    'tensile_strength': 70
+                },
+                'applications': ['광학재료', '간판', '조명'],
+                'processing': ['사출성형', '압출', '캐스팅']
+            }
+        }
+        
+        self.search_index = self._build_search_index()
+    
+    def _build_search_index(self):
+        """검색 인덱스 구축"""
+        index = {}
+        for polymer_id, data in self.polymers_data.items():
+            # 이름으로 인덱싱
+            index[data['name'].lower()] = polymer_id
+            # 약어로 인덱싱
+            index[polymer_id.lower()] = polymer_id
+            # 응용분야로 인덱싱
+            for app in data['applications']:
+                if app not in index:
+                    index[app] = []
+                if polymer_id not in index[app]:
+                    index[app].append(polymer_id)
+        return index
+    
+    def search(self, query: str) -> List[Dict]:
+        """고분자 검색"""
+        query_lower = query.lower()
+        results = []
+        
+        # 직접 매칭
+        if query_lower in self.search_index:
+            match = self.search_index[query_lower]
+            if isinstance(match, str):
+                results.append(self.get_polymer(match))
+            elif isinstance(match, list):
+                for polymer_id in match:
+                    results.append(self.get_polymer(polymer_id))
+        
+        # 부분 매칭
+        for key, value in self.search_index.items():
+            if query_lower in key and key != query_lower:
+                if isinstance(value, str):
+                    polymer = self.get_polymer(value)
+                    if polymer and polymer not in results:
+                        results.append(polymer)
+        
+        return results
+    
+    def get_polymer(self, polymer_id: str) -> Optional[Dict]:
+        """고분자 정보 가져오기"""
+        if polymer_id in self.polymers_data:
+            return {
+                'id': polymer_id,
+                **self.polymers_data[polymer_id]
+            }
+        return None
+    
+    def get_all_polymers(self) -> List[Dict]:
+        """모든 고분자 목록"""
+        return [
+            {'id': pid, **data} 
+            for pid, data in self.polymers_data.items()
+        ]
+
+# ==================== 프로젝트 템플릿 ====================
+class ProjectTemplates:
+    """프로젝트 템플릿 클래스"""
+    
+    def __init__(self):
+        self.templates = {
+            'packaging': {
+                'name': '포장재 개발',
+                'factors': ['두께', '첨가제 함량', '가공온도'],
+                'responses': ['인장강도', '투명도', '산소투과도'],
+                'typical_budget': 500,
+                'typical_timeline': 8
+            },
+            'automotive': {
+                'name': '자동차 부품',
+                'factors': ['유리섬유 함량', '성형온도', '냉각시간'],
+                'responses': ['충격강도', '치수안정성', '내열성'],
+                'typical_budget': 1000,
+                'typical_timeline': 12
+            },
+            'biomedical': {
+                'name': '의료용 소재',
+                'factors': ['가교도', 'pH', '멸균방법'],
+                'responses': ['생체적합성', '분해속도', '기계적 특성'],
+                'typical_budget': 2000,
+                'typical_timeline': 16
+            }
+        }
+    
+    def get_template(self, template_id: str) -> Optional[Dict]:
+        """템플릿 가져오기"""
+        return self.templates.get(template_id)
+    
+    def get_all_templates(self) -> Dict:
+        """모든 템플릿"""
+        return self.templates
+
+# ==================== 요인 라이브러리 ====================
+class FactorLibrary:
+    """실험 요인 라이브러리"""
+    
+    def __init__(self):
+        self.factors = {
+            'temperature': {
+                'name': '온도',
+                'unit': '°C',
+                'typical_range': [20, 300],
+                'description': '가공 또는 반응 온도'
+            },
+            'time': {
+                'name': '시간',
+                'unit': 'min',
+                'typical_range': [1, 240],
+                'description': '반응 또는 가공 시간'
+            },
+            'pressure': {
+                'name': '압력',
+                'unit': 'MPa',
+                'typical_range': [0.1, 50],
+                'description': '가공 압력'
+            },
+            'concentration': {
+                'name': '농도',
+                'unit': 'wt%',
+                'typical_range': [0, 100],
+                'description': '첨가제 또는 용질 농도'
+            }
+        }
+    
+    def get_factor(self, factor_id: str) -> Optional[Dict]:
+        """요인 정보 가져오기"""
+        return self.factors.get(factor_id)
+    
+    def get_all_factors(self) -> Dict:
+        """모든 요인"""
+        return self.factors
 
 # ==================== 사용자 인터페이스 시스템 ====================
 class UserInterfaceSystem:
