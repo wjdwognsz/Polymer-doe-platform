@@ -8250,8 +8250,8 @@ class AdvancedExperimentDesignEngine:
     """AI 기반 고급 실험 설계 엔진"""
     
     def __init__(self, ai_orchestrator: 'MultiAIOrchestrator', db_manager: 'DatabaseIntegrationManager'):
-        self.ai_orchestrator = ai_orchestrator
-        self.db_manager = db_manager
+        self.ai_orchestrator = ai_orchestrator or MultiAIOrchestrator()
+        self.db_manager = db_manager or DatabaseManager()
         self.design_strategies = {
             'screening': ScreeningDesignStrategy(),
             'optimization': OptimizationDesignStrategy(),
