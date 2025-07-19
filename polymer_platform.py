@@ -10481,9 +10481,16 @@ class ResultsVisualizationPage:
         self.visualizer = EnhancedVisualizationEngine()
         self.analyzer = DataAnalyzer()
     
-    def render(self):
+    def render(self, user_level: UserLevel):  # user_level 인자 추가
         """페이지 렌더링"""
         st.title("📊 결과 시각화")
+        
+        # 사용자 레벨에 따른 안내 메시지
+        if user_level == UserLevel.BEGINNER:
+            st.info("""
+            💡 시각화는 데이터를 이해하는 가장 좋은 방법입니다. 
+            다양한 그래프를 통해 실험 결과를 탐색해보세요.
+            """)
         
         # 사이드바 설정
         with st.sidebar:
@@ -11139,17 +11146,30 @@ class UserInterfaceSystem:
                         st.warning(f"⚠️ {db_name}")
 
 class HomePage:
-    def render(self):
+    def render(self, user_level: UserLevel):  # user_level 인자 추가
         st.title("🧬 고분자 실험 설계 플랫폼에 오신 것을 환영합니다!")
         st.write("이 플랫폼은 AI 기반 고분자 실험 설계를 도와드립니다.")
         
-        # 환영 메시지
+        # 환영 메시지 - 이제 user_level을 사용할 수 있음
         if user_level == UserLevel.BEGINNER:
             st.info("""
             👋 환영합니다! 이 플랫폼은 고분자 실험을 처음 시작하는 분들도 
             쉽게 사용할 수 있도록 설계되었습니다. 
             
             각 단계마다 자세한 설명과 도움말이 제공되니 걱정하지 마세요!
+            """)
+        elif user_level == UserLevel.INTERMEDIATE:
+            st.info("""
+            🌿 다시 오신 것을 환영합니다! 중급자를 위한 고급 기능들을 
+            활용해보세요. 질문이 있으시면 언제든 도움말을 참고하세요.
+            """)
+        elif user_level == UserLevel.ADVANCED:
+            st.info("""
+            🌳 환영합니다! 고급 사용자를 위한 모든 기능이 활성화되어 있습니다.
+            """)
+        elif user_level == UserLevel.EXPERT:
+            st.info("""
+            🎓 전문가 모드입니다. 모든 고급 설정과 기능을 자유롭게 사용하세요.
             """)
         
         # 빠른 시작
@@ -11450,14 +11470,17 @@ class CollaborationSystem:
 # Polymer-doe-platform - Part 11
 # ==================== 프로젝트 설정 페이지 ====================
 class ProjectSetupPage:
-    """프로젝트 설정 페이지"""
-    
     def __init__(self):
         self.polymer_database = PolymerDatabase()
         self.project_templates = ProjectTemplates()
-        
-    def render(self, user_level: UserLevel):
+        self.ai_consultant = None
+    
+    def render(self, user_level: UserLevel):  # 이미 user_level을 받고 있으므로 그대로 유지
         st.title("📋 프로젝트 설정")
+        
+        # AI 컨설턴트 초기화
+        if self.ai_consultant is None and hasattr(st.session_state, 'ai_orchestrator'):
+            self.ai_consultant = st.session_state.ai_orchestrator
         
         # 프로젝트 기본 정보
         st.markdown("### 1. 기본 정보")
@@ -12422,18 +12445,19 @@ class ExperimentDesignPage:
 # Polymer-doe-platform - Part 12
 # ==================== 데이터 분석 페이지 ====================
 class DataAnalysisPage:
-    """데이터 분석 페이지"""
-    
     def __init__(self):
-        self.analyzer = AdvancedStatisticalAnalyzer()
+        self.analyzer = DataAnalyzer()
         self.ml_analyzer = MachineLearningAnalyzer()
         
-    def render(self, user_level: UserLevel):
+    def render(self, user_level: UserLevel):  # user_level 인자 추가
         st.title("📊 데이터 분석")
         
-        # 실험 상태 확인
+        # 프로젝트 확인
         if 'experiment_design' not in st.session_state:
             st.warning("먼저 실험을 설계해주세요.")
+            if st.button("실험 설계로 이동"):
+                st.session_state.current_page = 'experiment_design'
+                st.rerun()
             return
         
         # 탭 구성
@@ -13602,8 +13626,11 @@ class LearningCenterPage:
             }
         }
         
-    def render(self, user_level: UserLevel):
+    def render(self, user_level: UserLevel):  # user_level 인자 추가
         st.title("📚 학습 센터")
+        
+        # 사용자 레벨별 맞춤 콘텐츠
+        st.markdown(f"### {user_level.icon} {user_level.description}")
         
         # 학습 진도
         col1, col2, col3 = st.columns(3)
