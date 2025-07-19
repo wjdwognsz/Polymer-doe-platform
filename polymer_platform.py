@@ -12359,7 +12359,7 @@ class PolymerDOEApp:
         try:
             # 1. 설정 관리자 초기화
             if 'config_manager' not in st.session_state:
-                st.session_state.config_manager = ConfigurationManager()
+                st.session_state.config_manager = ConfigManager()
             
             # 2. API 키 관리자 초기화 (전역 변수)
             if api_key_manager is None:
