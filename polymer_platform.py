@@ -12354,40 +12354,40 @@ class PolymerDOEApp:
                 finally:
                     loop.close()
     
-    def _initialize_systems():
-        """시스템 초기화 함수"""
+    def _initialize_systems(self):
+        """시스템 초기화 함수 (클래스 메서드)"""
         global api_key_manager
-    
+        
         try:
             # 1. 설정 관리자 초기화
             if 'config_manager' not in st.session_state:
                 st.session_state.config_manager = ConfigurationManager()
-        
+            
             # 2. API 키 관리자 초기화 (전역 변수)
             if api_key_manager is None:
                 api_key_manager = APIKeyManager()
-        
+            
             # 3. AI 오케스트레이터 초기화
             if 'ai_orchestrator' not in st.session_state:
                 logger.info("AI 오케스트레이터 초기화 시작...")
                 st.session_state.ai_orchestrator = MultiAIOrchestrator()
                 if not st.session_state.ai_orchestrator.initialize():
                     logger.error("AI 오케스트레이터 초기화 실패")
-        
+            
             # 4. 데이터베이스 매니저 초기화
             if 'db_manager' not in st.session_state:
                 st.session_state.db_manager = DatabaseIntegrationManager()
-            
+                
             # 5. 이벤트 버스 시작
             if not event_bus.running:
                 event_bus.start()
-            
+                
             # 6. API 모니터 초기화
             if 'api_monitor' not in st.session_state:
                 st.session_state.api_monitor = api_monitor
-            
+                
             logger.info("시스템 초기화 완료")
-        
+            
         except Exception as e:
             logger.error(f"초기화 오류: {e}")
             st.error(f"시스템 초기화 중 오류가 발생했습니다: {str(e)}")
@@ -12396,8 +12396,8 @@ class PolymerDOEApp:
     def run(self):
         """애플리케이션 실행"""
         try:
-            # 시스템 초기화
-            _initialize_systems()
+            # 시스템 초기화 (self를 사용하여 클래스 메서드 호출)
+            self._initialize_systems()
             
             # UI 시스템 생성 및 렌더링
             ui_system = UserInterfaceSystem()
