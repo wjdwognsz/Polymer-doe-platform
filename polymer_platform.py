@@ -11505,35 +11505,45 @@ class PolymerDOEApp:
             st.session_state.analysis_results = None
             st.session_state.learning_progress = {}
             st.session_state.recent_projects = []
-            
-            # AI 및 DB 시스템 초기화
-            st.session_state.init_task = asyncio.create_task(self._initialize_systems())
+        
+            # AI 및 DB 시스템 초기화 - 동기적으로 실행
+            with st.spinner("시스템 초기화 중..."):
+                # 새 이벤트 루프에서 비동기 함수 실행
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._initialize_systems())
+                finally:
+                    loop.close()
     
     async def _initialize_systems(self):
         """AI 및 데이터베이스 시스템 초기화"""
-        with st.spinner("시스템 초기화 중..."):
+        try:
             # AI 오케스트레이터 초기화
             st.session_state.ai_orchestrator = AIOrchestrator()
             await st.session_state.ai_orchestrator.initialize()
-            
+        
             # 데이터베이스 매니저 초기화
             st.session_state.db_manager = DatabaseIntegrationManager()
             await st.session_state.db_manager.initialize()
-            
+        
             # 실험 설계 엔진 초기화
             st.session_state.design_engine = AdvancedExperimentDesignEngine(
                 st.session_state.ai_orchestrator,
                 st.session_state.db_manager
             )
-            
+        
             # 협업 시스템 초기화
             st.session_state.collaboration_system = CollaborationSystem()
-            
+        
             # 학습 시스템 초기화
             st.session_state.learning_system = AILearningSystem()
             await st.session_state.learning_system.start_learning()
-            
+        
             st.success("시스템 초기화 완료!")
+        except Exception as e:
+            st.error(f"시스템 초기화 중 오류 발생: {str(e)}")
+            logger.error(f"초기화 오류: {e}", exc_info=True)
     
     def run(self):
         """애플리케이션 실행"""
