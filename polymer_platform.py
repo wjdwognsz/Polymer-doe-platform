@@ -1129,11 +1129,11 @@ def validate_input(value: Any,
     
     return True, None
 
-def generate_unique_id(prefix: str = "EXP") -> str:
+def generate_unique_id(prefix: str = "") -> str:
     """고유 ID 생성"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    random_part = hashlib.md5(f"{timestamp}{uuid.uuid4()}".encode()).hexdigest()[:6]
-    return f"{prefix}_{timestamp}_{random_part}"
+    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return f"{prefix}_{timestamp}_{random_str}" if prefix else f"{timestamp}_{random_str}"
 
 def safe_float_conversion(value: Any, default: float = 0.0) -> float:
     """안전한 float 변환"""
@@ -6500,9 +6500,25 @@ class SambaNovaEngine(BaseAIEngine):
 class DeepSeekEngine(BaseAIEngine):
     """DeepSeek AI 엔진"""
     
-    def __init__(self):
-        super().__init__("DeepSeek", "deepseek")
-        self.model_name = "deepseek-chat"
+    def __init__(self, api_key: str):
+        super().__init__("deepseek", "DeepSeek")
+        self.api_key = api_key
+        self.model = "deepseek-chat"
+        
+        try:
+            if not OPENAI_AVAILABLE:
+                raise ImportError("OpenAI library is required for DeepSeek")
+            
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com"
+            )
+            self.available = True
+            logger.info("DeepSeek 엔진 초기화 성공")
+        except Exception as e:
+            self.available = False
+            self.client = None
+            logger.error(f"DeepSeek 엔진 초기화 실패: {str(e)}")
         
     def _initialize_client(self):
         """DeepSeek 클라이언트 초기화"""
@@ -11195,6 +11211,39 @@ class HomePage:
             st.warning("🔧 예정된 유지보수: 12월 25일 오전 2-4시")
 
 # ==================== 실시간 협업 시스템 ====================
+class CollaborationDatabase:
+    """협업 데이터베이스 관리"""
+    
+    def __init__(self):
+        self.sessions = {}
+        self.db_manager = db_manager
+    
+    async def save_session(self, session: Dict) -> bool:
+        """세션 저장"""
+        try:
+            self.sessions[session['id']] = session
+            # 실제로는 DB에 저장
+            return True
+        except Exception as e:
+            logger.error(f"세션 저장 실패: {str(e)}")
+            return False
+    
+    async def load_session(self, session_id: str) -> Optional[Dict]:
+        """세션 로드"""
+        try:
+            # 메모리에서 먼저 확인
+            if session_id in self.sessions:
+                return self.sessions[session_id]
+            
+            # 실제로는 DB에서 로드
+            # result = self.db_manager.get_session(session_id)
+            # return result
+            
+            return None
+        except Exception as e:
+            logger.error(f"세션 로드 실패: {str(e)}")
+            return None
+
 class CollaborationSystem:
     """실시간 협업 기능"""
     
