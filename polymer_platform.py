@@ -1429,6 +1429,244 @@ class HelpSystem:
         elif user_level == UserLevel.INTERMEDIATE:
             self.show_help_button(context)
 
+class TutorialSystem:
+    """대화형 튜토리얼 시스템"""
+    
+    def __init__(self):
+        self.tutorials = {
+            'first_experiment': {
+                'title': '🎓 첫 실험 설계하기',
+                'steps': [
+                    {
+                        'title': '프로젝트 설정',
+                        'content': """
+                        첫 번째 단계는 프로젝트를 설정하는 것입니다.
+                        
+                        1. 프로젝트 이름을 정하세요
+                        2. 사용할 고분자를 선택하세요
+                        3. 목표 특성을 정의하세요
+                        """,
+                        'action': 'project_setup'
+                    },
+                    {
+                        'title': '요인 선택',
+                        'content': """
+                        실험에서 변화시킬 요인을 선택합니다.
+                        
+                        💡 팁: 처음에는 2-3개의 요인으로 시작하세요!
+                        - 온도
+                        - 시간
+                        - 농도
+                        """,
+                        'action': 'factor_selection'
+                    },
+                    {
+                        'title': '설계 생성',
+                        'content': """
+                        선택한 요인을 바탕으로 실험 설계를 생성합니다.
+                        
+                        AI가 최적의 실험 조건을 추천해드립니다!
+                        """,
+                        'action': 'design_generation'
+                    }
+                ],
+                'estimated_time': 15
+            },
+            'data_analysis': {
+                'title': '📊 데이터 분석하기',
+                'steps': [
+                    {
+                        'title': '데이터 입력',
+                        'content': """
+                        실험 결과를 입력합니다.
+                        
+                        - CSV 파일 업로드
+                        - 직접 입력
+                        - 구글 시트 연동
+                        """,
+                        'action': 'data_input'
+                    },
+                    {
+                        'title': '통계 분석',
+                        'content': """
+                        자동으로 통계 분석이 수행됩니다.
+                        
+                        - ANOVA (분산분석)
+                        - 회귀분석
+                        - 반응표면분석
+                        """,
+                        'action': 'statistical_analysis'
+                    },
+                    {
+                        'title': '시각화',
+                        'content': """
+                        결과를 시각적으로 확인합니다.
+                        
+                        - 주효과 플롯
+                        - 상호작용 플롯
+                        - 3D 표면 플롯
+                        """,
+                        'action': 'visualization'
+                    }
+                ],
+                'estimated_time': 20
+            },
+            'optimization': {
+                'title': '🎯 최적화하기',
+                'steps': [
+                    {
+                        'title': '목표 설정',
+                        'content': """
+                        최적화 목표를 설정합니다.
+                        
+                        - 단일 목표: 하나의 특성 최적화
+                        - 다중 목표: 여러 특성 동시 최적화
+                        """,
+                        'action': 'set_objectives'
+                    },
+                    {
+                        'title': '제약 조건',
+                        'content': """
+                        실험의 제약 조건을 정의합니다.
+                        
+                        - 비용 제약
+                        - 시간 제약
+                        - 안전 제약
+                        """,
+                        'action': 'set_constraints'
+                    },
+                    {
+                        'title': '최적점 찾기',
+                        'content': """
+                        AI가 최적의 실험 조건을 찾아드립니다.
+                        
+                        여러 시나리오를 비교하고 선택할 수 있습니다.
+                        """,
+                        'action': 'find_optimum'
+                    }
+                ],
+                'estimated_time': 25
+            }
+        }
+        
+        # 사용자 진행 상황 추적
+        self.user_progress = {}
+        self.completed_tutorials = set()
+    
+    def start_tutorial(self, tutorial_id: str, user_id: str = "default"):
+        """튜토리얼 시작"""
+        if tutorial_id not in self.tutorials:
+            return False
+        
+        self.user_progress[user_id] = {
+            'tutorial_id': tutorial_id,
+            'current_step': 0,
+            'started_at': datetime.now(),
+            'completed_steps': []
+        }
+        
+        return True
+    
+    def get_current_step(self, user_id: str = "default") -> Optional[Dict]:
+        """현재 단계 반환"""
+        if user_id not in self.user_progress:
+            return None
+        
+        progress = self.user_progress[user_id]
+        tutorial = self.tutorials[progress['tutorial_id']]
+        
+        if progress['current_step'] >= len(tutorial['steps']):
+            return None
+        
+        return tutorial['steps'][progress['current_step']]
+    
+    def complete_step(self, user_id: str = "default") -> bool:
+        """현재 단계 완료"""
+        if user_id not in self.user_progress:
+            return False
+        
+        progress = self.user_progress[user_id]
+        progress['completed_steps'].append(progress['current_step'])
+        progress['current_step'] += 1
+        
+        # 튜토리얼 완료 확인
+        tutorial = self.tutorials[progress['tutorial_id']]
+        if progress['current_step'] >= len(tutorial['steps']):
+            self.completed_tutorials.add(progress['tutorial_id'])
+            st.balloons()
+            return True
+        
+        return False
+    
+    def get_progress_percentage(self, user_id: str = "default") -> float:
+        """진행률 계산"""
+        if user_id not in self.user_progress:
+            return 0.0
+        
+        progress = self.user_progress[user_id]
+        tutorial = self.tutorials[progress['tutorial_id']]
+        
+        return (len(progress['completed_steps']) / len(tutorial['steps'])) * 100
+    
+    def render_tutorial_widget(self, user_id: str = "default"):
+        """튜토리얼 위젯 렌더링"""
+        current_step = self.get_current_step(user_id)
+        
+        if current_step:
+            with st.container():
+                st.markdown("### 🎓 튜토리얼 진행 중")
+                
+                # 진행률 표시
+                progress = self.get_progress_percentage(user_id)
+                st.progress(progress / 100)
+                st.caption(f"진행률: {progress:.0f}%")
+                
+                # 현재 단계 표시
+                st.markdown(f"**{current_step['title']}**")
+                st.markdown(current_step['content'])
+                
+                # 액션 버튼
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("⏭️ 건너뛰기", key="skip_tutorial"):
+                        self.complete_step(user_id)
+                        st.rerun()
+                
+                with col2:
+                    if st.button("✅ 완료", key="complete_tutorial", type="primary"):
+                        self.complete_step(user_id)
+                        st.success("단계 완료!")
+                        st.rerun()
+        else:
+            # 튜토리얼 선택
+            st.markdown("### 🎓 튜토리얼 시작하기")
+            
+            tutorial_options = {
+                tid: tutorial['title'] 
+                for tid, tutorial in self.tutorials.items()
+            }
+            
+            selected_tutorial = st.selectbox(
+                "튜토리얼 선택",
+                options=list(tutorial_options.keys()),
+                format_func=lambda x: tutorial_options[x]
+            )
+            
+            if st.button("🚀 시작", key="start_tutorial"):
+                self.start_tutorial(selected_tutorial, user_id)
+                st.rerun()
+    
+    def get_recommendations(self, user_level: UserLevel) -> List[str]:
+        """사용자 레벨에 따른 추천 튜토리얼"""
+        if user_level == UserLevel.BEGINNER:
+            return ['first_experiment']
+        elif user_level == UserLevel.INTERMEDIATE:
+            return ['data_analysis']
+        elif user_level == UserLevel.ADVANCED:
+            return ['optimization']
+        else:
+            return []
+
 # ==================== 캐시 시스템 ====================
 class CacheManager:
     """효율적인 캐싱 시스템"""
@@ -6711,27 +6949,38 @@ class MultiAIOrchestrator:
     
     def __init__(self):
         self.engines = {}
-        self.available_engines = {}
-        self.initialized = False
+        self.api_keys = {}
+        self.active_engines = []
+        self.usage_stats = defaultdict(lambda: {'calls': 0, 'tokens': 0, 'errors': 0})
+        self.rate_limiters = {}
+        self.consensus_threshold = 0.7
+        
+        # 엔진 초기화
+        self._initialize_engines()
+
+    def _initialize_engines(self):
+        """AI 엔진 초기화"""
+        logger.info("AI 오케스트레이터 초기화 시작...")
         
         # 각 엔진을 안전하게 초기화
-        engine_classes = {
-            # 'openai': lambda: OpenAIEngine(),  # OpenAIEngine이 정의되지 않음
-            'gemini': lambda: GeminiEngine(),
-            # 'anthropic': lambda: AnthropicEngine(),  # AnthropicEngine이 정의되지 않음
-            'groq': lambda: GroqEngine(),
-            'grok': lambda: GrokEngine(),
-            'sambanova': lambda: SambaNovaEngine(),
-            'deepseek': lambda: DeepSeekEngine(),
-            'huggingface': lambda: HuggingFaceEngine()
+        engine_creators = {
+            'gemini': lambda: GeminiEngine(self.api_keys.get('gemini')),
+            'groq': lambda: GroqEngine(self.api_keys.get('groq')),
+            'grok': lambda: GrokEngine(self.api_keys.get('grok')),
+            'sambanova': lambda: SambaNovaEngine(self.api_keys.get('sambanova')),
+            'deepseek': lambda: DeepSeekEngine(self.api_keys.get('deepseek')),  # API 키 전달
+            'huggingface': lambda: HuggingFaceEngine(self.api_keys.get('huggingface'))
         }
     
-        for name, engine_factory in engine_classes.items():
+        # 각 엔진 생성 시도
+        for engine_name, creator in engine_creators.items():
             try:
-                self.engines[name] = engine_factory()
-                logger.info(f"{name} 엔진 생성 성공")
+                engine = creator()
+                self.engines[engine_name] = engine
+                logger.info(f"{engine_name} 엔진 생성 성공")
             except Exception as e:
-                logger.warning(f"{name} 엔진 생성 실패: {e}")
+                logger.warning(f"{engine_name} 엔진 생성 실패: {str(e)}")
+                self.engines[engine_name] = None
         
         # 사용 가능한 엔진 확인 - 제거
         # self.available_engines = {}
