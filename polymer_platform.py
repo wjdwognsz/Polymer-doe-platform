@@ -6592,12 +6592,14 @@ class MultiAIOrchestrator:
     
     def __init__(self):
         self.engines = {}
-    
+        self.available_engines = {}
+        self.initialized = False
+        
         # 각 엔진을 안전하게 초기화
         engine_classes = {
-            'openai': lambda: OpenAIEngine(),
+            # 'openai': lambda: OpenAIEngine(),  # OpenAIEngine이 정의되지 않음
             'gemini': lambda: GeminiEngine(),
-            'anthropic': lambda: AnthropicEngine(),
+            # 'anthropic': lambda: AnthropicEngine(),  # AnthropicEngine이 정의되지 않음
             'groq': lambda: GroqEngine(),
             'grok': lambda: GrokEngine(),
             'sambanova': lambda: SambaNovaEngine(),
@@ -6608,6 +6610,7 @@ class MultiAIOrchestrator:
         for name, engine_factory in engine_classes.items():
             try:
                 self.engines[name] = engine_factory()
+                logger.info(f"{name} 엔진 생성 성공")
             except Exception as e:
                 logger.warning(f"{name} 엔진 생성 실패: {e}")
         
@@ -6617,21 +6620,21 @@ class MultiAIOrchestrator:
         
         # AI 역할 정의 (확장)
         self.ai_roles = {
-            'openai': {
-                'strength': '범용 언어 이해, 코드 생성, 복잡한 추론',
-                'priority': 1,
-                'specialties': ['코드', '분석', '창의성']
-            },
+            # 'openai': {
+            #     'strength': '범용 언어 이해, 코드 생성, 복잡한 추론',
+            #     'priority': 1,
+            #     'specialties': ['코드', '분석', '창의성']
+            # },
             'gemini': {
                 'strength': '과학적 분석, 한국어 처리, 긴 컨텍스트',
                 'priority': 1,
                 'specialties': ['과학', '한국어', '멀티모달']
             },
-            'anthropic': {
-                'strength': '안전성, 윤리적 추론, 상세한 설명',
-                'priority': 1,
-                'specialties': ['안전성', '설명', '정확성']
-            },
+            # 'anthropic': {
+            #     'strength': '안전성, 윤리적 추론, 상세한 설명',
+            #     'priority': 1,
+            #     'specialties': ['안전성', '설명', '정확성']
+            # },
             'groq': {
                 'strength': '초고속 응답, 실시간 처리',
                 'priority': 2,
@@ -6658,6 +6661,7 @@ class MultiAIOrchestrator:
                 'specialties': ['특수모델', '화학', '커스텀']
             }
         }
+
         
         # 합의 전략
         self.consensus_strategies = {
@@ -6667,8 +6671,33 @@ class MultiAIOrchestrator:
             'ensemble': self._ensemble_consensus
         }
         
-    async def initialize(self):
-        """모든 AI 엔진 초기화"""
+    def initialize(self):
+        """모든 AI 엔진 초기화 (동기적)"""
+        logger.info("AI 오케스트레이터 초기화 시작...")
+        
+        # 각 엔진 초기화
+        for engine_name, engine in self.engines.items():
+            try:
+                if engine.initialize():
+                    self.available_engines[engine_name] = engine
+                    logger.info(f"✅ {engine.name} 엔진 활성화")
+                else:
+                    logger.info(f"❌ {engine.name} 엔진 비활성화")
+            except Exception as e:
+                logger.error(f"{engine_name} 엔진 초기화 실패: {str(e)}")
+        
+        # 최소 1개 이상의 엔진이 활성화되어야 함
+        active_count = len(self.available_engines)
+        if active_count >= 1:
+            self.initialized = True
+            logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
+            return True
+        else:
+            logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(self.engines)})")
+            return False
+
+    async def initialize_async(self):
+        """모든 AI 엔진 초기화 (비동기)"""
         logger.info("AI 오케스트레이터 초기화 시작...")
         
         # 병렬로 모든 엔진 초기화
@@ -6678,14 +6707,14 @@ class MultiAIOrchestrator:
             
         results = await asyncio.gather(*init_tasks)
         
-        # 최소 3개 이상의 엔진이 활성화되어야 함
+        # 최소 1개 이상의 엔진이 활성화되어야 함
         active_count = sum(1 for r in results if r)
-        if active_count >= 3:
+        if active_count >= 1:
             self.initialized = True
             logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
         else:
             logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(self.engines)})")
-            
+
     async def _init_engine(self, name: str, engine: BaseAIEngine) -> bool:
         """개별 엔진 초기화"""
         try:
@@ -6693,6 +6722,113 @@ class MultiAIOrchestrator:
         except Exception as e:
             logger.error(f"{name} 엔진 초기화 실패: {str(e)}")
             return False
+
+    def _majority_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
+        """다수결 합의"""
+        # 간단한 다수결 구현
+        contents = [r['content'] for r in responses if r.get('content')]
+        if not contents:
+            return {'status': 'error', 'message': '유효한 응답이 없습니다.'}
+        
+        # 가장 많이 등장하는 응답 선택 (여기서는 간단히 첫 번째 응답 반환)
+        return {
+            'status': 'success',
+            'content': contents[0],
+            'consensus_type': 'majority',
+            'engine_count': len(contents)
+        }
+
+    def _weighted_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
+        """가중치 기반 합의"""
+        # 우선순위에 따른 가중치 적용
+        weighted_responses = []
+        for resp in responses:
+            engine_name = resp.get('engine')
+            if engine_name and engine_name in self.ai_roles:
+                priority = self.ai_roles[engine_name]['priority']
+                weight = 1.0 / priority  # 우선순위가 낮을수록 높은 가중치
+                weighted_responses.append((resp, weight))
+        
+        if not weighted_responses:
+            return self._majority_consensus(responses)
+        
+        # 가장 높은 가중치를 가진 응답 선택
+        best_response = max(weighted_responses, key=lambda x: x[1])
+        return {
+            'status': 'success',
+            'content': best_response[0]['content'],
+            'consensus_type': 'weighted',
+            'engine': best_response[0].get('engine')
+        }
+    
+    def _best_quality_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
+        """품질 기반 합의"""
+        # 응답 품질 평가 (길이, 구조화 정도 등)
+        best_response = None
+        best_score = -1
+        
+        for resp in responses:
+            if resp.get('status') == 'success' and resp.get('content'):
+                content = resp['content']
+                # 간단한 품질 점수 계산
+                score = len(content) + content.count('\n') * 10 + content.count('•') * 5
+                if score > best_score:
+                    best_score = score
+                    best_response = resp
+        
+        if best_response:
+            return {
+                'status': 'success',
+                'content': best_response['content'],
+                'consensus_type': 'best_quality',
+                'quality_score': best_score
+            }
+        
+        return {'status': 'error', 'message': '품질 기준을 만족하는 응답이 없습니다.'}
+
+    def _ensemble_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
+        """앙상블 합의 (모든 응답 통합)"""
+        valid_responses = [r for r in responses if r.get('status') == 'success' and r.get('content')]
+        
+        if not valid_responses:
+            return {'status': 'error', 'message': '유효한 응답이 없습니다.'}
+        
+        # 모든 응답을 통합하여 종합적인 답변 생성
+        combined_content = "### 종합 분석 결과\n\n"
+        for i, resp in enumerate(valid_responses):
+            engine_name = resp.get('engine', f'Engine {i+1}')
+            combined_content += f"**{engine_name}의 분석:**\n{resp['content']}\n\n"
+        
+        return {
+            'status': 'success',
+            'content': combined_content,
+            'consensus_type': 'ensemble',
+            'engine_count': len(valid_responses)
+        }
+    
+    async def _query_with_metadata(self, engine_name: str, engine, prompt: str, 
+                                   context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
+        """메타데이터와 함께 쿼리 실행"""
+        try:
+            start_time = asyncio.get_event_loop().time()
+            response = await engine.generate_response(prompt, context, **kwargs)
+            end_time = asyncio.get_event_loop().time()
+            
+            return {
+                'status': 'success' if response.get('content') else 'error',
+                'content': response.get('content', ''),
+                'engine': engine_name,
+                'response_time': end_time - start_time,
+                'tokens_used': response.get('usage', {}).get('total_tokens', 0),
+                'error': response.get('error')
+            }
+        except Exception as e:
+            logger.error(f"{engine_name} 쿼리 실패: {str(e)}")
+            return {
+                'status': 'error',
+                'engine': engine_name,
+                'error': str(e)
+            }
     
     async def query_single(self, 
                           engine_name: str, 
@@ -6703,11 +6839,12 @@ class MultiAIOrchestrator:
         if not self.initialized:
             return {'status': 'error', 'message': 'AI 시스템이 초기화되지 않았습니다.'}
             
-        engine = self.engines.get(engine_name)
-        if not engine or not engine.available:
+        engine = self.available_engines.get(engine_name)
+        if not engine:
             return {'status': 'error', 'message': f'{engine_name} 엔진을 사용할 수 없습니다.'}
             
-        return await engine.generate_response(prompt, context, **kwargs)
+        return await self._query_with_metadata(engine_name, engine, prompt, context, **kwargs)
+    
     
     async def query_multiple(self,
                             prompt: str,
@@ -6768,25 +6905,6 @@ class MultiAIOrchestrator:
             
         return result
     
-    async def _query_with_metadata(self, 
-                                  engine_name: str, 
-                                  engine: BaseAIEngine,
-                                  prompt: str, 
-                                  context: Dict,
-                                  **kwargs) -> Dict:
-        """메타데이터와 함께 엔진 질의"""
-        try:
-            response = await engine.generate_response(prompt, context, **kwargs)
-            response['engine_name'] = engine_name
-            response['timestamp'] = datetime.now()
-            return response
-        except Exception as e:
-            logger.error(f"{engine_name} 질의 오류: {str(e)}")
-            return {
-                'status': 'error',
-                'engine_name': engine_name,
-                'message': str(e)
-            }
 
     async def _build_consensus(self, responses: List[Dict], prompt: str) -> Dict[str, Any]:
         """AI 응답들로부터 합의 도출"""
