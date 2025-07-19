@@ -6315,7 +6315,7 @@ class GeminiEngine(BaseAIEngine):
     """Google Gemini AI 엔진"""
     
     def __init__(self):
-        super().__init__("Gemini", "GEMINI_API_KEY")
+        super().__init__("gemini", "google_gemini")
         self.model_name = "gemini-2.0-flash-exp"
         
     def _initialize_client(self):
@@ -6392,7 +6392,7 @@ class GrokEngine(BaseAIEngine):
     """xAI Grok 엔진"""
     
     def __init__(self):
-        super().__init__("Grok", "xai_grok", "GROK_API_KEY")
+        super().__init__("grok", "xai_grok")
         self.model_name = "grok-3-mini"
         
     def _initialize_client(self):
@@ -6445,7 +6445,7 @@ class SambaNovaEngine(BaseAIEngine):
     """SambaNova AI 엔진"""
     
     def __init__(self):
-        super().__init__("SambaNova", "SAMBANOVA_API_KEY")
+        super().__init__("SambaNova", "smabanova")
         self.model_name = "Meta-Llama-3.1-405B-Instruct"
         
     def _initialize_client(self):
@@ -6498,7 +6498,7 @@ class DeepSeekEngine(BaseAIEngine):
     """DeepSeek AI 엔진"""
     
     def __init__(self):
-        super().__init__("DeepSeek", "DEEPSEEK_API_KEY")
+        super().__init__("DeepSeek", "deepseek")
         self.model_name = "deepseek-chat"
         
     def _initialize_client(self):
@@ -6563,7 +6563,7 @@ class GroqEngine(BaseAIEngine):
     """Groq 초고속 AI 엔진"""
     
     def __init__(self):
-        super().__init__("Groq", "GROQ_API_KEY")
+        super().__init__("Groq", "groq")
         self.model_name = "llama3-70b-8192"
         
     def _initialize_client(self):
@@ -6622,7 +6622,7 @@ class HuggingFaceEngine(BaseAIEngine):
     """HuggingFace 특화 모델 엔진"""
     
     def __init__(self):
-        super().__init__("HuggingFace", "HUGGINGFACE_API_KEY")
+        super().__init__("HuggingFace", "huggingface")
         self.specialized_models = {
             'chemistry': 'laituan245/molt5-large-smiles2caption',
             'materials': 'oliverguhr/materials-property-predictor',
