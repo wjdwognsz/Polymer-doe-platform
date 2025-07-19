@@ -10351,7 +10351,7 @@ class DataAnalyzer:
     def __init__(self):
         self.statistical_analyzer = StatisticalAnalyzer()
         self.visualization_engine = EnhancedVisualizationEngine()
-        self.ml_analyzer = MLAnalyzer()
+        self.ml_analyzer = MachineLearningAnalyzer()
         self.report_generator = ReportGenerator()
         
     def analyze(self, data: pd.DataFrame, design_type: str = 'factorial') -> Dict[str, Any]:
@@ -13364,6 +13364,31 @@ print(design)
 
 # Polymer-doe-platform - Part 14 (Final)
 # ==================== 보고서 생성 시스템 ====================
+class TemplateEngine:
+    """간단한 템플릿 엔진"""
+    def __init__(self):
+        self.templates = {}
+    
+    def render(self, template_name: str, context: Dict) -> str:
+        # 간단한 템플릿 렌더링 로직
+        return f"Template: {template_name}, Context: {context}"
+
+class ChartGenerator:
+    """간단한 차트 생성기"""
+    def __init__(self):
+        self.chart_types = ['line', 'bar', 'scatter']
+    
+    def create_chart(self, data: pd.DataFrame, chart_type: str) -> go.Figure:
+        # 간단한 차트 생성 로직
+        return go.Figure()
+
+class ReportGenerator:
+    """실험 보고서 생성기"""
+    
+    def __init__(self):
+        self.template_engine = TemplateEngine()
+        self.chart_generator = ChartGenerator()
+
 class ReportGenerator:
     """실험 보고서 생성기"""
     
