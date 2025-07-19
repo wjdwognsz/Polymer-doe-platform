@@ -10353,6 +10353,119 @@ class FactorLibrary:
         """모든 요인"""
         return self.factors
 
+class DataAnalyzer:
+    """실험 데이터 분석 엔진"""
+    
+    def __init__(self):
+        self.statistical_analyzer = StatisticalAnalyzer()
+        self.visualization_engine = VisualizationEngine()
+        self.ml_analyzer = MLAnalyzer()
+        self.report_generator = ReportGenerator()
+        
+    def analyze(self, data: pd.DataFrame, design_type: str = 'factorial') -> Dict[str, Any]:
+        """종합 데이터 분석"""
+        results = {
+            'descriptive_stats': self._get_descriptive_stats(data),
+            'anova': None,
+            'regression': None,
+            'optimization': None,
+            'visualizations': {},
+            'insights': []
+        }
+        
+        # 설계 유형에 따른 분석
+        if design_type == 'factorial':
+            results['anova'] = self._perform_anova(data)
+            results['effects'] = self._calculate_effects(data)
+        elif design_type == 'response_surface':
+            results['regression'] = self._perform_regression(data)
+            results['optimization'] = self._find_optimum(data)
+        elif design_type == 'mixture':
+            results['mixture_model'] = self._fit_mixture_model(data)
+            
+        # 시각화 생성
+        results['visualizations'] = self._create_visualizations(data, design_type)
+        
+        # AI 기반 인사이트 생성
+        results['insights'] = self._generate_insights(results)
+        
+        return results
+    
+    def _get_descriptive_stats(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """기술 통계"""
+        numeric_cols = data.select_dtypes(include=[np.number]).columns
+        return {
+            'summary': data[numeric_cols].describe().to_dict(),
+            'correlations': data[numeric_cols].corr().to_dict(),
+            'missing_values': data.isnull().sum().to_dict()
+        }
+    
+    def _perform_anova(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """분산분석"""
+        # 간단한 ANOVA 구현 (실제로는 statsmodels 사용 권장)
+        return {
+            'f_statistic': 0.0,
+            'p_value': 0.0,
+            'significant': False,
+            'message': 'ANOVA 분석이 필요합니다'
+        }
+    
+    def _calculate_effects(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """효과 계산"""
+        return {
+            'main_effects': {},
+            'interaction_effects': {},
+            'message': '효과 계산이 필요합니다'
+        }
+    
+    def _perform_regression(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """회귀 분석"""
+        return {
+            'coefficients': {},
+            'r_squared': 0.0,
+            'adjusted_r_squared': 0.0,
+            'message': '회귀 분석이 필요합니다'
+        }
+    
+    def _find_optimum(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """최적점 찾기"""
+        return {
+            'optimum_point': {},
+            'predicted_response': 0.0,
+            'message': '최적화가 필요합니다'
+        }
+    
+    def _fit_mixture_model(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """혼합물 모델 적합"""
+        return {
+            'model_type': 'simplex-lattice',
+            'coefficients': {},
+            'message': '혼합물 모델 적합이 필요합니다'
+        }
+    
+    def _create_visualizations(self, data: pd.DataFrame, design_type: str) -> Dict[str, Any]:
+        """시각화 생성"""
+        return {
+            'scatter_matrix': None,
+            'main_effects_plot': None,
+            'interaction_plot': None,
+            'contour_plot': None,
+            'message': '시각화 생성이 필요합니다'
+        }
+    
+    def _generate_insights(self, results: Dict[str, Any]) -> List[str]:
+        """AI 기반 인사이트 생성"""
+        insights = []
+        
+        # 기본 인사이트
+        if results.get('anova') and results['anova'].get('significant'):
+            insights.append("✓ 요인들이 반응변수에 유의미한 영향을 미칩니다.")
+            
+        if results.get('optimization'):
+            insights.append("✓ 최적 조건을 찾았습니다.")
+            
+        return insights
+
 # ==================== 사용자 인터페이스 시스템 ====================
 class ResultsVisualizationPage:
     """결과 시각화 페이지"""
