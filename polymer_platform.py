@@ -6374,6 +6374,20 @@ class GeminiEngine(BaseAIEngine):
             "코드 생성 및 디버깅"
         ]
 
+    def _initialize_client(self):
+        """Gemini 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        try:
+            genai.configure(api_key=self.api_key)
+            self.client = genai.GenerativeModel('gemini-pro')
+            self.available = True
+            return True
+        except Exception as e:
+            logger.error(f"Gemini 클라이언트 초기화 실패: {str(e)}")
+            return False
+
 class GrokEngine(BaseAIEngine):
     """xAI Grok 엔진"""
     
@@ -6418,6 +6432,14 @@ class GrokEngine(BaseAIEngine):
             "실시간 정보 접근",
             "빠른 응답 속도"
         ]
+
+    def _initialize_client(self):
+        """Grok 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        self.available = True  # HTTP 요청 기반이므로 별도 클라이언트 불필요
+        return True
 
 class SambaNovaEngine(BaseAIEngine):
     """SambaNova AI 엔진"""
@@ -6464,6 +6486,14 @@ class SambaNovaEngine(BaseAIEngine):
             "안정적인 응답"
         ]
 
+    def _initialize_client(self):
+        """SambaNova 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        self.available = True  # HTTP 요청 기반
+        return True
+
 class DeepSeekEngine(BaseAIEngine):
     """DeepSeek AI 엔진"""
     
@@ -6509,6 +6539,26 @@ class DeepSeekEngine(BaseAIEngine):
             "알고리즘 설계"
         ]
 
+    def _initialize_client(self):
+        """DeepSeek 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        try:
+            if OPENAI_AVAILABLE:
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.deepseek.com/v1"
+                )
+                self.available = True
+                return True
+            else:
+                logger.warning("OpenAI 라이브러리가 설치되지 않았습니다")
+                return False
+        except Exception as e:
+            logger.error(f"DeepSeek 클라이언트 초기화 실패: {str(e)}")
+            return False
+
 class GroqEngine(BaseAIEngine):
     """Groq 초고속 AI 엔진"""
     
@@ -6550,6 +6600,23 @@ class GroqEngine(BaseAIEngine):
             "대량 요청 처리",
             "낮은 지연시간"
         ]
+
+    def _initialize_client(self):
+        """Groq 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        try:
+            if GROQ_AVAILABLE:
+                self.client = Groq(api_key=self.api_key)
+                self.available = True
+                return True
+            else:
+                logger.warning("Groq 라이브러리가 설치되지 않았습니다")
+                return False
+        except Exception as e:
+            logger.error(f"Groq 클라이언트 초기화 실패: {str(e)}")
+            return False
 
 class HuggingFaceEngine(BaseAIEngine):
     """HuggingFace 특화 모델 엔진"""
@@ -6609,6 +6676,23 @@ class HuggingFaceEngine(BaseAIEngine):
             "특화 모델 활용",
             "무료 티어 제공"
         ]
+
+    def _initialize_client(self):
+        """HuggingFace 클라이언트 초기화"""
+        if not self.api_key:
+            return False
+        
+        try:
+            if HUGGINGFACE_AVAILABLE:
+                self.client = InferenceClient(token=self.api_key)
+                self.available = True
+                return True
+            else:
+                logger.warning("HuggingFace 라이브러리가 설치되지 않았습니다")
+                return False
+        except Exception as e:
+            logger.error(f"HuggingFace 클라이언트 초기화 실패: {str(e)}")
+            return False
 
 # ==================== 다중 AI 오케스트레이터 ====================
 class MultiAIOrchestrator:
