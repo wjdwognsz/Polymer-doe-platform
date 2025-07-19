@@ -19,7 +19,8 @@ shap>=0.48.0
 
 # ==================== Streamlit 확장 ====================
 streamlit-option-menu>=0.3.6
-streamlit-aggrid>=0.3.4
+#streamlit-aggrid>=0.3.4
+st-aggrid>=0.3.0
 streamlit-elements>=0.1.0
 streamlit-ace>=0.1.1
 streamlit-drawable-canvas>=0.9.3
