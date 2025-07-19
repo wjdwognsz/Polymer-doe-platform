@@ -218,6 +218,12 @@ from scipy.spatial.distance import cdist
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 #from sklearn.decomposition import PCA, ICA, NMF
 from sklearn.decomposition import PCA, FastICA, NMF
+try:
+    from sklearn.decomposition import FastICA
+    # ICA를 FastICA의 별칭으로 설정
+    ICA = FastICA
+except ImportError:
+    pass
 from sklearn.manifold import TSNE, MDS
 from sklearn.model_selection import (
     train_test_split, cross_val_score, KFold, 
