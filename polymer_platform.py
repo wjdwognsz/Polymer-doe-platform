@@ -11549,10 +11549,19 @@ class PolymerDOEApp:
         self._apply_custom_css()
         
         # 초기화 대기
-        if hasattr(st.session_state, 'init_task'):
-            if not st.session_state.init_task.done():
-                st.info("시스템을 초기화하고 있습니다. 잠시만 기다려주세요...")
-                return
+        if not st.session_state.get('init_complete', False):
+            with st.spinner("시스템을 초기화하고 있습니다. 잠시만 기다려주세요..."):
+                # 비동기 함수를 동기적으로 실행
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._initialize_systems())
+                    st.session_state.init_complete = True
+                except Exception as e:
+                    st.error(f"초기화 실패: {str(e)}")
+                    return
+                finally:
+                    loop.close()
         
         # UI 시스템 생성 및 렌더링
         ui_system = UserInterfaceSystem()
