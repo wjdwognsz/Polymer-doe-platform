@@ -6503,33 +6503,25 @@ class DeepSeekEngine(BaseAIEngine):
         
     def _initialize_client(self):
         """DeepSeek 클라이언트 초기화"""
-        from openai import OpenAI
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url="https://api.deepseek.com/v1"
-        )
-        
-    async def _call_api(self, prompt: str, context: Dict, temperature: float, max_tokens: int) -> Dict:
-        """DeepSeek API 호출"""
-        messages = [
-            {"role": "system", "content": "당신은 고분자 화학 및 재료과학 전문가입니다. 수식 계산, 화학 구조 해석, 코드 생성에 특화되어 있습니다."},
-            {"role": "user", "content": self._build_full_prompt(prompt, context)}
-        ]
-        
-        response = await asyncio.to_thread(
-            self.client.chat.completions.create,
-            model=self.model_name,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        
-        return {
-            'content': response.choices[0].message.content,
-            'prompt_tokens': response.usage.prompt_tokens,
-            'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens
-        }
+        if not self.api_key:
+            return False
+    
+        try:
+            # OpenAI가 전역에서 import되었는지 확인
+            if OPENAI_AVAILABLE:
+                from openai import OpenAI
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.deepseek.com/v1"
+                )
+                self.available = True
+                return True
+            else:
+                logger.warning("OpenAI 라이브러리가 설치되지 않았습니다")
+                return False
+        except Exception as e:
+            logger.error(f"DeepSeek 클라이언트 초기화 실패: {str(e)}")
+            return False
     
     def _get_specific_capabilities(self) -> List[str]:
         return [
@@ -13705,23 +13697,35 @@ class PolymerDOEApp:
 
             if api_key_manager:
                 logger.info("=== API 키 디버깅 정보 ===")
-                logger.info(f"저장된 API 키 목록: {list(api_key_manager.api_keys.keys())}")
     
+                # api_keys는 st.session_state에 저장됨
+                if 'api_keys' in st.session_state:
+                    logger.info(f"저장된 API 키 목록: {list(st.session_state.api_keys.keys())}")
+                    logger.info(f"저장된 API 키 개수: {len(st.session_state.api_keys)}")
+                else:
+                    logger.info("API 키가 아직 초기화되지 않았습니다.")
+        
+                # API 키 초기화 상태 확인
+                if hasattr(st.session_state, 'api_keys_initialized'):
+                    logger.info(f"API 키 초기화 상태: {st.session_state.api_keys_initialized}")
+
                 # 각 키의 존재 여부 확인
-                test_keys = ['google_gemini', 'xai_grok', 'groq', 'sambanova', 'deepseek', 'huggingface']
+                test_keys = ['gemini', 'grok', 'groq', 'sambanova', 'deepseek', 'huggingface']
                 for key in test_keys:
                     if api_key_manager.is_key_set(key):
                         logger.info(f"✓ {key} 키 존재")
                     else:
                         logger.info(f"✗ {key} 키 없음")
-    
+
                 # streamlit secrets 직접 확인
                 logger.info("=== Streamlit Secrets 확인 ===")
                 if hasattr(st, 'secrets'):
-                    for key in st.secrets:
-                        if 'api' in key.lower() or 'key' in key.lower():
-                            logger.info(f"Secret 키: {key}")
-    
+                    secret_keys = list(st.secrets.keys())
+                    logger.info(f"Secrets에 저장된 키 개수: {len(secret_keys)}")
+                    for key in secret_keys:
+                        if any(x in key.lower() for x in ['api', 'key', 'gemini', 'grok', 'groq']):
+                            logger.info(f"Secret 키: {key} (값 길이: {len(str(st.secrets[key]))})")
+
                 logger.info("=== API 키 디버깅 완료 ===")
         
         except Exception as e:
