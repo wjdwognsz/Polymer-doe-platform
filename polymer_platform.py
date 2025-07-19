@@ -373,6 +373,15 @@ try:
 except ImportError:
     HUGGINGFACE_AVAILABLE = False
 
+# Grok API
+GROK_AVAILABLE = True
+
+# SambaNova API
+SAMBANOVA_AVAILABLE = True
+
+# DeepSeek API (OpenAI 호환)
+DEEPSEEK_AVAILABLE = True
+
 # ==================== 데이터베이스 및 저장소 ====================
 try:
     import gspread
