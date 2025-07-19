@@ -3366,6 +3366,12 @@ class APIKeyManager:
 
 api_key_manager = None  # 전역 변수 선언
 
+    def set_api_keys(self, api_keys: Dict[str, str]):
+        """여러 API 키를 한 번에 설정"""
+        for key_name, key_value in api_keys.items():
+            if key_value and key_value != 'your-key':  # 실제 키인지 확인
+                self.set_api_key(key_name, key_value)
+
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
 class RateLimiter:
@@ -7001,46 +7007,57 @@ class MultiAIOrchestrator:
         }
 
     def initialize(self):
-        """모든 AI 엔진 초기화 (동기적)"""
-        logger.info("AI 오케스트레이터 초기화 시작...")
+        """모든 AI 엔진 초기화 (수정 버전)"""
+        logger.info("=== API 키 초기화 시작 ===")
         
-        # API 키 확인 및 엔진 생성
-        engine_configs = {
-            'gemini': (GeminiEngine, 'gemini'),
-            'groq': (GroqEngine, 'groq'),
-            'grok': (GrokEngine, 'grok'),
-            'sambanova': (SambaNovaEngine, 'sambanova'),
-            'deepseek': (DeepSeekEngine, 'deepseek'),
-            'huggingface': (HuggingFaceEngine, 'huggingface')
+        # API 키 매핑 (streamlit secrets → 내부 엔진 이름)
+        key_mapping = {
+            'google_gemini': 'gemini',
+            'xai_grok': 'grok',
+            'groq': 'groq',
+            'sambanova': 'sambanova',
+            'deepseek': 'deepseek',
+            'huggingface': 'huggingface'
         }
         
-        # 각 엔진 초기화 시도
-        for engine_name, (engine_class, api_key_name) in engine_configs.items():
-            api_key = self.api_keys.get(api_key_name)
-            if api_key:
+        # Streamlit secrets에서 API 키 로드
+        if hasattr(st, 'secrets'):
+            for secret_key, engine_key in key_mapping.items():
+                if secret_key in st.secrets and st.secrets[secret_key] != 'your-key':
+                    # api_manager가 전역 변수로 있다면
+                    if 'api_manager' in globals():
+                        api_manager.set_api_key(engine_key, st.secrets[secret_key])
+        
+        # 각 엔진 설정에 따라 초기화
+        engine_configs = {
+            'gemini': GeminiEngine,
+            'grok': GrokEngine,
+            'groq': GroqEngine,
+            'sambanova': SambaNovaEngine,
+            'deepseek': DeepSeekEngine,
+            'huggingface': HuggingFaceEngine
+        }
+        
+        # 엔진 객체 생성
+        for engine_name, engine_class in engine_configs.items():
+            try:
+                self.engines[engine_name] = engine_class()
+            except Exception as e:
+                logger.warning(f"{engine_name} 엔진 생성 실패: {str(e)}")
+                self.engines[engine_name] = None
+        
+        # 각 엔진 초기화
+        for engine_name, engine in self.engines.items():
+            if engine:
                 try:
-                    # 엔진 인스턴스 생성
-                    if engine_name == 'deepseek':
-                        engine = engine_class(api_key)  # DeepSeek은 API 키를 생성자에서 받음
-                    else:
-                        engine = engine_class()
-                        engine.api_key = api_key  # 다른 엔진들은 속성으로 설정
-                    
-                    # 엔진 초기화
                     if engine.initialize():
-                        self.engines[engine_name] = engine
                         self.available_engines[engine_name] = engine
                         self.active_engines.append(engine_name)
-                        logger.info(f"✅ {engine.name} 엔진 활성화")
+                        logger.info(f"✓ {engine_name} 엔진 초기화 성공")
                     else:
-                        self.engines[engine_name] = engine
-                        logger.info(f"❌ {engine.name} 엔진 비활성화")
-                        
+                        logger.warning(f"✗ {engine_name} 엔진 초기화 실패")
                 except Exception as e:
-                    logger.error(f"{engine_name} 엔진 생성 실패: {str(e)}")
-                    self.engines[engine_name] = None
-            else:
-                logger.warning(f"{engine_name} API 키가 없습니다")
+                    logger.error(f"{engine_name} 엔진 초기화 중 오류: {str(e)}")
         
         # 최소 1개 이상의 엔진이 활성화되어야 함
         active_count = len(self.available_engines)
@@ -7302,7 +7319,32 @@ class MultiAIOrchestrator:
             'active_engines': len(self.available_engines),
             'initialized': self.initialized
         }
-    
+
+    def get_engine_status(self) -> Dict[str, Dict[str, Any]]:
+        """모든 AI 엔진의 상태 정보 반환"""
+        status = {}
+        
+        for engine_name, engine in self.engines.items():
+            if engine:
+                status[engine_name] = {
+                    'available': engine.available,
+                    'api_key_present': bool(engine.api_key),
+                    'initialized': getattr(engine, 'initialized', False),
+                    'client': bool(getattr(engine, 'client', None)),
+                    'error': getattr(engine, 'last_error', None)
+                }
+            else:
+                status[engine_name] = {
+                    'available': False,
+                    'api_key_present': False,
+                    'initialized': False,
+                    'client': False,
+                    'error': 'Engine not created'
+                }
+        
+        return status
+
+
 # Polymer-doe-platform - Part 7
 # ==================== AI 학습 시스템 (총 정리) ====================
 # ==================== 상호작용 데이터베이스 ====================
@@ -14572,11 +14614,26 @@ class PolymerDOEApp:
                 api_key_manager = APIKeyManager()
             
             # 3. AI 오케스트레이터 초기화
-            if 'ai_orchestrator' not in st.session_state:
-                logger.info("AI 오케스트레이터 초기화 시작...")
-                st.session_state.ai_orchestrator = MultiAIOrchestrator()
-                if not st.session_state.ai_orchestrator.initialize():
+            try:
+                ai_orchestrator = MultiAIOrchestrator()
+                if ai_orchestrator.initialize():
+                    logger.info("AI 오케스트레이터 초기화 성공")
+        
+                    # 상태 확인
+                    if hasattr(ai_orchestrator, 'get_engine_status'):
+                        status = ai_orchestrator.get_engine_status()
+                        logger.info("=== AI 엔진 상태 ===")
+                        for engine, info in status.items():
+                            if info['available']:
+                                logger.info(f"✓ {engine}: 활성")
+                            else:
+                                logger.info(f"✗ {engine}: 비활성 - {info.get('error', 'Unknown')}")
+                else:
                     logger.error("AI 오케스트레이터 초기화 실패")
+                    ai_orchestrator = None
+            except Exception as e:
+                logger.error(f"AI 오케스트레이터 생성 중 오류: {str(e)}")
+                ai_orchestrator = None
             
             # 4. 데이터베이스 매니저 초기화
             if 'db_manager' not in st.session_state:
@@ -14617,11 +14674,18 @@ class PolymerDOEApp:
                 # streamlit secrets 직접 확인
                 logger.info("=== Streamlit Secrets 확인 ===")
                 if hasattr(st, 'secrets'):
-                    secret_keys = list(st.secrets.keys())
-                    logger.info(f"Secrets에 저장된 키 개수: {len(secret_keys)}")
-                    for key in secret_keys:
-                        if any(x in key.lower() for x in ['api', 'key', 'gemini', 'grok', 'groq']):
-                            logger.info(f"Secret 키: {key} (값 길이: {len(str(st.secrets[key]))})")
+                    logger.info(f"Streamlit secrets 키 개수: {len(st.secrets)}")
+    
+                    # AI 관련 키만 확인
+                    ai_keys = ['google_gemini', 'xai_grok', 'groq', 'sambanova', 'deepseek', 'huggingface']
+                    for key in ai_keys:
+                        if key in st.secrets:
+                            if st.secrets[key] != 'your-key':
+                                logger.info(f"✓ {key} 키 발견 (실제 키)")
+                            else:
+                                logger.debug(f"✗ {key} 키 미설정 ('your-key')")
+                        else:
+                            logger.warning(f"✗ {key} 키 없음")
 
                 logger.info("=== API 키 디버깅 완료 ===")
         
