@@ -339,11 +339,14 @@ import socketio
 # ==================== AI 서비스 ====================
 # OpenAI
 try:
-    import openai
-    from openai import AsyncOpenAI
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+    # OpenAI 클래스 더미 정의
+    class OpenAI:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("OpenAI library is not installed")
 
 # Google AI
 try:
