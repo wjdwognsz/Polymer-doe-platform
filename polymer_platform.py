@@ -7311,6 +7311,7 @@ class DatabaseIntegrationManager:
     
     def __init__(self):
         self.databases = {
+            # 기존 데이터베이스
             'materials_project': MaterialsProjectClient(),
             'pubchem': PubChemClient(),
             'polyinfo': PolyInfoClient(),
@@ -7319,7 +7320,11 @@ class DatabaseIntegrationManager:
             'zenodo': ZenodoClient(),
             'figshare': FigshareClient(),
             'openalex': OpenAlexClient(),
-            'crossref': CrossrefClient()
+            'crossref': CrossrefClient(),
+            
+            # 추가 데이터베이스
+            'materials_commons': MaterialsCommonsClient(),
+            'chemspider': ChemSpiderClient()
         }
         self.cache = DatabaseCache()
         self.search_orchestrator = SearchOrchestrator()
