@@ -6315,7 +6315,7 @@ class GeminiEngine(BaseAIEngine):
     """Google Gemini AI 엔진"""
     
     def __init__(self):
-        super().__init__("gemini", "gemini")
+        super().__init__("Gemini", "gemini")
         self.model_name = "gemini-2.0-flash-exp"
         
     def _initialize_client(self):
@@ -6392,7 +6392,7 @@ class GrokEngine(BaseAIEngine):
     """xAI Grok 엔진"""
     
     def __init__(self):
-        super().__init__("grok", "grok")
+        super().__init__("Grok", "grok")
         self.model_name = "grok-3-mini"
         
     def _initialize_client(self):
