@@ -6388,6 +6388,36 @@ class AIOrchestrator:
             }
         return status
 
+# ==================== AI 학습 시스템 (총 정리) ====================
+# ==================== 상호작용 데이터베이스 ====================
+class InteractionDatabase:
+    """AI 상호작용 기록 데이터베이스"""
+    
+    def __init__(self):
+        self.interactions = []
+        self.db_path = "interactions.db"
+        self.lock = threading.Lock()
+        
+    async def save_interaction(self, interaction: Dict):
+        """상호작용 저장"""
+        with self.lock:
+            self.interactions.append(interaction)
+            # 실제로는 데이터베이스에 저장
+            logger.info(f"상호작용 저장: {interaction['id']}")
+    
+    async def get_interactions(self, limit: int = 100) -> List[Dict]:
+        """최근 상호작용 조회"""
+        with self.lock:
+            return self.interactions[-limit:]
+    
+    async def get_interaction_by_id(self, interaction_id: str) -> Optional[Dict]:
+        """ID로 상호작용 조회"""
+        with self.lock:
+            for interaction in self.interactions:
+                if interaction.get('id') == interaction_id:
+                    return interaction
+        return None
+
 # ==================== AI 학습 시스템 ====================
 class AILearningSystem:
     """AI 상호작용 학습 및 개선 시스템"""
