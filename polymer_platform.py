@@ -3364,13 +3364,13 @@ class APIKeyManager:
         
         return summary
 
-api_key_manager = None  # 전역 변수 선언
-
     def set_api_keys(self, api_keys: Dict[str, str]):
         """여러 API 키를 한 번에 설정"""
         for key_name, key_value in api_keys.items():
             if key_value and key_value != 'your-key':  # 실제 키인지 확인
-                self.set_api_key(key_name, key_value)
+                self.set_key(key_name, key_value)  # set_api_key가 아니라 set_key 사용!
+
+api_key_manager = None  # 전역 변수 선언
 
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
@@ -6349,7 +6349,7 @@ class BaseAIEngine:
         self.cache = AIResponseCache(name)
         
     def initialize(self):
-        """엔진 초기화"""
+        """엔진 초기화 (수정 버전)"""
         global api_key_manager
         
         # API 키 관리자 확인
@@ -6359,30 +6359,43 @@ class BaseAIEngine:
         
         # API 키 관리자에서 키 가져오기
         try:
-            if api_key_manager.is_key_set(self.api_key_id):
-                self.api_key = api_key_manager.get_key(self.api_key_id)
-                if self.api_key:
-                    logger.info(f"{self.name} API 키 로드 성공")
+            # streamlit secrets의 키 매핑
+            secret_key_mapping = {
+                'gemini': 'google_gemini',
+                'grok': 'xai_grok',
+                'groq': 'groq',
+                'sambanova': 'sambanova',
+                'deepseek': 'deepseek',
+                'huggingface': 'huggingface'
+            }
+            
+            # streamlit secrets에서 직접 확인
+            if hasattr(st, 'secrets'):
+                secret_key = secret_key_mapping.get(self.api_key_id, self.api_key_id)
+                if secret_key in st.secrets:
+                    self.api_key = st.secrets[secret_key]
+                    if self.api_key and self.api_key != 'your-key':
+                        logger.info(f"{self.name} API 키 로드 성공")
+                    else:
+                        logger.warning(f"{self.name} API 키가 설정되지 않음")
+                        return False
                 else:
-                    logger.warning(f"{self.name} API 키가 비어있습니다")
+                    logger.warning(f"{self.name} API 키를 찾을 수 없습니다")
                     return False
-            else:
-                logger.warning(f"{self.name} API 키를 찾을 수 없습니다 (key_id: {self.api_key_id})")
-                return False
+            
+            # API 키 관리자에서도 확인 (백업)
+            if not self.api_key and api_key_manager.is_key_set(self.api_key_id):
+                self.api_key = api_key_manager.get_key(self.api_key_id)
+                
         except Exception as e:
             logger.error(f"{self.name} API 키 로드 중 오류: {str(e)}")
             return False
         
         # Rate limiter 설정
-        if api_key_manager and hasattr(api_key_manager, 'rate_limiters') and self.api_key_id in api_key_manager.rate_limiters:
+        if self.api_key_id in api_key_manager.rate_limiters:
             self.rate_limiter = api_key_manager.rate_limiters[self.api_key_id]
         
-        # 하위 클래스의 초기화 호출
-        try:
-            return self._initialize_client()
-        except Exception as e:
-            logger.error(f"{self.name} 클라이언트 초기화 실패: {str(e)}")
-            return False
+        return True
     
     def _initialize_client(self):
         """각 AI 엔진별 클라이언트 초기화 (하위 클래스에서 구현)"""
