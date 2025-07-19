@@ -3780,6 +3780,192 @@ class MLPredictionSystem:
             return {}
 
 # Polymer-doe-platform - Part 5
+# ==================== 통계 분석 엔진 (확장) (총 정리) ====================
+# ==================== 통계 분석 엔진 ====================
+class StatisticalAnalyzer:
+    """기본 통계 분석 엔진"""
+    
+    def __init__(self):
+        self.logger = logger
+        
+    def generate_factorial_design(self, factors, full_factorial=True):
+        """요인설계 생성"""
+        try:
+            if full_factorial:
+                # 완전 요인설계
+                levels = [factor.get('levels', [factor['min_value'], factor['max_value']]) 
+                         for factor in factors]
+                design_matrix = self._full_factorial(levels)
+            else:
+                # 부분 요인설계
+                design_matrix = self._fractional_factorial(factors)
+            
+            # 런 번호 추가
+            factor_names = [f['name'] for f in factors]
+            design_df = pd.DataFrame(design_matrix, columns=factor_names)
+            design_df.insert(0, '실험번호', range(1, len(design_df) + 1))
+            
+            return design_df
+            
+        except Exception as e:
+            self.logger.error(f'generate_factorial_design 오류: {e}')
+            return pd.DataFrame()
+    
+    def _full_factorial(self, levels):
+        """완전 요인설계 생성"""
+        import itertools
+        return list(itertools.product(*levels))
+    
+    def _fractional_factorial(self, factors):
+        """부분 요인설계 생성"""
+        k = len(factors)
+        if k <= 4:
+            levels = [f.get('levels', [f['min_value'], f['max_value']])[:2] 
+                     for f in factors]
+            return self._full_factorial(levels)
+        
+        # 5개 이상 요인시 1/2 부분설계
+        base_factors = factors[:4]
+        base_levels = [f.get('levels', [f['min_value'], f['max_value']])[:2] 
+                      for f in base_factors]
+        base_design = self._full_factorial(base_levels)
+        
+        # 추가 요인들은 교호작용으로 정의
+        extended_design = []
+        for design_point in base_design:
+            extended_point = list(design_point)
+            for j in range(4, k):
+                # 간단한 교호작용 정의
+                interaction_value = design_point[0] if j % 2 == 0 else design_point[1]
+                extended_point.append(interaction_value)
+            extended_design.append(extended_point)
+        
+        return extended_design
+    
+    def analyze_results(self, design_df, results_data):
+        """실험 결과 분석"""
+        try:
+            analysis = {
+                'descriptive': self._calculate_descriptive_stats(results_data),
+                'anova': self._perform_anova(design_df, results_data),
+                'regression': self._perform_regression(design_df, results_data),
+                'optimization': self._find_optimal_conditions(design_df, results_data)
+            }
+            return analysis
+        except Exception as e:
+            self.logger.error(f'analyze_results 오류: {e}')
+            return {}
+    
+    def _calculate_descriptive_stats(self, data):
+        """기술통계 계산"""
+        stats = {}
+        
+        for column in data.columns:
+            if pd.api.types.is_numeric_dtype(data[column]):
+                stats[column] = {
+                    'mean': data[column].mean(),
+                    'std': data[column].std(),
+                    'min': data[column].min(),
+                    'max': data[column].max(),
+                    'median': data[column].median(),
+                    'cv': data[column].std() / data[column].mean() * 100 if data[column].mean() != 0 else 0
+                }
+        
+        return stats
+    
+    def _perform_anova(self, design_df, results_data):
+        """ANOVA 분석"""
+        anova_results = {}
+        
+        # 각 반응변수에 대해 ANOVA 수행
+        for response_col in results_data.columns:
+            if pd.api.types.is_numeric_dtype(results_data[response_col]):
+                try:
+                    # 간단한 일원분산분석 (실제로는 더 복잡)
+                    factor_cols = [col for col in design_df.columns if col != '실험번호']
+                    
+                    if len(factor_cols) > 0:
+                        # F-통계량 계산 (간략화된 버전)
+                        groups = []
+                        for level in design_df[factor_cols[0]].unique():
+                            group_data = results_data[response_col][design_df[factor_cols[0]] == level]
+                            groups.append(group_data.dropna())
+                        
+                        if len(groups) >= 2:
+                            f_stat, p_value = stats.f_oneway(*groups)
+                            anova_results[response_col] = {
+                                'f_statistic': f_stat,
+                                'p_value': p_value,
+                                'significant': p_value < 0.05
+                            }
+                except Exception as e:
+                    self.logger.error(f'ANOVA 오류 ({response_col}): {e}')
+        
+        return anova_results
+    
+    def _perform_regression(self, design_df, results_data):
+        """회귀분석"""
+        regression_results = {}
+        
+        try:
+            from sklearn.linear_model import LinearRegression
+            from sklearn.preprocessing import PolynomialFeatures
+            
+            # 설계 행렬 준비
+            X = design_df.drop('실험번호', axis=1)
+            
+            for response_col in results_data.columns:
+                if pd.api.types.is_numeric_dtype(results_data[response_col]):
+                    y = results_data[response_col]
+                    
+                    # 결측값 제거
+                    valid_idx = ~y.isna()
+                    X_valid = X[valid_idx]
+                    y_valid = y[valid_idx]
+                    
+                    if len(y_valid) > len(X_valid.columns):
+                        # 선형 회귀
+                        model = LinearRegression()
+                        model.fit(X_valid, y_valid)
+                        
+                        y_pred = model.predict(X_valid)
+                        r2 = r2_score(y_valid, y_pred)
+                        
+                        regression_results[response_col] = {
+                            'r2': r2,
+                            'coefficients': dict(zip(X.columns, model.coef_)),
+                            'intercept': model.intercept_
+                        }
+        except Exception as e:
+            self.logger.error(f'회귀분석 오류: {e}')
+        
+        return regression_results
+    
+    def _find_optimal_conditions(self, design_df, results_data):
+        """최적 조건 찾기"""
+        optimal_conditions = {}
+        
+        for response_col in results_data.columns:
+            if pd.api.types.is_numeric_dtype(results_data[response_col]):
+                # 최대값을 갖는 조건 찾기
+                max_idx = results_data[response_col].idxmax()
+                if not pd.isna(max_idx):
+                    optimal_conditions[response_col] = {
+                        'best_value': results_data[response_col][max_idx],
+                        'conditions': design_df.iloc[max_idx].to_dict()
+                    }
+        
+        return optimal_conditions
+
+# ==================== 기계학습 분석기 ====================
+class MachineLearningAnalyzer:
+    """기계학습 기반 분석기"""
+    
+    def __init__(self):
+        self.models = {}
+        self.scalers = {}
+        self.logger = logger
+
 # ==================== 통계 분석 엔진 (확장) ====================
 class AdvancedStatisticalAnalyzer:
     """고급 통계 분석 엔진"""
