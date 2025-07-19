@@ -384,6 +384,7 @@ try:
     GSPREAD_AVAILABLE = True
 except ImportError:
     GSPREAD_AVAILABLE = False
+    logger.warning("Google 인증 라이브러리를 사용할 수 없습니다.")
 
 try:
     from github import Github
@@ -2758,6 +2759,8 @@ class APIKeyManager:
         except Exception as e:
             logger.error(f"API 호출 실패 ({api_id}): {e}")
             raise
+
+api_key_manager = None  # 전역 변수 선언
 
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
@@ -6305,8 +6308,6 @@ class AIOrchestrator:
                 'message': str(e)
             }
 
-# Polymer-doe-platform - Part 7
-# ==================== AI 합의 시스템 (계속) ====================
     async def _build_consensus(self, responses: List[Dict], prompt: str) -> Dict[str, Any]:
         """AI 응답들로부터 합의 도출"""
         logger.info("AI 합의 빌드 시작...")
@@ -6573,7 +6574,8 @@ class AIOrchestrator:
                 'usage': engine.usage_tracker.get_usage_stats() if hasattr(engine, 'usage_tracker') else {}
             }
         return status
-
+    
+# Polymer-doe-platform - Part 7
 # ==================== AI 학습 시스템 (총 정리) ====================
 # ==================== 상호작용 데이터베이스 ====================
 class InteractionDatabase:
@@ -7381,6 +7383,137 @@ class GitHubClient(BaseDBClient):
                 'topics': item.get('topics', []),
                 'last_updated': item.get('updated_at'),
                 'url': item.get('html_url')
+            })
+        return formatted
+
+class ZenodoClient(BaseDBClient):
+    """Zenodo API 클라이언트"""
+    
+    def __init__(self):
+        super().__init__(
+            name="zenodo",
+            base_url="https://zenodo.org/api",
+            requires_auth=True
+        )
+        
+    async def _test_connection(self):
+        """연결 테스트"""
+        if not self.auth_credentials:
+            raise ConnectionError("Zenodo API 토큰이 필요합니다")
+            
+        headers = {'Authorization': f"Bearer {self.auth_credentials['access_token']}"}
+        async with self.session.get(f"{self.base_url}/deposit/depositions", headers=headers) as response:
+            if response.status != 200:
+                raise ConnectionError(f"API 응답 오류: {response.status}")
+    
+    async def search(self, query: str, filters: Dict = None) -> List[Dict]:
+        """Zenodo 레코드 검색"""
+        if not self.is_available:
+            return []
+        
+        params = {
+            'q': query,
+            'size': filters.get('size', 20) if filters else 20,
+            'sort': filters.get('sort', 'mostrecent') if filters else 'mostrecent'
+        }
+        
+        if filters:
+            if 'type' in filters:
+                params['type'] = filters['type']
+            if 'keywords' in filters:
+                params['keywords'] = filters['keywords']
+        
+        try:
+            async with self.session.get(
+                f"{self.base_url}/records",
+                params=params
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._format_results(data.get('hits', {}).get('hits', []))
+                else:
+                    logger.error(f"{self.name}: 검색 오류 - {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"{self.name}: 검색 중 오류 - {str(e)}")
+            return []
+    
+    def _format_results(self, raw_results: List[Dict]) -> List[Dict]:
+        """결과 포맷팅"""
+        formatted = []
+        for item in raw_results:
+            formatted.append({
+                'source': 'Zenodo',
+                'doi': item.get('doi'),
+                'title': item.get('metadata', {}).get('title'),
+                'authors': item.get('metadata', {}).get('creators', []),
+                'description': item.get('metadata', {}).get('description'),
+                'keywords': item.get('metadata', {}).get('keywords', []),
+                'publication_date': item.get('metadata', {}).get('publication_date'),
+                'files': item.get('files', []),
+                'url': item.get('links', {}).get('html')
+            })
+        return formatted
+
+
+class FigshareClient(BaseDBClient):
+    """Figshare API 클라이언트"""
+    
+    def __init__(self):
+        super().__init__(
+            name="figshare",
+            base_url="https://api.figshare.com/v2",
+            requires_auth=False
+        )
+        
+    async def _test_connection(self):
+        """연결 테스트"""
+        async with self.session.get(f"{self.base_url}/articles?page_size=1") as response:
+            if response.status != 200:
+                raise ConnectionError(f"API 응답 오류: {response.status}")
+    
+    async def search(self, query: str, filters: Dict = None) -> List[Dict]:
+        """Figshare 아티클 검색"""
+        if not self.is_available:
+            return []
+        
+        params = {
+            'search_for': query,
+            'page_size': filters.get('limit', 20) if filters else 20,
+            'order': filters.get('order', 'published_date') if filters else 'published_date',
+            'order_direction': filters.get('order_direction', 'desc') if filters else 'desc'
+        }
+        
+        try:
+            async with self.session.get(
+                f"{self.base_url}/articles/search",
+                params=params
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._format_results(data)
+                else:
+                    logger.error(f"{self.name}: 검색 오류 - {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"{self.name}: 검색 중 오류 - {str(e)}")
+            return []
+    
+    def _format_results(self, raw_results: List[Dict]) -> List[Dict]:
+        """결과 포맷팅"""
+        formatted = []
+        for item in raw_results:
+            formatted.append({
+                'source': 'Figshare',
+                'id': item.get('id'),
+                'title': item.get('title'),
+                'doi': item.get('doi'),
+                'description': item.get('description'),
+                'authors': [author.get('full_name') for author in item.get('authors', [])],
+                'categories': [cat.get('title') for cat in item.get('categories', [])],
+                'tags': item.get('tags', []),
+                'published_date': item.get('published_date'),
+                'url': item.get('figshare_url')
             })
         return formatted
 
@@ -9017,6 +9150,226 @@ class FactorLibrary:
         return self.factors
 
 # ==================== 사용자 인터페이스 시스템 ====================
+class ResultsVisualizationPage:
+    """결과 시각화 페이지"""
+    
+    def __init__(self):
+        self.visualizer = EnhancedVisualizationEngine()
+        self.analyzer = DataAnalyzer()
+    
+    def render(self):
+        """페이지 렌더링"""
+        st.title("📊 결과 시각화")
+        
+        # 사이드바 설정
+        with st.sidebar:
+            st.header("시각화 설정")
+            
+            # 프로젝트 선택
+            if 'projects' in st.session_state:
+                project_names = [p.name for p in st.session_state.projects]
+                selected_project = st.selectbox(
+                    "프로젝트 선택",
+                    project_names,
+                    key="viz_project_select"
+                )
+            else:
+                st.info("먼저 프로젝트를 생성하세요.")
+                return
+            
+            # 시각화 유형 선택
+            viz_type = st.selectbox(
+                "시각화 유형",
+                ["주효과 플롯", "상호작용 플롯", "반응표면", "등고선도", 
+                 "3D 표면", "상자 그림", "히트맵", "최적화 경로"],
+                key="viz_type_select"
+            )
+        
+        # 메인 영역
+        tabs = st.tabs(["📈 플롯", "📊 통계 요약", "🎯 최적화 결과", "📄 보고서"])
+        
+        with tabs[0]:
+            self._render_plots(viz_type)
+        
+        with tabs[1]:
+            self._render_statistics()
+        
+        with tabs[2]:
+            self._render_optimization()
+        
+        with tabs[3]:
+            self._render_report_preview()
+    
+    def _render_plots(self, viz_type: str):
+        """플롯 렌더링"""
+        if 'analysis_results' not in st.session_state:
+            st.info("분석 결과가 없습니다. 먼저 데이터 분석을 수행하세요.")
+            return
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            # 플롯 표시
+            if viz_type == "주효과 플롯":
+                fig = self.visualizer.create_main_effects_plot(
+                    st.session_state.analysis_results,
+                    st.session_state.selected_response
+                )
+            elif viz_type == "상호작용 플롯":
+                fig = self.visualizer.create_interaction_plot(
+                    st.session_state.analysis_results,
+                    st.session_state.selected_response
+                )
+            elif viz_type == "반응표면":
+                fig = self.visualizer.create_response_surface(
+                    st.session_state.analysis_results,
+                    st.session_state.selected_response
+                )
+            # ... 다른 플롯 유형들
+            else:
+                fig = go.Figure()
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # 플롯 설정
+            st.subheader("플롯 설정")
+            
+            # 색상 테마
+            color_theme = st.selectbox(
+                "색상 테마",
+                ["default", "sequential", "diverging", "polymer", "professional"]
+            )
+            
+            # 플롯 크기
+            width = st.slider("너비", 400, 1200, 800)
+            height = st.slider("높이", 300, 800, 600)
+            
+            # 내보내기
+            if st.button("이미지로 저장"):
+                self._export_plot(fig, f"{viz_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    
+    def _render_statistics(self):
+        """통계 요약 렌더링"""
+        if 'analysis_results' not in st.session_state:
+            st.info("분석 결과가 없습니다.")
+            return
+        
+        results = st.session_state.analysis_results
+        
+        # 기술 통계
+        st.subheader("📊 기술 통계")
+        if 'descriptive' in results:
+            desc_df = pd.DataFrame(results['descriptive']).T
+            st.dataframe(desc_df.style.format("{:.3f}"))
+        
+        # ANOVA 결과
+        st.subheader("📈 분산 분석 (ANOVA)")
+        if 'anova' in results:
+            anova_df = pd.DataFrame(results['anova'])
+            st.dataframe(anova_df.style.format("{:.4f}"))
+        
+        # 회귀 분석
+        st.subheader("📉 회귀 분석")
+        if 'regression' in results:
+            reg_info = results['regression']
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("R²", f"{reg_info.get('r_squared', 0):.4f}")
+            with col2:
+                st.metric("조정된 R²", f"{reg_info.get('adj_r_squared', 0):.4f}")
+            with col3:
+                st.metric("RMSE", f"{reg_info.get('rmse', 0):.4f}")
+    
+    def _render_optimization(self):
+        """최적화 결과 렌더링"""
+        if 'optimization_results' not in st.session_state:
+            st.info("최적화가 수행되지 않았습니다.")
+            return
+        
+        opt_results = st.session_state.optimization_results
+        
+        # 최적 조건
+        st.subheader("🎯 최적 조건")
+        opt_df = pd.DataFrame([opt_results['optimal_conditions']])
+        st.dataframe(opt_df.style.format("{:.3f}"))
+        
+        # 예상 결과
+        st.subheader("📊 예상 결과")
+        pred_df = pd.DataFrame([opt_results['predicted_responses']])
+        st.dataframe(pred_df.style.format("{:.3f}"))
+        
+        # 수렴 그래프
+        st.subheader("📈 최적화 수렴 이력")
+        fig = self.visualizer.create_optimization_history(opt_results['history'])
+        st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_report_preview(self):
+        """보고서 미리보기"""
+        st.subheader("📄 보고서 미리보기")
+        
+        # 보고서 형식 선택
+        col1, col2 = st.columns(2)
+        with col1:
+            report_format = st.selectbox(
+                "보고서 형식",
+                ["PDF", "HTML", "Markdown", "LaTeX"]
+            )
+        with col2:
+            template = st.selectbox(
+                "템플릿",
+                ["기본", "학술", "산업", "프레젠테이션"]
+            )
+        
+        # 미리보기 생성
+        if st.button("미리보기 생성"):
+            with st.spinner("보고서 생성 중..."):
+                # 보고서 생성 로직
+                report_content = self._generate_report_preview(report_format, template)
+                
+                # 미리보기 표시
+                if report_format == "HTML":
+                    st.components.v1.html(report_content, height=600)
+                else:
+                    st.text_area("보고서 내용", report_content, height=400)
+    
+    def _export_plot(self, fig: go.Figure, filename: str):
+        """플롯 내보내기"""
+        try:
+            # 이미지로 저장
+            fig.write_image(f"{filename}.png")
+            st.success(f"플롯이 {filename}.png로 저장되었습니다.")
+        except Exception as e:
+            st.error(f"저장 중 오류 발생: {str(e)}")
+    
+    def _generate_report_preview(self, format: str, template: str) -> str:
+        """보고서 미리보기 생성"""
+        # 간단한 보고서 내용 생성
+        content = f"""
+        # 실험 결과 보고서
+        
+        생성일: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        형식: {format}
+        템플릿: {template}
+        
+        ## 요약
+        - 프로젝트: {st.session_state.get('current_project', 'N/A')}
+        - 실험 설계: {st.session_state.get('design_type', 'N/A')}
+        - 총 실험 횟수: {st.session_state.get('n_experiments', 'N/A')}
+        
+        ## 주요 발견사항
+        1. 주효과 분석 결과
+        2. 상호작용 효과
+        3. 최적 조건
+        
+        ## 결론 및 권고사항
+        - 추가 실험 필요 여부
+        - 스케일업 고려사항
+        """
+        
+        return content
+
 class UserInterfaceSystem:
     """Streamlit 기반 사용자 인터페이스 시스템"""
     
@@ -11958,24 +12311,25 @@ class ReportGenerator:
 
 # ==================== 메인 애플리케이션 ====================
 class PolymerDOEApp:
-    """메인 애플리케이션 클래스"""
+    """고분자 실험 설계 플랫폼 메인 애플리케이션"""
     
     def __init__(self):
-        self.config = self._load_config()
-        self.initialize_session_state()
+        self._setup_page_config()
+        self._apply_custom_css()
         
-    def _load_config(self) -> Dict:
-        """설정 로드"""
-        return {
-            'app_name': '고분자 실험 설계 플랫폼',
-            'version': '4.0.0',
-            'theme': {
-                'primaryColor': '#1f77b4',
-                'backgroundColor': '#ffffff',
-                'secondaryBackgroundColor': '#f0f2f6',
-                'textColor': '#262730'
+    def _setup_page_config(self):
+        """페이지 설정"""
+        st.set_page_config(
+            page_title="🧬 고분자 실험 설계 플랫폼",
+            page_icon="🧬",
+            layout="wide",
+            initial_sidebar_state="expanded",
+            menu_items={
+                'Get Help': 'https://github.com/polymer-doe-platform',
+                'Report a bug': 'https://github.com/polymer-doe-platform/issues',
+                'About': f'고분자 실험 설계 플랫폼 v{VERSION}'
             }
-        }
+        )
     
     def initialize_session_state(self):
         """세션 상태 초기화"""
@@ -12000,47 +12354,63 @@ class PolymerDOEApp:
                 finally:
                     loop.close()
     
-    async def _initialize_systems(self):
-        """AI 및 데이터베이스 시스템 초기화"""
+    def _initialize_systems():
+        """시스템 초기화 함수"""
+        global api_key_manager
+    
         try:
-            # AI 오케스트레이터 초기화
-            st.session_state.ai_orchestrator = AIOrchestrator()
-            await st.session_state.ai_orchestrator.initialize()
+            # 1. 설정 관리자 초기화
+            if 'config_manager' not in st.session_state:
+                st.session_state.config_manager = ConfigurationManager()
         
-            # 데이터베이스 매니저 초기화
-            st.session_state.db_manager = DatabaseIntegrationManager()
-            await st.session_state.db_manager.initialize()
+            # 2. API 키 관리자 초기화 (전역 변수)
+            if api_key_manager is None:
+                api_key_manager = APIKeyManager()
         
-            # 실험 설계 엔진 초기화
-            st.session_state.design_engine = AdvancedExperimentDesignEngine(
-                st.session_state.ai_orchestrator,
-                st.session_state.db_manager
-            )
+            # 3. AI 오케스트레이터 초기화
+            if 'ai_orchestrator' not in st.session_state:
+                logger.info("AI 오케스트레이터 초기화 시작...")
+                st.session_state.ai_orchestrator = MultiAIOrchestrator()
+                if not st.session_state.ai_orchestrator.initialize():
+                    logger.error("AI 오케스트레이터 초기화 실패")
         
-            # 협업 시스템 초기화
-            st.session_state.collaboration_system = CollaborationSystem()
+            # 4. 데이터베이스 매니저 초기화
+            if 'db_manager' not in st.session_state:
+                st.session_state.db_manager = DatabaseIntegrationManager()
+            
+            # 5. 이벤트 버스 시작
+            if not event_bus.running:
+                event_bus.start()
+            
+            # 6. API 모니터 초기화
+            if 'api_monitor' not in st.session_state:
+                st.session_state.api_monitor = api_monitor
+            
+            logger.info("시스템 초기화 완료")
         
-            # 학습 시스템 초기화
-            st.session_state.learning_system = AILearningSystem()
-            await st.session_state.learning_system.start_learning()
-        
-            st.success("시스템 초기화 완료!")
         except Exception as e:
-            st.error(f"시스템 초기화 중 오류 발생: {str(e)}")
-            logger.error(f"초기화 오류: {e}", exc_info=True)
+            logger.error(f"초기화 오류: {e}")
+            st.error(f"시스템 초기화 중 오류가 발생했습니다: {str(e)}")
+            raise
     
     def run(self):
         """애플리케이션 실행"""
-        # 페이지 설정
-        st.set_page_config(
-            page_title=self.config['app_name'],
-            page_icon="🧬",
-            layout="wide",
-            initial_sidebar_state="expanded"
-        )
-        
-        # CSS 스타일 적용
-        self._apply_custom_css()
+        try:
+            # 시스템 초기화
+            _initialize_systems()
+            
+            # UI 시스템 생성 및 렌더링
+            ui_system = UserInterfaceSystem()
+            ui_system.render()
+            
+        except Exception as e:
+            logger.error(f"애플리케이션 실행 오류: {e}")
+            st.error("애플리케이션 실행 중 오류가 발생했습니다.")
+            
+            # 디버그 정보 표시
+            with st.expander("디버그 정보"):
+                st.code(str(e))
+                st.code(traceback.format_exc())
         
         # 초기화 대기
         if not st.session_state.get('init_complete', False):
