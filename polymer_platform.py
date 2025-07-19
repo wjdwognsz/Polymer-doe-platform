@@ -6105,18 +6105,42 @@ class BaseAIEngine:
         """엔진 초기화"""
         global api_key_manager
         
+        # API 키 관리자 확인
+        if api_key_manager is None:
+            logger.error(f"{self.name}: API 키 관리자가 초기화되지 않았습니다")
+            return False
+        
         # API 키 관리자에서 키 가져오기
-        if api_key_manager and api_key_manager.is_key_set(self.api_key_id):
-            self.api_key = api_key_manager.get_key(self.api_key_id)
-            logger.info(f"{self.name} API 키 로드 성공")
-        else:
-            logger.warning(f"{self.name} API 키를 찾을 수 없습니다")
+        try:
+            if api_key_manager.is_key_set(self.api_key_id):
+                self.api_key = api_key_manager.get_key(self.api_key_id)
+                if self.api_key:
+                    logger.info(f"{self.name} API 키 로드 성공")
+                else:
+                    logger.warning(f"{self.name} API 키가 비어있습니다")
+                    return False
+            else:
+                logger.warning(f"{self.name} API 키를 찾을 수 없습니다 (key_id: {self.api_key_id})")
+                return False
+        except Exception as e:
+            logger.error(f"{self.name} API 키 로드 중 오류: {str(e)}")
             return False
         
         # Rate limiter 설정
-        if api_key_manager and self.api_key_id in api_key_manager.rate_limiters:
+        if api_key_manager and hasattr(api_key_manager, 'rate_limiters') and self.api_key_id in api_key_manager.rate_limiters:
             self.rate_limiter = api_key_manager.rate_limiters[self.api_key_id]
         
+        # 하위 클래스의 초기화 호출
+        try:
+            return self._initialize_client()
+        except Exception as e:
+            logger.error(f"{self.name} 클라이언트 초기화 실패: {str(e)}")
+            return False
+    
+    def _initialize_client(self):
+        """각 AI 엔진별 클라이언트 초기화 (하위 클래스에서 구현)"""
+        # 기본적으로 True 반환 (하위 클래스에서 오버라이드)
+        self.available = True
         return True
     
     async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
