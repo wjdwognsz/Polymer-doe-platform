@@ -6614,9 +6614,9 @@ class MultiAIOrchestrator:
             except Exception as e:
                 logger.warning(f"{name} 엔진 생성 실패: {e}")
         
-        # 사용 가능한 엔진 확인
-        self.available_engines = {}
-        self._initialize_engines()
+        # 사용 가능한 엔진 확인 - 제거
+        # self.available_engines = {}
+        # self._initialize_engines()  # 이 줄을 제거하세요!
         
         # AI 역할 정의 (확장)
         self.ai_roles = {
@@ -6661,7 +6661,6 @@ class MultiAIOrchestrator:
                 'specialties': ['특수모델', '화학', '커스텀']
             }
         }
-
         
         # 합의 전략
         self.consensus_strategies = {
@@ -6670,10 +6669,26 @@ class MultiAIOrchestrator:
             'best_quality': self._best_quality_consensus,
             'ensemble': self._ensemble_consensus
         }
+    
+    def _initialize_engines(self):
+        """사용 가능한 AI 엔진 초기화"""
+        for engine_id, engine in self.engines.items():
+            try:
+                if engine.initialize():
+                    self.available_engines[engine_id] = engine
+                    logger.info(f"✅ {engine.name} 엔진 활성화")
+                else:
+                    logger.info(f"❌ {engine.name} 엔진 비활성화")
+            except Exception as e:
+                logger.warning(f"{engine_id} 엔진 초기화 실패: {e}")
+    
         
     def initialize(self):
         """모든 AI 엔진 초기화 (동기적)"""
         logger.info("AI 오케스트레이터 초기화 시작...")
+        
+        # _initialize_engines 호출
+        self._initialize_engines()
         
         # 각 엔진 초기화
         for engine_name, engine in self.engines.items():
