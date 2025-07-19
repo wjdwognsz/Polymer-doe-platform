@@ -6524,22 +6524,78 @@ class HuggingFaceEngine(BaseAIEngine):
             "무료 티어 제공"
         ]
 
-# ==================== AI 오케스트레이터 ====================
-class AIOrchestrator:
-    """다중 AI 엔진 조정 및 합의 시스템"""
+# ==================== 다중 AI 오케스트레이터 ====================
+class MultiAIOrchestrator:
+    """다중 AI 엔진을 통합 관리하는 오케스트레이터"""
     
     def __init__(self):
+        # AI 엔진 초기화 (확장된 버전)
         self.engines = {
+            'openai': OpenAIEngine(),
             'gemini': GeminiEngine(),
-            'grok': GrokEngine(),
-            'sambanova': SambaNovaEngine(),
-            'deepseek': DeepSeekEngine(),
+            'anthropic': AnthropicEngine(),
             'groq': GroqEngine(),
-            'huggingface': HuggingFaceEngine()
+            'grok': GrokEngine(),           # 추가
+            'sambanova': SambaNovaEngine(), # 추가
+            'deepseek': DeepSeekEngine(),   # 추가
+            'huggingface': HuggingFaceEngine()  # 추가
         }
-        self.initialized = False
-        self.consensus_threshold = 0.7  # 합의 임계값
-        self.learning_system = AILearningSystem()
+        
+        # 사용 가능한 엔진 확인
+        self.available_engines = {}
+        self._initialize_engines()
+        
+        # AI 역할 정의 (확장)
+        self.ai_roles = {
+            'openai': {
+                'strength': '범용 언어 이해, 코드 생성, 복잡한 추론',
+                'priority': 1,
+                'specialties': ['코드', '분석', '창의성']
+            },
+            'gemini': {
+                'strength': '과학적 분석, 한국어 처리, 긴 컨텍스트',
+                'priority': 1,
+                'specialties': ['과학', '한국어', '멀티모달']
+            },
+            'anthropic': {
+                'strength': '안전성, 윤리적 추론, 상세한 설명',
+                'priority': 1,
+                'specialties': ['안전성', '설명', '정확성']
+            },
+            'groq': {
+                'strength': '초고속 응답, 실시간 처리',
+                'priority': 2,
+                'specialties': ['속도', '실시간', '간단한 작업']
+            },
+            'grok': {
+                'strength': '실시간 정보, 창의적 사고, 트렌드 분석',
+                'priority': 2,
+                'specialties': ['실시간', '창의성', '트렌드']
+            },
+            'sambanova': {
+                'strength': '대규모 모델, 안정적 처리, 엔터프라이즈',
+                'priority': 2,
+                'specialties': ['대규모', '안정성', '기업용']
+            },
+            'deepseek': {
+                'strength': '코드 생성, 수학/화학 계산, 기술 문서',
+                'priority': 1,
+                'specialties': ['코드', '수학', '화학', '계산']
+            },
+            'huggingface': {
+                'strength': '특수 모델, 화학 전용 모델, 커스터마이징',
+                'priority': 3,
+                'specialties': ['특수모델', '화학', '커스텀']
+            }
+        }
+        
+        # 합의 전략
+        self.consensus_strategies = {
+            'majority': self._majority_consensus,
+            'weighted': self._weighted_consensus,
+            'best_quality': self._best_quality_consensus,
+            'ensemble': self._ensemble_consensus
+        }
         
     async def initialize(self):
         """모든 AI 엔진 초기화"""
