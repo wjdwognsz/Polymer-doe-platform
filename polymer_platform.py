@@ -11200,6 +11200,29 @@ class UserInterfaceSystem:
                     else:
                         st.warning(f"⚠️ {db_name}")
 
+            # 추가 정보
+            st.markdown("---")
+            st.markdown("### 📊 프로젝트 통계")
+            if 'projects' in st.session_state:
+                st.metric("총 프로젝트", len(st.session_state.projects))
+            else:
+                st.metric("총 프로젝트", 0)
+            
+            # 도움말
+            st.markdown("---")
+            st.markdown("### 💡 도움말")
+            st.info("""
+            **레벨별 기능:**
+            - 🌱 초보자: 단계별 가이드
+            - 🌿 중급자: 선택 옵션 제공
+            - 🌳 고급자: 자유로운 설계
+            - 🎓 전문가: 전체 기능
+            """)
+        
+        # API 설정 모달
+        if st.session_state.get('show_api_settings', False):
+            self._render_api_settings_modal()
+
 class HomePage:
     def render(self, user_level: UserLevel):  # user_level 인자 추가
         st.title("🧬 고분자 실험 설계 플랫폼에 오신 것을 환영합니다!")
