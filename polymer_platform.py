@@ -10679,6 +10679,359 @@ class ResultsVisualizationPage:
         
         return content
 
+class CollaborationPage:
+    """협업 페이지"""
+    
+    def __init__(self):
+        if 'collaboration_manager' not in st.session_state:
+            st.session_state.collaboration_manager = CollaborationManager(db_manager)
+        self.collab_manager = st.session_state.collaboration_manager
+        self.collab_system = CollaborationSystem()
+        
+    def render(self, user_level: UserLevel):
+        st.title("👥 협업 및 공유")
+        
+        # 프로젝트 확인
+        if 'project_info' not in st.session_state:
+            st.warning("먼저 프로젝트를 설정해주세요.")
+            if st.button("프로젝트 설정으로 이동"):
+                st.session_state.current_page = 'project_setup'
+                st.rerun()
+            return
+        
+        project_info = st.session_state.project_info
+        project_id = project_info.get('id', 'default_project')
+        
+        # 탭 구성
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "💬 프로젝트 토론",
+            "📊 실험 데이터 공유",
+            "👥 실시간 협업",
+            "📝 리뷰 및 승인"
+        ])
+        
+        with tab1:
+            self._render_discussions(project_id, user_level)
+        
+        with tab2:
+            self._render_data_sharing(project_id, user_level)
+        
+        with tab3:
+            self._render_realtime_collaboration(project_id, user_level)
+        
+        with tab4:
+            self._render_review_approval(project_id, user_level)
+    
+    def _render_discussions(self, project_id: str, user_level: UserLevel):
+        """프로젝트 토론 탭"""
+        st.markdown("### 💬 프로젝트 토론")
+        
+        # 새 토론 작성
+        with st.expander("새 토론 시작", expanded=False):
+            discussion_type = st.selectbox(
+                "토론 유형",
+                options=[
+                    CollaborationType.COMMENT,
+                    CollaborationType.QUESTION,
+                    CollaborationType.SUGGESTION
+                ],
+                format_func=lambda x: {
+                    CollaborationType.COMMENT: "💭 일반 댓글",
+                    CollaborationType.QUESTION: "❓ 질문",
+                    CollaborationType.SUGGESTION: "💡 제안"
+                }[x]
+            )
+            
+            content = st.text_area("내용", height=100)
+            
+            if st.button("토론 시작", type="primary"):
+                if content:
+                    user_id = st.session_state.get('user_id', 'anonymous')
+                    self.collab_manager.add_collaboration(
+                        project_id=project_id,
+                        collab_type=discussion_type,
+                        user_id=user_id,
+                        content=content
+                    )
+                    st.success("토론이 시작되었습니다!")
+                    st.rerun()
+        
+        # 기존 토론 표시
+        discussions = self.collab_manager.get_collaborations(project_id)
+        
+        if discussions:
+            st.markdown("#### 📋 진행 중인 토론")
+            
+            for discussion in discussions:
+                with st.container():
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        type_icon = {
+                            CollaborationType.COMMENT: "💭",
+                            CollaborationType.QUESTION: "❓",
+                            CollaborationType.SUGGESTION: "💡",
+                            CollaborationType.REVIEW: "📝",
+                            CollaborationType.APPROVAL: "✅"
+                        }.get(discussion.type, "💬")
+                        
+                        st.markdown(f"**{type_icon} {discussion.user_id}**")
+                        st.write(discussion.content)
+                    
+                    with col2:
+                        st.caption(f"{discussion.created_at.strftime('%Y-%m-%d %H:%M')}")
+                        
+                        # 답글 버튼
+                        if st.button("답글", key=f"reply_{discussion.id}"):
+                            st.session_state[f"reply_to_{discussion.id}"] = True
+                    
+                    # 답글 입력 폼
+                    if st.session_state.get(f"reply_to_{discussion.id}", False):
+                        reply_content = st.text_input(
+                            "답글 내용",
+                            key=f"reply_content_{discussion.id}"
+                        )
+                        if st.button("답글 달기", key=f"submit_reply_{discussion.id}"):
+                            if reply_content:
+                                user_id = st.session_state.get('user_id', 'anonymous')
+                                self.collab_manager.add_collaboration(
+                                    project_id=project_id,
+                                    collab_type=CollaborationType.COMMENT,
+                                    user_id=user_id,
+                                    content=reply_content,
+                                    parent_id=discussion.id
+                                )
+                                st.session_state[f"reply_to_{discussion.id}"] = False
+                                st.rerun()
+                    
+                    st.divider()
+        else:
+            st.info("아직 토론이 없습니다. 첫 번째 토론을 시작해보세요!")
+    
+    def _render_data_sharing(self, project_id: str, user_level: UserLevel):
+        """데이터 공유 탭"""
+        st.markdown("### 📊 실험 데이터 공유")
+        
+        # 데이터 업로드
+        with st.expander("새 데이터 공유", expanded=False):
+            data_title = st.text_input("데이터 제목")
+            data_description = st.text_area("설명", height=100)
+            
+            # 파일 업로드
+            uploaded_file = st.file_uploader(
+                "데이터 파일 선택",
+                type=['csv', 'xlsx', 'json', 'txt']
+            )
+            
+            # 데이터 미리보기
+            if uploaded_file is not None:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                        st.dataframe(df.head())
+                    elif uploaded_file.name.endswith('.xlsx'):
+                        df = pd.read_excel(uploaded_file)
+                        st.dataframe(df.head())
+                except Exception as e:
+                    st.error(f"파일 읽기 오류: {str(e)}")
+            
+            if st.button("데이터 공유", type="primary"):
+                if data_title and uploaded_file:
+                    # 실제 구현에서는 파일을 저장하고 메타데이터를 DB에 저장
+                    st.success("데이터가 공유되었습니다!")
+                    st.rerun()
+        
+        # 공유된 데이터 목록
+        st.markdown("#### 📁 공유된 데이터")
+        
+        # 더미 데이터 표시 (실제로는 DB에서 조회)
+        shared_data = [
+            {
+                "title": "인장강도 테스트 결과",
+                "user": "researcher1",
+                "date": "2024-01-15",
+                "type": "CSV",
+                "downloads": 5
+            },
+            {
+                "title": "DSC 분석 데이터",
+                "user": "researcher2",
+                "date": "2024-01-14",
+                "type": "Excel",
+                "downloads": 3
+            }
+        ]
+        
+        for data in shared_data:
+            with st.container():
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    st.markdown(f"**📄 {data['title']}**")
+                    st.caption(f"공유자: {data['user']} | {data['date']}")
+                
+                with col2:
+                    st.caption(f"형식: {data['type']}")
+                    st.caption(f"다운로드: {data['downloads']}회")
+                
+                with col3:
+                    if st.button("다운로드", key=f"download_{data['title']}"):
+                        st.info("다운로드 기능은 준비 중입니다.")
+                
+                st.divider()
+    
+    def _render_realtime_collaboration(self, project_id: str, user_level: UserLevel):
+        """실시간 협업 탭"""
+        st.markdown("### 👥 실시간 협업 세션")
+        
+        # 세션 생성/참여
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            with st.expander("새 세션 만들기", expanded=False):
+                session_name = st.text_input("세션 이름")
+                session_desc = st.text_area("세션 설명", height=100)
+                
+                if st.button("세션 생성", type="primary"):
+                    if session_name:
+                        # 실제로는 async 함수 호출
+                        st.success(f"'{session_name}' 세션이 생성되었습니다!")
+                        st.session_state['active_session'] = session_name
+                        st.rerun()
+        
+        with col2:
+            with st.expander("세션 참여하기", expanded=False):
+                session_id = st.text_input("세션 ID 입력")
+                
+                if st.button("참여", type="secondary"):
+                    if session_id:
+                        st.success(f"세션에 참여했습니다!")
+                        st.session_state['active_session'] = session_id
+                        st.rerun()
+        
+        # 활성 세션 표시
+        if 'active_session' in st.session_state:
+            st.markdown(f"#### 🟢 현재 세션: {st.session_state['active_session']}")
+            
+            # 참여자 목록
+            with st.sidebar:
+                st.markdown("### 👥 참여자")
+                participants = ["You", "researcher1", "professor_kim"]
+                for p in participants:
+                    st.markdown(f"• {p} {'(나)' if p == 'You' else ''}")
+            
+            # 공유 화면
+            st.markdown("##### 🖼️ 공유 화면")
+            shared_content = st.container()
+            with shared_content:
+                st.info("실시간 공유 콘텐츠가 여기에 표시됩니다.")
+            
+            # 채팅
+            st.markdown("##### 💬 채팅")
+            chat_container = st.container()
+            with chat_container:
+                # 더미 채팅 메시지
+                messages = [
+                    ("researcher1", "이 조건에서 실험해보면 어떨까요?"),
+                    ("professor_kim", "온도를 조금 더 높여보는 것도 좋을 것 같습니다."),
+                    ("You", "네, 180도에서 시도해보겠습니다.")
+                ]
+                
+                for user, msg in messages:
+                    if user == "You":
+                        st.markdown(f"**나**: {msg}")
+                    else:
+                        st.markdown(f"**{user}**: {msg}")
+            
+            # 메시지 입력
+            new_message = st.text_input("메시지 입력", key="chat_input")
+            if st.button("전송", key="send_chat"):
+                if new_message:
+                    st.rerun()
+    
+    def _render_review_approval(self, project_id: str, user_level: UserLevel):
+        """리뷰 및 승인 탭"""
+        st.markdown("### 📝 리뷰 및 승인")
+        
+        # 리뷰 요청
+        with st.expander("리뷰 요청하기", expanded=False):
+            review_title = st.text_input("리뷰 제목")
+            review_content = st.text_area("리뷰 요청 내용", height=150)
+            reviewers = st.multiselect(
+                "리뷰어 선택",
+                options=["professor_kim", "senior_researcher", "lab_manager"],
+                default=[]
+            )
+            
+            if st.button("리뷰 요청", type="primary"):
+                if review_title and review_content and reviewers:
+                    st.success("리뷰가 요청되었습니다!")
+                    st.rerun()
+        
+        # 진행 중인 리뷰
+        st.markdown("#### 📋 진행 중인 리뷰")
+        
+        # 더미 리뷰 데이터
+        reviews = [
+            {
+                "title": "최종 실험 계획 검토",
+                "requester": "You",
+                "reviewers": ["professor_kim"],
+                "status": "검토 중",
+                "date": "2024-01-20"
+            },
+            {
+                "title": "중간 결과 분석",
+                "requester": "researcher1",
+                "reviewers": ["You", "senior_researcher"],
+                "status": "승인됨",
+                "date": "2024-01-18"
+            }
+        ]
+        
+        for review in reviews:
+            with st.container():
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    st.markdown(f"**📄 {review['title']}**")
+                    st.caption(f"요청자: {review['requester']} | 리뷰어: {', '.join(review['reviewers'])}")
+                
+                with col2:
+                    status_color = {
+                        "검토 중": "🟡",
+                        "승인됨": "🟢",
+                        "수정 요청": "🔴"
+                    }
+                    st.markdown(f"{status_color.get(review['status'], '⚪')} {review['status']}")
+                
+                with col3:
+                    if review['requester'] != "You" and review['status'] == "검토 중":
+                        if st.button("리뷰하기", key=f"review_{review['title']}"):
+                            st.session_state[f"reviewing_{review['title']}"] = True
+                
+                # 리뷰 작성 폼
+                if st.session_state.get(f"reviewing_{review['title']}", False):
+                    st.markdown("##### 리뷰 작성")
+                    review_decision = st.radio(
+                        "결정",
+                        options=["승인", "수정 요청", "거부"],
+                        horizontal=True,
+                        key=f"decision_{review['title']}"
+                    )
+                    review_comment = st.text_area(
+                        "리뷰 의견",
+                        height=100,
+                        key=f"comment_{review['title']}"
+                    )
+                    
+                    if st.button("리뷰 제출", key=f"submit_{review['title']}"):
+                        st.success("리뷰가 제출되었습니다!")
+                        st.session_state[f"reviewing_{review['title']}"] = False
+                        st.rerun()
+                
+                st.divider()
+
 class UserInterfaceSystem:
     """Streamlit 기반 사용자 인터페이스 시스템"""
     
