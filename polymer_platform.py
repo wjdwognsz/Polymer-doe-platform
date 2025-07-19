@@ -9462,11 +9462,9 @@ class UserInterfaceSystem:
                         st.warning(f"⚠️ {db_name}")
 
 class HomePage:
-    """홈 페이지"""
-    
-    def render(self, user_level: UserLevel):
-        st.title("🧬 범용 고분자 실험 설계 플랫폼")
-        st.markdown("### AI 기반 지능형 실험 설계 및 분석 시스템")
+    def render(self):
+        st.title("🧬 고분자 실험 설계 플랫폼에 오신 것을 환영합니다!")
+        st.write("이 플랫폼은 AI 기반 고분자 실험 설계를 도와드립니다.")
         
         # 환영 메시지
         if user_level == UserLevel.BEGINNER:
