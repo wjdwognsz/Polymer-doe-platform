@@ -6315,7 +6315,7 @@ class GeminiEngine(BaseAIEngine):
     """Google Gemini AI 엔진"""
     
     def __init__(self):
-        super().__init__("gemini", "google_gemini")
+        super().__init__("gemini", "gemini")
         self.model_name = "gemini-2.0-flash-exp"
         
     def _initialize_client(self):
@@ -6392,7 +6392,7 @@ class GrokEngine(BaseAIEngine):
     """xAI Grok 엔진"""
     
     def __init__(self):
-        super().__init__("grok", "xai_grok")
+        super().__init__("grok", "grok")
         self.model_name = "grok-3-mini"
         
     def _initialize_client(self):
@@ -6445,7 +6445,7 @@ class SambaNovaEngine(BaseAIEngine):
     """SambaNova AI 엔진"""
     
     def __init__(self):
-        super().__init__("SambaNova", "smabanova")
+        super().__init__("SambaNova", "sambanova")
         self.model_name = "Meta-Llama-3.1-405B-Instruct"
         
     def _initialize_client(self):
@@ -6698,7 +6698,7 @@ class MultiAIOrchestrator:
         # 각 엔진을 안전하게 초기화
         engine_classes = {
             # 'openai': lambda: OpenAIEngine(),  # OpenAIEngine이 정의되지 않음
-            'google_gemini': lambda: GeminiEngine(),
+            'gemini': lambda: GeminiEngine(),
             # 'anthropic': lambda: AnthropicEngine(),  # AnthropicEngine이 정의되지 않음
             'groq': lambda: GroqEngine(),
             'grok': lambda: GrokEngine(),
@@ -10350,7 +10350,7 @@ class DataAnalyzer:
     
     def __init__(self):
         self.statistical_analyzer = StatisticalAnalyzer()
-        self.visualization_engine = VisualizationEngine()
+        self.visualization_engine = EnhancedVisualizationEngine()
         self.ml_analyzer = MLAnalyzer()
         self.report_generator = ReportGenerator()
         
