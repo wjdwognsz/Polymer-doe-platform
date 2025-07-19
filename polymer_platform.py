@@ -6392,7 +6392,7 @@ class GrokEngine(BaseAIEngine):
     """xAI Grok 엔진"""
     
     def __init__(self):
-        super().__init__("Grok", "GROK_API_KEY")
+        super().__init__("Grok", "xai_grok", "GROK_API_KEY")
         self.model_name = "grok-3-mini"
         
     def _initialize_client(self):
