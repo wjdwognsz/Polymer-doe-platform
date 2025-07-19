@@ -6948,85 +6948,47 @@ class MultiAIOrchestrator:
     """다중 AI 엔진을 통합 관리하는 오케스트레이터"""
     
     def __init__(self):
+        # 필수 속성들 초기화
         self.engines = {}
         self.api_keys = {}
+        self.available_engines = {}  # 이 줄이 누락되어 있었습니다!
         self.active_engines = []
         self.usage_stats = defaultdict(lambda: {'calls': 0, 'tokens': 0, 'errors': 0})
         self.rate_limiters = {}
         self.consensus_threshold = 0.7
+        self.initialized = False
         
-        # 엔진 초기화
-        self._initialize_engines()
-
-    def _initialize_engines(self):
-        """AI 엔진 초기화"""
-        logger.info("AI 오케스트레이터 초기화 시작...")
-        
-        # 각 엔진을 안전하게 초기화
-        engine_creators = {
-            'gemini': lambda: GeminiEngine(self.api_keys.get('gemini')),
-            'groq': lambda: GroqEngine(self.api_keys.get('groq')),
-            'grok': lambda: GrokEngine(self.api_keys.get('grok')),
-            'sambanova': lambda: SambaNovaEngine(self.api_keys.get('sambanova')),
-            'deepseek': lambda: DeepSeekEngine(self.api_keys.get('deepseek')),  # API 키 전달
-            'huggingface': lambda: HuggingFaceEngine(self.api_keys.get('huggingface'))
-        }
-    
-        # 각 엔진 생성 시도
-        for engine_name, creator in engine_creators.items():
-            try:
-                engine = creator()
-                self.engines[engine_name] = engine
-                logger.info(f"{engine_name} 엔진 생성 성공")
-            except Exception as e:
-                logger.warning(f"{engine_name} 엔진 생성 실패: {str(e)}")
-                self.engines[engine_name] = None
-        
-        # 사용 가능한 엔진 확인 - 제거
-        # self.available_engines = {}
-        # self._initialize_engines()  # 이 줄을 제거하세요!
-        
-        # AI 역할 정의 (확장)
+        # AI 역할 정의
         self.ai_roles = {
-            # 'openai': {
-            #     'strength': '범용 언어 이해, 코드 생성, 복잡한 추론',
-            #     'priority': 1,
-            #     'specialties': ['코드', '분석', '창의성']
-            # },
-            'google_gemini': {
+            'gemini': {
                 'strength': '과학적 분석, 한국어 처리, 긴 컨텍스트',
                 'priority': 1,
                 'specialties': ['과학', '한국어', '멀티모달']
             },
-            # 'anthropic': {
-            #     'strength': '안전성, 윤리적 추론, 상세한 설명',
-            #     'priority': 1,
-            #     'specialties': ['안전성', '설명', '정확성']
-            # },
             'groq': {
                 'strength': '초고속 응답, 실시간 처리',
                 'priority': 2,
                 'specialties': ['속도', '실시간', '간단한 작업']
             },
             'grok': {
-                'strength': '실시간 정보, 창의적 사고, 트렌드 분석',
-                'priority': 2,
-                'specialties': ['실시간', '창의성', '트렌드']
+                'strength': '창의적 접근, 최신 정보',
+                'priority': 1,
+                'specialties': ['창의성', '최신정보', '트렌드']
             },
             'sambanova': {
-                'strength': '대규모 모델, 안정적 처리, 엔터프라이즈',
+                'strength': '대규모 데이터 처리, 안정적 응답',
                 'priority': 2,
-                'specialties': ['대규모', '안정성', '기업용']
+                'specialties': ['대용량', '안정성', '분석']
             },
             'deepseek': {
-                'strength': '코드 생성, 수학/화학 계산, 기술 문서',
-                'priority': 1,
-                'specialties': ['코드', '수학', '화학', '계산']
+                'strength': '수식/계산, 코드 생성',
+                'priority': 2,
+                'specialties': ['수학', '코드', '논리']
             },
             'huggingface': {
-                'strength': '특수 모델, 화학 전용 모델, 커스터마이징',
+                'strength': '특수 모델 활용',
                 'priority': 3,
-                'specialties': ['특수모델', '화학', '커스텀']
+                'specialties': ['특수모델', '화학', '과학']
             }
         }
         
@@ -7037,64 +6999,82 @@ class MultiAIOrchestrator:
             'best_quality': self._best_quality_consensus,
             'ensemble': self._ensemble_consensus
         }
-    
-    def _initialize_engines(self):
-        """사용 가능한 AI 엔진 초기화"""
-        for engine_id, engine in self.engines.items():
-            try:
-                if engine.initialize():
-                    self.available_engines[engine_id] = engine
-                    logger.info(f"✅ {engine.name} 엔진 활성화")
-                else:
-                    logger.info(f"❌ {engine.name} 엔진 비활성화")
-            except Exception as e:
-                logger.warning(f"{engine_id} 엔진 초기화 실패: {e}")
-    
-        
+
     def initialize(self):
         """모든 AI 엔진 초기화 (동기적)"""
         logger.info("AI 오케스트레이터 초기화 시작...")
         
-        # _initialize_engines 호출
-        self._initialize_engines()
+        # API 키 확인 및 엔진 생성
+        engine_configs = {
+            'gemini': (GeminiEngine, 'gemini'),
+            'groq': (GroqEngine, 'groq'),
+            'grok': (GrokEngine, 'grok'),
+            'sambanova': (SambaNovaEngine, 'sambanova'),
+            'deepseek': (DeepSeekEngine, 'deepseek'),
+            'huggingface': (HuggingFaceEngine, 'huggingface')
+        }
         
-        # 각 엔진 초기화
-        for engine_name, engine in self.engines.items():
-            try:
-                if engine.initialize():
-                    self.available_engines[engine_name] = engine
-                    logger.info(f"✅ {engine.name} 엔진 활성화")
-                else:
-                    logger.info(f"❌ {engine.name} 엔진 비활성화")
-            except Exception as e:
-                logger.error(f"{engine_name} 엔진 초기화 실패: {str(e)}")
+        # 각 엔진 초기화 시도
+        for engine_name, (engine_class, api_key_name) in engine_configs.items():
+            api_key = self.api_keys.get(api_key_name)
+            if api_key:
+                try:
+                    # 엔진 인스턴스 생성
+                    if engine_name == 'deepseek':
+                        engine = engine_class(api_key)  # DeepSeek은 API 키를 생성자에서 받음
+                    else:
+                        engine = engine_class()
+                        engine.api_key = api_key  # 다른 엔진들은 속성으로 설정
+                    
+                    # 엔진 초기화
+                    if engine.initialize():
+                        self.engines[engine_name] = engine
+                        self.available_engines[engine_name] = engine
+                        self.active_engines.append(engine_name)
+                        logger.info(f"✅ {engine.name} 엔진 활성화")
+                    else:
+                        self.engines[engine_name] = engine
+                        logger.info(f"❌ {engine.name} 엔진 비활성화")
+                        
+                except Exception as e:
+                    logger.error(f"{engine_name} 엔진 생성 실패: {str(e)}")
+                    self.engines[engine_name] = None
+            else:
+                logger.warning(f"{engine_name} API 키가 없습니다")
         
         # 최소 1개 이상의 엔진이 활성화되어야 함
         active_count = len(self.available_engines)
         if active_count >= 1:
             self.initialized = True
-            logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
+            logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(engine_configs)} 엔진 활성)")
             return True
         else:
-            logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(self.engines)})")
+            logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(engine_configs)})")
             return False
 
     async def initialize_async(self):
         """모든 AI 엔진 초기화 (비동기)"""
-        logger.info("AI 오케스트레이터 초기화 시작...")
+        logger.info("AI 오케스트레이터 비동기 초기화 시작...")
         
         # 병렬로 모든 엔진 초기화
         init_tasks = []
         for engine_name, engine in self.engines.items():
-            init_tasks.append(self._init_engine(engine_name, engine))
-            
-        results = await asyncio.gather(*init_tasks)
+            if engine:
+                init_tasks.append(self._init_engine(engine_name, engine))
+                
+        results = await asyncio.gather(*init_tasks, return_exceptions=True)
+        
+        # 결과 처리
+        for i, (engine_name, engine) in enumerate(self.engines.items()):
+            if i < len(results) and results[i] is True:
+                self.available_engines[engine_name] = engine
+                self.active_engines.append(engine_name)
         
         # 최소 1개 이상의 엔진이 활성화되어야 함
-        active_count = sum(1 for r in results if r)
+        active_count = len(self.available_engines)
         if active_count >= 1:
             self.initialized = True
-            logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
+            logger.info(f"AI 오케스트레이터 비동기 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
         else:
             logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(self.engines)})")
 
@@ -7106,455 +7086,222 @@ class MultiAIOrchestrator:
             logger.error(f"{name} 엔진 초기화 실패: {str(e)}")
             return False
 
-    def _majority_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
-        """다수결 합의"""
-        # 간단한 다수결 구현
-        contents = [r['content'] for r in responses if r.get('content')]
-        if not contents:
-            return {'status': 'error', 'message': '유효한 응답이 없습니다.'}
+    async def generate_with_single_ai(self,
+                                     prompt: str,
+                                     engine_id: str = None,
+                                     **kwargs) -> AIResponse:
+        """단일 AI로 응답 생성"""
+        if not self.available_engines:
+            return AIResponse(
+                success=False,
+                content="사용 가능한 AI 엔진이 없습니다.",
+                model="none",
+                error="No available engines"
+            )
         
-        # 가장 많이 등장하는 응답 선택 (여기서는 간단히 첫 번째 응답 반환)
+        # 엔진 선택
+        if engine_id and engine_id in self.available_engines:
+            engine = self.available_engines[engine_id]
+        else:
+            # 우선순위가 가장 높은 엔진 선택
+            engine_id = min(
+                self.available_engines.keys(),
+                key=lambda x: self.ai_roles.get(x, {}).get('priority', 99)
+            )
+            engine = self.available_engines[engine_id]
+        
+        # 응답 생성
+        try:
+            response = await engine.generate_async(prompt, **kwargs)
+            
+            # 사용 통계 업데이트
+            self.usage_stats[engine_id]['calls'] += 1
+            if response.success:
+                self.usage_stats[engine_id]['tokens'] += response.tokens_used or 0
+            else:
+                self.usage_stats[engine_id]['errors'] += 1
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"{engine_id} 엔진 호출 실패: {str(e)}")
+            self.usage_stats[engine_id]['errors'] += 1
+            return AIResponse(
+                success=False,
+                content="",
+                model=engine_id,
+                error=str(e)
+            )
+
+    async def generate_with_consensus(self,
+                                    prompt: str,
+                                    strategy: str = 'weighted',
+                                    min_engines: int = 2,
+                                    **kwargs) -> Dict[str, Any]:
+        """다중 AI 합의 기반 응답 생성"""
+        if len(self.available_engines) < min_engines:
+            # 엔진이 부족하면 단일 AI 사용
+            single_response = await self.generate_with_single_ai(prompt, **kwargs)
+            return {
+                'success': single_response.success,
+                'consensus': single_response.content,
+                'confidence': 0.5,
+                'engines_used': 1,
+                'responses': [single_response]
+            }
+        
+        # 병렬로 여러 AI 호출
+        tasks = []
+        engine_ids = list(self.available_engines.keys())[:min_engines]
+        
+        for engine_id in engine_ids:
+            tasks.append(self.generate_with_single_ai(prompt, engine_id, **kwargs))
+        
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 유효한 응답만 필터링
+        valid_responses = []
+        for resp in responses:
+            if isinstance(resp, AIResponse) and resp.success:
+                valid_responses.append(resp)
+        
+        if not valid_responses:
+            return {
+                'success': False,
+                'consensus': "모든 AI 엔진이 응답에 실패했습니다.",
+                'confidence': 0.0,
+                'engines_used': len(engine_ids),
+                'responses': responses
+            }
+        
+        # 선택한 전략으로 합의 도출
+        consensus_func = self.consensus_strategies.get(strategy, self._weighted_consensus)
+        consensus_result = consensus_func(valid_responses)
+        
         return {
-            'status': 'success',
-            'content': contents[0],
-            'consensus_type': 'majority',
-            'engine_count': len(contents)
+            'success': True,
+            'consensus': consensus_result.get('content', ''),
+            'confidence': consensus_result.get('confidence', 0.0),
+            'engines_used': len(valid_responses),
+            'responses': valid_responses,
+            'strategy': strategy
         }
 
-    def _weighted_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
-        """가중치 기반 합의"""
-        # 우선순위에 따른 가중치 적용
-        weighted_responses = []
-        for resp in responses:
-            engine_name = resp.get('engine')
-            if engine_name and engine_name in self.ai_roles:
-                priority = self.ai_roles[engine_name]['priority']
-                weight = 1.0 / priority  # 우선순위가 낮을수록 높은 가중치
-                weighted_responses.append((resp, weight))
+    def _majority_consensus(self, responses: List[AIResponse]) -> Dict[str, Any]:
+        """다수결 합의"""
+        if not responses:
+            return {'content': '', 'confidence': 0.0}
         
-        if not weighted_responses:
-            return self._majority_consensus(responses)
+        # 간단한 구현: 가장 긴 응답을 선택 (더 상세한 설명일 가능성이 높음)
+        best_response = max(responses, key=lambda r: len(r.content))
+        
+        # 신뢰도는 응답들의 일관성 기반
+        confidence = len(responses) / 3.0  # 최대 3개 엔진 기준
+        
+        return {
+            'content': best_response.content,
+            'confidence': min(confidence, 1.0)
+        }
+
+    def _weighted_consensus(self, responses: List[AIResponse]) -> Dict[str, Any]:
+        """가중치 기반 합의"""
+        if not responses:
+            return {'content': '', 'confidence': 0.0}
+        
+        # 각 엔진의 우선순위를 가중치로 사용
+        weighted_responses = []
+        total_weight = 0
+        
+        for response in responses:
+            engine_name = response.model.lower()
+            priority = self.ai_roles.get(engine_name, {}).get('priority', 3)
+            weight = 1.0 / priority  # 우선순위가 낮을수록 높은 가중치
+            
+            weighted_responses.append((response, weight))
+            total_weight += weight
         
         # 가장 높은 가중치를 가진 응답 선택
         best_response = max(weighted_responses, key=lambda x: x[1])
+        
         return {
-            'status': 'success',
-            'content': best_response[0]['content'],
-            'consensus_type': 'weighted',
-            'engine': best_response[0].get('engine')
+            'content': best_response[0].content,
+            'confidence': best_response[1] / total_weight if total_weight > 0 else 0.0
         }
-    
-    def _best_quality_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
+
+    def _best_quality_consensus(self, responses: List[AIResponse]) -> Dict[str, Any]:
         """품질 기반 합의"""
-        # 응답 품질 평가 (길이, 구조화 정도 등)
-        best_response = None
-        best_score = -1
+        if not responses:
+            return {'content': '', 'confidence': 0.0}
         
-        for resp in responses:
-            if resp.get('status') == 'success' and resp.get('content'):
-                content = resp['content']
-                # 간단한 품질 점수 계산
-                score = len(content) + content.count('\n') * 10 + content.count('•') * 5
-                if score > best_score:
-                    best_score = score
-                    best_response = resp
+        # 응답 품질 평가 기준
+        quality_scores = []
         
-        if best_response:
-            return {
-                'status': 'success',
-                'content': best_response['content'],
-                'consensus_type': 'best_quality',
-                'quality_score': best_score
-            }
-        
-        return {'status': 'error', 'message': '품질 기준을 만족하는 응답이 없습니다.'}
-
-    def _ensemble_consensus(self, responses: List[Dict]) -> Dict[str, Any]:
-        """앙상블 합의 (모든 응답 통합)"""
-        valid_responses = [r for r in responses if r.get('status') == 'success' and r.get('content')]
-        
-        if not valid_responses:
-            return {'status': 'error', 'message': '유효한 응답이 없습니다.'}
-        
-        # 모든 응답을 통합하여 종합적인 답변 생성
-        combined_content = "### 종합 분석 결과\n\n"
-        for i, resp in enumerate(valid_responses):
-            engine_name = resp.get('engine', f'Engine {i+1}')
-            combined_content += f"**{engine_name}의 분석:**\n{resp['content']}\n\n"
-        
-        return {
-            'status': 'success',
-            'content': combined_content,
-            'consensus_type': 'ensemble',
-            'engine_count': len(valid_responses)
-        }
-    
-    async def _query_with_metadata(self, engine_name: str, engine, prompt: str, 
-                                   context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
-        """메타데이터와 함께 쿼리 실행"""
-        try:
-            start_time = asyncio.get_event_loop().time()
-            response = await engine.generate_response(prompt, context, **kwargs)
-            end_time = asyncio.get_event_loop().time()
-            
-            return {
-                'status': 'success' if response.get('content') else 'error',
-                'content': response.get('content', ''),
-                'engine': engine_name,
-                'response_time': end_time - start_time,
-                'tokens_used': response.get('usage', {}).get('total_tokens', 0),
-                'error': response.get('error')
-            }
-        except Exception as e:
-            logger.error(f"{engine_name} 쿼리 실패: {str(e)}")
-            return {
-                'status': 'error',
-                'engine': engine_name,
-                'error': str(e)
-            }
-    
-    async def query_single(self, 
-                          engine_name: str, 
-                          prompt: str,
-                          context: Dict[str, Any] = None,
-                          **kwargs) -> Dict[str, Any]:
-        """단일 AI 엔진 질의"""
-        if not self.initialized:
-            return {'status': 'error', 'message': 'AI 시스템이 초기화되지 않았습니다.'}
-            
-        engine = self.available_engines.get(engine_name)
-        if not engine:
-            return {'status': 'error', 'message': f'{engine_name} 엔진을 사용할 수 없습니다.'}
-            
-        return await self._query_with_metadata(engine_name, engine, prompt, context, **kwargs)
-    
-    
-    async def query_multiple(self,
-                            prompt: str,
-                            context: Dict[str, Any] = None,
-                            engines: List[str] = None,
-                            strategy: str = 'consensus',
-                            **kwargs) -> Dict[str, Any]:
-        """다중 AI 엔진 질의 및 결과 통합"""
-        if not self.initialized:
-            return {'status': 'error', 'message': 'AI 시스템이 초기화되지 않았습니다.'}
-            
-        # 사용할 엔진 선택
-        if engines:
-            active_engines = {k: v for k, v in self.engines.items() 
-                            if k in engines and v.available}
-        else:
-            active_engines = {k: v for k, v in self.engines.items() 
-                            if v.available}
-            
-        if len(active_engines) < 2:
-            return {'status': 'error', 'message': '최소 2개 이상의 AI 엔진이 필요합니다.'}
-            
-        # 병렬로 모든 엔진에 질의
-        query_tasks = []
-        for engine_name, engine in active_engines.items():
-            query_tasks.append(self._query_with_metadata(
-                engine_name, engine, prompt, context, **kwargs
-            ))
-            
-        responses = await asyncio.gather(*query_tasks, return_exceptions=True)
-        
-        # 오류 필터링
-        valid_responses = []
-        for resp in responses:
-            if isinstance(resp, dict) and resp.get('status') == 'success':
-                valid_responses.append(resp)
-                
-        if not valid_responses:
-            return {'status': 'error', 'message': '모든 AI 엔진에서 응답을 받지 못했습니다.'}
-            
-        # 전략에 따른 결과 통합
-        if strategy == 'consensus':
-            result = await self._build_consensus(valid_responses, prompt)
-        elif strategy == 'best':
-            result = await self._select_best(valid_responses, context)
-        elif strategy == 'ensemble':
-            result = await self._ensemble_responses(valid_responses)
-        else:
-            result = valid_responses[0]  # 기본값: 첫 번째 응답
-            
-        # 학습 시스템에 피드백
-        await self.learning_system.record_interaction(
-            prompt=prompt,
-            context=context,
-            responses=valid_responses,
-            final_result=result
-        )
-            
-        return result
-    
-
-    async def _build_consensus(self, responses: List[Dict], prompt: str) -> Dict[str, Any]:
-        """AI 응답들로부터 합의 도출"""
-        logger.info("AI 합의 빌드 시작...")
-        
-        # 응답 내용 추출
-        contents = [r['response'] for r in responses]
-        engines = [r['engine_name'] for r in responses]
-        
-        # 유사도 매트릭스 계산
-        similarity_matrix = await self._calculate_similarity_matrix(contents)
-        
-        # 클러스터링으로 주요 의견 그룹 식별
-        clusters = await self._cluster_responses(similarity_matrix, contents)
-        
-        # 가장 큰 클러스터의 대표 응답 선택
-        largest_cluster = max(clusters, key=lambda c: len(c['members']))
-        
-        # 합의 응답 생성
-        consensus_prompt = f"""
-        다음은 여러 AI의 응답입니다. 이들을 종합하여 가장 정확하고 유용한 답변을 만들어주세요.
-        
-        원래 질문: {prompt}
-        
-        AI 응답들:
-        {self._format_responses_for_consensus(responses)}
-        
-        위 응답들을 종합하여 다음 기준으로 최종 답변을 작성해주세요:
-        1. 정확성: 과학적으로 정확한 정보
-        2. 완성도: 빠진 부분 없이 완전한 답변
-        3. 실용성: 실제 적용 가능한 조언
-        4. 명확성: 이해하기 쉬운 설명
-        """
-        
-        # Gemini를 사용하여 최종 합의 생성 (가장 신뢰할 수 있는 엔진)
-        if self.engines['google_gemini'].available:
-            final_response = await self.engines['google_gemini'].generate_response(
-                consensus_prompt,
-                temperature=0.3  # 낮은 temperature로 일관성 있는 응답
-            )
-        else:
-            # Gemini 사용 불가시 가장 큰 클러스터의 대표 응답 사용
-            final_response = {
-                'status': 'success',
-                'response': contents[largest_cluster['representative_idx']]
-            }
-        
-        return {
-            'status': 'success',
-            'response': final_response.get('response', ''),
-            'metadata': {
-                'strategy': 'consensus',
-                'participating_engines': engines,
-                'consensus_confidence': largest_cluster['size'] / len(responses),
-                'cluster_count': len(clusters),
-                'timestamp': datetime.now()
-            }
-        }
-    
-    async def _calculate_similarity_matrix(self, contents: List[str]) -> np.ndarray:
-        """응답 간 유사도 매트릭스 계산"""
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-        
-        # TF-IDF 벡터화
-        vectorizer = TfidfVectorizer(max_features=500)
-        tfidf_matrix = vectorizer.fit_transform(contents)
-        
-        # 코사인 유사도 계산
-        similarity_matrix = cosine_similarity(tfidf_matrix)
-        
-        return similarity_matrix
-    
-    async def _cluster_responses(self, similarity_matrix: np.ndarray, contents: List[str]) -> List[Dict]:
-        """응답 클러스터링"""
-        from sklearn.cluster import DBSCAN
-        
-        # DBSCAN 클러스터링
-        clustering = DBSCAN(eps=0.3, min_samples=2, metric='precomputed')
-        distance_matrix = 1 - similarity_matrix
-        cluster_labels = clustering.fit_predict(distance_matrix)
-        
-        # 클러스터 정보 구성
-        clusters = []
-        unique_labels = set(cluster_labels)
-        
-        for label in unique_labels:
-            if label == -1:  # 노이즈 포인트는 개별 클러스터로 처리
-                indices = np.where(cluster_labels == label)[0]
-                for idx in indices:
-                    clusters.append({
-                        'label': f'single_{idx}',
-                        'members': [idx],
-                        'size': 1,
-                        'representative_idx': idx
-                    })
-            else:
-                indices = np.where(cluster_labels == label)[0].tolist()
-                # 클러스터 중심에 가장 가까운 응답을 대표로 선택
-                cluster_similarities = similarity_matrix[np.ix_(indices, indices)]
-                avg_similarities = cluster_similarities.mean(axis=1)
-                representative_idx = indices[np.argmax(avg_similarities)]
-                
-                clusters.append({
-                    'label': label,
-                    'members': indices,
-                    'size': len(indices),
-                    'representative_idx': representative_idx
-                })
-        
-        return clusters
-    
-    def _format_responses_for_consensus(self, responses: List[Dict]) -> str:
-        """합의를 위한 응답 포맷팅"""
-        formatted = []
-        for i, resp in enumerate(responses):
-            formatted.append(f"""
---- {resp['engine_name']} 응답 ---
-{resp['response']}
----
-""")
-        return "\n".join(formatted)
-    
-    async def _select_best(self, responses: List[Dict], context: Dict) -> Dict[str, Any]:
-        """컨텍스트 기반 최적 응답 선택"""
-        # 평가 기준
-        scores = []
-        
-        for resp in responses:
+        for response in responses:
             score = 0
-            content = resp['response']
             
-            # 길이 점수 (적절한 상세함)
-            length = len(content)
-            if 500 <= length <= 2000:
-                score += 20
-            elif 200 <= length < 500 or 2000 < length <= 3000:
-                score += 10
+            # 응답 길이 (적절한 상세함)
+            if 100 < len(response.content) < 2000:
+                score += 2
+            elif len(response.content) > 2000:
+                score += 1
             
-            # 구조화 점수 (단락, 리스트 등)
-            if '\n\n' in content:  # 단락 구분
-                score += 10
-            if any(marker in content for marker in ['1.', '•', '-', '*']):  # 리스트
-                score += 10
+            # 구조화 (마크다운, 번호 등)
+            if '##' in response.content or '1.' in response.content:
+                score += 2
             
-            # 전문성 점수 (전문 용어 포함)
-            technical_terms = ['고분자', '중합', '가교', '분자량', '유리전이온도', 'Tg', 'Tm']
-            term_count = sum(1 for term in technical_terms if term in content)
-            score += min(term_count * 5, 30)
+            # 코드 블록 포함
+            if '```' in response.content:
+                score += 1
             
-            # 실용성 점수 (실험 조건, 수치 포함)
-            import re
-            numbers = re.findall(r'\d+\.?\d*', content)
-            score += min(len(numbers) * 2, 20)
+            # 응답 시간 (빠를수록 좋음)
+            if response.response_time < 2.0:
+                score += 1
             
-            # 엔진별 신뢰도 가중치
-            engine_weights = {
-                'google_gemini': 1.2,
-                'deepseek': 1.1,
-                'sambanova': 1.0,
-                'grok': 0.9,
-                'groq': 0.8,
-                'huggingface': 0.8
-            }
-            score *= engine_weights.get(resp['engine_name'], 1.0)
-            
-            scores.append(score)
+            quality_scores.append((response, score))
         
-        # 최고 점수 응답 선택
-        best_idx = np.argmax(scores)
-        best_response = responses[best_idx]
+        # 최고 품질 응답 선택
+        best_response = max(quality_scores, key=lambda x: x[1])
+        max_score = 6  # 최대 가능 점수
         
         return {
-            'status': 'success',
-            'response': best_response['response'],
-            'metadata': {
-                'strategy': 'best',
-                'selected_engine': best_response['engine_name'],
-                'score': scores[best_idx],
-                'all_scores': {r['engine_name']: s for r, s in zip(responses, scores)},
-                'timestamp': datetime.now()
-            }
+            'content': best_response[0].content,
+            'confidence': best_response[1] / max_score
         }
-    
-    async def _ensemble_responses(self, responses: List[Dict]) -> Dict[str, Any]:
-        """응답 앙상블 (가중 평균)"""
-        # 각 응답에서 핵심 정보 추출
-        key_points = []
-        for resp in responses:
-            points = await self._extract_key_points(resp['response'])
-            key_points.extend(points)
+
+    def _ensemble_consensus(self, responses: List[AIResponse]) -> Dict[str, Any]:
+        """앙상블 합의 (모든 응답 통합)"""
+        if not responses:
+            return {'content': '', 'confidence': 0.0}
         
-        # 중복 제거 및 중요도 계산
-        unique_points = []
-        point_counts = {}
+        # 모든 응답에서 공통 요소 추출
+        all_contents = [r.content for r in responses]
         
-        for point in key_points:
-            if point not in point_counts:
-                point_counts[point] = 0
-            point_counts[point] += 1
+        # 간단한 구현: 모든 응답을 섹션별로 병합
+        merged_content = "## AI 종합 분석 결과\n\n"
         
-        # 빈도순 정렬
-        sorted_points = sorted(point_counts.items(), key=lambda x: x[1], reverse=True)
+        for i, response in enumerate(responses):
+            engine_name = response.model
+            merged_content += f"### {engine_name} 분석\n"
+            merged_content += response.content[:500] + "...\n\n"  # 각 응답의 일부만 포함
         
-        # 앙상블 응답 생성
-        ensemble_prompt = f"""
-        다음 핵심 포인트들을 바탕으로 종합적인 답변을 작성해주세요:
-        
-        {self._format_key_points(sorted_points[:10])}  # 상위 10개 포인트
-        
-        위 내용을 자연스럽게 연결하여 완성도 있는 답변을 만들어주세요.
-        """
-        
-        # 사용 가능한 첫 번째 엔진으로 생성
-        for engine in self.engines.values():
-            if engine.available:
-                final_response = await engine.generate_response(
-                    ensemble_prompt,
-                    temperature=0.5
-                )
-                break
-        else:
-            final_response = {'status': 'error', 'response': '앙상블 생성 실패'}
+        # 신뢰도는 응답 수에 비례
+        confidence = min(len(responses) / 3.0, 1.0)
         
         return {
-            'status': 'success',
-            'response': final_response.get('response', ''),
-            'metadata': {
-                'strategy': 'ensemble',
-                'point_count': len(sorted_points),
-                'participating_engines': [r['engine_name'] for r in responses],
-                'timestamp': datetime.now()
-            }
+            'content': merged_content,
+            'confidence': confidence
         }
-    
-    async def _extract_key_points(self, text: str) -> List[str]:
-        """텍스트에서 핵심 포인트 추출"""
-        # 간단한 구현: 문장 단위로 분리
-        import re
-        sentences = re.split(r'[.!?]+', text)
-        
-        # 빈 문장 제거 및 정리
-        key_points = []
-        for sent in sentences:
-            sent = sent.strip()
-            if len(sent) > 20:  # 최소 길이
-                key_points.append(sent)
-        
-        return key_points[:5]  # 응답당 최대 5개 포인트
-    
-    def _format_key_points(self, points: List[Tuple[str, int]]) -> str:
-        """핵심 포인트 포맷팅"""
-        formatted = []
-        for i, (point, count) in enumerate(points):
-            formatted.append(f"{i+1}. {point} (언급 횟수: {count})")
-        return "\n".join(formatted)
-    
-    def get_engine_status(self) -> Dict[str, Dict]:
-        """모든 엔진 상태 반환"""
-        status = {}
-        for name, engine in self.engines.items():
-            status[name] = {
-                'available': engine.available,
-                'capabilities': engine.get_capabilities(),
-                'usage': engine.usage_tracker.get_usage_stats() if hasattr(engine, 'usage_tracker') else {}
-            }
-        return status
+
+    def get_usage_stats(self) -> Dict[str, Any]:
+        """사용 통계 반환"""
+        return {
+            'engines': dict(self.usage_stats),
+            'total_calls': sum(stats['calls'] for stats in self.usage_stats.values()),
+            'total_tokens': sum(stats['tokens'] for stats in self.usage_stats.values()),
+            'total_errors': sum(stats['errors'] for stats in self.usage_stats.values()),
+            'active_engines': len(self.available_engines),
+            'initialized': self.initialized
+        }
     
 # Polymer-doe-platform - Part 7
 # ==================== AI 학습 시스템 (총 정리) ====================
