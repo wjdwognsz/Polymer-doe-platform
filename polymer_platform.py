@@ -363,6 +363,13 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 # ==================== 번역 및 자연어 처리 ====================
+#try:
+#    from googletrans import Translator
+#    import langdetect
+#    TRANSLATION_AVAILABLE = True
+#except ImportError:
+#    TRANSLATION_AVAILABLE = False
+
 try:
     from deep_translator import GoogleTranslator
     import langdetect
