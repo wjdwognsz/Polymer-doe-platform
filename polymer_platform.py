@@ -7695,6 +7695,154 @@ class PolyInfoClient(BaseDBClient):
         
         return results
 
+class MaterialsCommonsClient(BaseDBClient):
+    """Materials Commons API 클라이언트"""
+    
+    def __init__(self):
+        super().__init__(
+            name="materials_commons",
+            base_url="https://materialscommons.org/api",
+            requires_auth=True
+        )
+        
+    async def _test_connection(self):
+        """연결 테스트"""
+        if not self.auth_credentials:
+            raise ConnectionError("Materials Commons API 키가 필요합니다")
+            
+        headers = {'Authorization': f"Bearer {self.auth_credentials['api_key']}"}
+        async with self.session.get(f"{self.base_url}/v3/projects", headers=headers) as response:
+            if response.status != 200:
+                raise ConnectionError(f"API 응답 오류: {response.status}")
+    
+    async def search(self, query: str, filters: Dict = None) -> List[Dict]:
+        """Materials Commons 프로젝트/데이터 검색"""
+        if not self.is_available:
+            return []
+        
+        headers = {'Authorization': f"Bearer {self.auth_credentials['api_key']}"}
+        
+        # 검색 엔드포인트
+        search_url = f"{self.base_url}/v3/search"
+        params = {
+            'query': query,
+            'limit': filters.get('limit', 20) if filters else 20
+        }
+        
+        try:
+            async with self.session.get(search_url, headers=headers, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._format_results(data.get('data', []))
+                else:
+                    logger.error(f"{self.name}: 검색 오류 - {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"{self.name}: 검색 중 오류 - {str(e)}")
+            return []
+    
+    def _format_results(self, raw_results: List[Dict]) -> List[Dict]:
+        """결과 포맷팅"""
+        formatted = []
+        for item in raw_results:
+            formatted.append({
+                'source': 'Materials Commons',
+                'title': item.get('name'),
+                'description': item.get('description'),
+                'project': item.get('project_name'),
+                'materials': item.get('materials', []),
+                'processes': item.get('processes', []),
+                'created_at': item.get('created_at'),
+                'url': item.get('url')
+            })
+        return formatted
+
+class ChemSpiderClient(BaseDBClient):
+    """ChemSpider API 클라이언트"""
+    
+    def __init__(self):
+        super().__init__(
+            name="chemspider",
+            base_url="https://api.rsc.org/compounds/v1",
+            requires_auth=True
+        )
+        
+    async def _test_connection(self):
+        """연결 테스트"""
+        if not self.auth_credentials:
+            raise ConnectionError("ChemSpider API 키가 필요합니다")
+            
+        headers = {'apikey': self.auth_credentials['api_key']}
+        async with self.session.get(
+            f"{self.base_url}/filter/element",
+            headers=headers,
+            params={'filter': 'C'}
+        ) as response:
+            if response.status != 200:
+                raise ConnectionError(f"API 응답 오류: {response.status}")
+    
+    async def search(self, query: str, filters: Dict = None) -> List[Dict]:
+        """ChemSpider 화합물 검색"""
+        if not self.is_available:
+            return []
+        
+        headers = {'apikey': self.auth_credentials['api_key']}
+        
+        # 화합물 이름으로 검색
+        search_url = f"{self.base_url}/filter/name"
+        
+        try:
+            # 검색 요청
+            async with self.session.post(
+                search_url,
+                headers=headers,
+                json={'name': query}
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    query_id = result.get('queryId')
+                    
+                    # 결과 가져오기
+                    results_url = f"{self.base_url}/filter/{query_id}/results"
+                    async with self.session.get(results_url, headers=headers) as res:
+                        if res.status == 200:
+                            data = await res.json()
+                            return await self._get_compound_details(data.get('results', []), headers)
+                
+                logger.error(f"{self.name}: 검색 오류 - {response.status}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"{self.name}: 검색 중 오류 - {str(e)}")
+            return []
+    
+    async def _get_compound_details(self, compound_ids: List[int], headers: Dict) -> List[Dict]:
+        """화합물 상세 정보 가져오기"""
+        formatted = []
+        
+        # 상위 10개만 상세 정보 조회
+        for compound_id in compound_ids[:10]:
+            try:
+                url = f"{self.base_url}/records/{compound_id}/details"
+                async with self.session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        formatted.append({
+                            'source': 'ChemSpider',
+                            'compound_id': compound_id,
+                            'name': data.get('commonName'),
+                            'formula': data.get('formula'),
+                            'smiles': data.get('smiles'),
+                            'inchi': data.get('inchi'),
+                            'molecular_weight': data.get('molecularWeight'),
+                            'properties': data.get('properties', {}),
+                            'url': f"http://www.chemspider.com/Chemical-Structure.{compound_id}.html"
+                        })
+            except Exception as e:
+                logger.debug(f"화합물 {compound_id} 정보 조회 실패: {e}")
+                
+        return formatted
+
 class ProtocolsIOClient(BaseDBClient):
     """Protocols.io API 클라이언트"""
     
