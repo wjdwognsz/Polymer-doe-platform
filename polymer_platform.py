@@ -239,59 +239,6 @@ class APIKeyManager:
         else:
             return "🔴"
     
-    def initialize_keys(self):
-        """API 키 초기화"""
-        # Streamlit secrets에서 먼저 확인
-        if hasattr(st, 'secrets'):
-            for key_id, config in self.api_configs.items():
-                secret_key = config['env_key']
-                if secret_key in st.secrets:
-                    st.session_state.api_keys[key_id] = st.secrets[secret_key]
-        
-        # 환경 변수에서 확인
-        for key_id, config in self.api_configs.items():
-            if key_id not in st.session_state.api_keys:
-                env_value = os.getenv(config['env_key'])
-                if env_value:
-                    st.session_state.api_keys[key_id] = env_value
-        
-        st.session_state.api_keys_initialized = True
-    
-    def get_key(self, key_id: str) -> Optional[str]:
-        """API 키 반환"""
-        # 세션 상태에서 확인
-        if key_id in st.session_state.api_keys:
-            return st.session_state.api_keys[key_id]
-        
-        # Streamlit secrets에서 확인
-        config = self.api_configs.get(key_id)
-        if config and hasattr(st, 'secrets'):
-            if config['env_key'] in st.secrets:
-                return st.secrets[config['env_key']]
-        
-        # 환경 변수에서 확인
-        if config:
-            return os.getenv(config['env_key'])
-        
-        return None
-    
-    def set_key(self, key_id: str, value: str):
-        """API 키 설정"""
-        st.session_state.api_keys[key_id] = value
-        config = self.api_configs.get(key_id)
-        if config:
-            os.environ[config['env_key']] = value
-    
-    def _mask_key(self, key: str) -> str:
-        """API 키를 마스킹 처리"""
-        if not key:
-            return ""
-        if len(key) <= 8:
-            return "*" * len(key)
-        return key[:4] + "*" * (len(key) - 8) + key[-4:]
-
-# 전역 API 키 매니저 인스턴스 생성
-api_key_manager = APIKeyManager()
 
 # ==================== Enhanced 모듈 임포트 시도 ====================
 ENHANCED_FEATURES_AVAILABLE = False
