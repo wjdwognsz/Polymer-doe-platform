@@ -6093,23 +6093,40 @@ class BaseAIEngine:
         self.cache = AIResponseCache(name)
         
     def initialize(self):
-        """API 키 확인 및 클라이언트 초기화"""
-        self.api_key = api_key_manager.get_key(self.api_key_id)
-        if not self.api_key:
-            logger.warning(f"{self.name} API 키가 설정되지 않았습니다.")
-            self.available = False
+        """엔진 초기화"""
+        global api_key_manager
+        
+        # API 키 관리자에서 키 가져오기
+        if api_key_manager and api_key_manager.is_key_set(self.api_key_id):
+            self.api_key = api_key_manager.get_key(self.api_key_id)
+            logger.info(f"{self.name} API 키 로드 성공")
+        else:
+            logger.warning(f"{self.name} API 키를 찾을 수 없습니다")
             return False
-            
+        
+        # Rate limiter 설정
+        if api_key_manager and self.api_key_id in api_key_manager.rate_limiters:
+            self.rate_limiter = api_key_manager.rate_limiters[self.api_key_id]
+        
+        return True
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        """비동기 생성 (하위 클래스에서 구현)"""
+        raise NotImplementedError
+    
+    def generate(self, prompt: str, **kwargs) -> AIResponse:
+        """동기 생성 래퍼"""
         try:
-            self._initialize_client()
-            self.available = True
-            self.rate_limiter = RateLimiter(self.name)
-            logger.info(f"{self.name} 엔진 초기화 성공")
-            return True
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(self.generate_async(prompt, **kwargs))
         except Exception as e:
-            logger.error(f"{self.name} 엔진 초기화 실패: {str(e)}")
-            self.available = False
-            return False
+            return AIResponse(
+                success=False,
+                content="",
+                model=self.name,
+                error=str(e)
+            )
     
     def _initialize_client(self):
         """각 AI 엔진별 클라이언트 초기화 (하위 클래스에서 구현)"""
