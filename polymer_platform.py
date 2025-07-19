@@ -227,8 +227,14 @@ except ImportError:
 from sklearn.manifold import TSNE, MDS
 from sklearn.model_selection import (
     train_test_split, cross_val_score, KFold, 
-    GridSearchCV, RandomizedSearchCV, BayesSearchCV
+    GridSearchCV, RandomizedSearchCV
 )
+try:
+    from skopt import BayesSearchCV
+    SKOPT_AVAILABLE = True
+except ImportError:
+    SKOPT_AVAILABLE = False
+
 from sklearn.ensemble import (
     RandomForestRegressor, GradientBoostingRegressor,
     ExtraTreesRegressor, AdaBoostRegressor
