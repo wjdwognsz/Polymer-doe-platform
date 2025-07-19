@@ -2612,6 +2612,7 @@ class CollaborationManager:
                 logger.info(f"알림: {user_id}에게 새 {collaboration.type.value} 알림")
 
 # ==================== API 키 관리 시스템 (확장) ====================
+# ==================== API 키 관리 시스템 (확장) ====================
 class APIKeyManager:
     """API 키를 중앙에서 관리하는 시스템"""
     
@@ -2658,8 +2659,39 @@ class APIKeyManager:
                 'rate_limit': {'rpm': 50, 'tpm': 100000},
                 'models': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
             },
-            # ... 기존 API들 ...
-            
+            'groq': {
+                'name': 'Groq',
+                'env_key': 'GROQ_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.groq.com/v1/models',
+                'category': 'ai',
+                'description': '초고속 AI 추론',
+                'features': ['빠른 응답', '효율성', '실시간 처리'],
+                'rate_limit': {'rpm': 100, 'tpm': 200000},
+                'models': ['mixtral-8x7b', 'llama2-70b']
+            },
+            'deepseek': {
+                'name': 'DeepSeek',
+                'env_key': 'DEEPSEEK_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api.deepseek.com/v1/models',
+                'category': 'ai',
+                'description': '코드 및 수학 특화 AI',
+                'features': ['코드 생성', '수학 문제 해결', '기술 문서'],
+                'rate_limit': {'rpm': 60},
+                'models': ['deepseek-coder', 'deepseek-math']
+            },
+            'huggingface': {
+                'name': 'HuggingFace',
+                'env_key': 'HUGGINGFACE_API_KEY',
+                'required': False,
+                'test_endpoint': 'https://api-inference.huggingface.co/models',
+                'category': 'ai',
+                'description': '다양한 오픈소스 모델',
+                'features': ['특수 모델', '임베딩', '분류', 'NER'],
+                'rate_limit': {'rpm': 300},
+                'models': ['various']
+            },
             # Database APIs (확장)
             'materials_project': {
                 'name': 'Materials Project',
@@ -2717,6 +2749,41 @@ class APIKeyManager:
             st.session_state.api_keys_initialized = True
             logger.info("API 키 초기화 완료")
     
+    def _load_from_secrets(self):
+        """Streamlit secrets에서 API 키 로드"""
+        try:
+            for api_id, config in self.api_configs.items():
+                env_key = config.get('env_key')
+                if env_key and env_key in st.secrets:
+                    st.session_state.api_keys[api_id] = st.secrets[env_key]
+                    logger.info(f"{config['name']} API 키가 secrets에서 로드되었습니다")
+        except Exception as e:
+            logger.debug(f"Secrets 로드 중 오류 (정상적일 수 있음): {e}")
+
+    def _load_from_env(self):
+        """환경 변수에서 API 키 로드"""
+        import os
+        for api_id, config in self.api_configs.items():
+            env_key = config.get('env_key')
+            if env_key:
+                value = os.environ.get(env_key)
+                if value:
+                    st.session_state.api_keys[api_id] = value
+                    logger.info(f"{config['name']} API 키가 환경 변수에서 로드되었습니다")
+
+    def _load_from_file(self):
+        """로컬 파일에서 API 키 로드 (개발용)"""
+        try:
+            import os
+            if os.path.exists('.env'):
+                from dotenv import load_dotenv
+                load_dotenv()
+                self._load_from_env()  # .env 파일 로드 후 환경 변수에서 다시 읽기
+        except ImportError:
+            logger.debug("python-dotenv가 설치되지 않았습니다. 로컬 파일 로드를 건너뜁니다.")
+        except Exception as e:
+            logger.debug(f"로컬 파일 로드 중 오류: {e}")
+    
     def _init_rate_limiters(self):
         """Rate limiter 초기화"""
         for api_id, config in self.api_configs.items():
@@ -2732,6 +2799,89 @@ class APIKeyManager:
             for key_id, value in st.session_state.user_api_keys.items():
                 if value and key_id not in st.session_state.api_keys:
                     st.session_state.api_keys[key_id] = value
+    
+    def validate_key_format(self, key_id: str, key: str) -> bool:
+        """API 키 형식 검증"""
+        if not key or not isinstance(key, str):
+            return False
+        
+        # API별 형식 검증
+        if key_id == 'openai':
+            return key.startswith('sk-') and len(key) > 20
+        elif key_id == 'gemini':
+            return key.startswith('AIza') and len(key) > 30
+        elif key_id == 'anthropic':
+            return key.startswith('sk-ant-') and len(key) > 40
+        elif key_id == 'groq':
+            return key.startswith('gsk_') and len(key) > 40
+        elif key_id == 'deepseek':
+            return len(key) > 20
+        elif key_id == 'huggingface':
+            return key.startswith('hf_') and len(key) > 20
+        else:
+            # 기타 API는 기본 길이만 확인
+            return len(key) > 10
+
+    def test_api_connection(self, key_id: str, key: str) -> Dict[str, Any]:
+        """API 연결 테스트"""
+        config = self.api_configs.get(key_id)
+        if not config:
+            return {'status': 'error', 'message': '알 수 없는 API ID'}
+        
+        try:
+            # 간단한 연결 테스트 (실제로는 각 API별로 구현 필요)
+            test_endpoint = config.get('test_endpoint')
+            if test_endpoint:
+                # 여기서 실제 API 호출 테스트를 수행할 수 있습니다
+                # 지금은 간단한 검증만 수행
+                if self.validate_key_format(key_id, key):
+                    return {
+                        'status': 'success',
+                        'message': f'{config["name"]} API 키가 유효한 형식입니다'
+                    }
+                else:
+                    return {
+                        'status': 'error',
+                        'message': 'API 키 형식이 올바르지 않습니다'
+                    }
+            else:
+                return {
+                    'status': 'success',
+                    'message': 'API 키가 저장되었습니다'
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'연결 테스트 실패: {str(e)}'
+            }
+
+    def set_key(self, key_id: str, key: str):
+        """API 키 설정"""
+        st.session_state.api_keys[key_id] = key
+        
+        # 사용자 입력 키도 별도로 저장
+        if 'user_api_keys' not in st.session_state:
+            st.session_state.user_api_keys = {}
+        st.session_state.user_api_keys[key_id] = key
+        
+        logger.info(f"{self.api_configs[key_id]['name']} API 키가 설정되었습니다")
+
+    def get_key(self, key_id: str) -> Optional[str]:
+        """API 키 가져오기"""
+        return st.session_state.api_keys.get(key_id)
+
+    def is_key_set(self, key_id: str) -> bool:
+        """API 키 설정 여부 확인"""
+        return key_id in st.session_state.api_keys and bool(st.session_state.api_keys[key_id])
+
+    def get_available_apis(self, category: str = None) -> List[str]:
+        """사용 가능한 API 목록"""
+        available = []
+        for api_id, config in self.api_configs.items():
+            if self.is_key_set(api_id):
+                if category is None or config.get('category') == category:
+                    available.append(api_id)
+        return available
     
     def validate_and_set_key(self, key_id: str, key: str) -> Tuple[bool, str]:
         """API 키 검증 및 설정"""
