@@ -11136,9 +11136,9 @@ class UserInterfaceSystem:
         if page in self.pages:
             self.pages[page].render(self.current_user_level)
         
-        # 도움말 시스템
+        # 도움말 시스템 - 수정된 부분
         if self.current_user_level in [UserLevel.BEGINNER, UserLevel.INTERMEDIATE]:
-            self.help_system.render_contextual_help(page)
+            self.help_system.show_contextual_help(page, self.current_user_level)
     
     def _render_sidebar(self):
         """사이드바 렌더링"""
