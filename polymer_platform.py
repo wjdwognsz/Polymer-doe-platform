@@ -7590,6 +7590,206 @@ class AILearningSystem:
         """개선 추세 반환"""
         return self.interaction_db.get_improvement_trends(days=30)
 
+# ==================== 데이터베이스 캐시 ====================
+class DatabaseCache:
+    """데이터베이스 쿼리 결과 캐싱"""
+    
+    def __init__(self, max_size: int = 1000, ttl: int = 3600):
+        self.cache = OrderedDict()
+        self.max_size = max_size
+        self.ttl = ttl  # Time to live in seconds
+        self.timestamps = {}
+        
+    def get(self, key: str) -> Any:
+        """캐시에서 값 가져오기"""
+        if key in self.cache:
+            # TTL 확인
+            if time.time() - self.timestamps[key] < self.ttl:
+                # LRU: 최근 사용 항목을 끝으로 이동
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            else:
+                # 만료된 항목 제거
+                del self.cache[key]
+                del self.timestamps[key]
+        return None
+    
+    def set(self, key: str, value: Any):
+        """캐시에 값 저장"""
+        # 기존 키 업데이트
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        else:
+            # 새 키 추가
+            if len(self.cache) >= self.max_size:
+                # 가장 오래된 항목 제거
+                oldest_key = next(iter(self.cache))
+                del self.cache[oldest_key]
+                del self.timestamps[oldest_key]
+            
+        self.cache[key] = value
+        self.timestamps[key] = time.time()
+    
+    def clear(self):
+        """캐시 전체 삭제"""
+        self.cache.clear()
+        self.timestamps.clear()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """캐시 통계"""
+        return {
+            'size': len(self.cache),
+            'max_size': self.max_size,
+            'ttl': self.ttl,
+            'oldest_entry': min(self.timestamps.values()) if self.timestamps else None,
+            'newest_entry': max(self.timestamps.values()) if self.timestamps else None
+        }
+
+# ==================== 검색 오케스트레이터 ====================
+class SearchOrchestrator:
+    """다중 데이터베이스 검색 조정"""
+    
+    def __init__(self):
+        self.search_strategies = {
+            'parallel': self._parallel_search,
+            'sequential': self._sequential_search,
+            'priority': self._priority_search
+        }
+        self.relevance_scorer = RelevanceScorer()
+        
+    async def search(self, 
+                     query: str, 
+                     databases: List[Any],
+                     strategy: str = 'parallel',
+                     filters: Dict = None) -> List[Dict]:
+        """통합 검색 실행"""
+        if strategy not in self.search_strategies:
+            strategy = 'parallel'
+            
+        search_func = self.search_strategies[strategy]
+        results = await search_func(query, databases, filters)
+        
+        # 결과 정렬 및 중복 제거
+        return self._process_results(results)
+    
+    async def _parallel_search(self, query: str, databases: List[Any], filters: Dict) -> List[Dict]:
+        """병렬 검색"""
+        tasks = []
+        for db in databases:
+            if hasattr(db, 'search') and db.is_available:
+                tasks.append(db.search(query, filters))
+                
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 오류 제외하고 결과 통합
+        combined_results = []
+        for result in results:
+            if isinstance(result, list):
+                combined_results.extend(result)
+                
+        return combined_results
+    
+    async def _sequential_search(self, query: str, databases: List[Any], filters: Dict) -> List[Dict]:
+        """순차 검색 (우선순위 기반)"""
+        combined_results = []
+        
+        for db in databases:
+            if hasattr(db, 'search') and db.is_available:
+                try:
+                    results = await db.search(query, filters)
+                    combined_results.extend(results)
+                    
+                    # 충분한 결과를 얻으면 중단
+                    if len(combined_results) >= filters.get('limit', 50):
+                        break
+                except Exception as e:
+                    logger.warning(f"Sequential search error in {db.name}: {e}")
+                    
+        return combined_results
+    
+    async def _priority_search(self, query: str, databases: List[Any], filters: Dict) -> List[Dict]:
+        """우선순위 기반 검색"""
+        # 데이터베이스를 우선순위별로 그룹화
+        priority_groups = {}
+        for db in databases:
+            priority = getattr(db, 'priority', 5)
+            if priority not in priority_groups:
+                priority_groups[priority] = []
+            priority_groups[priority].append(db)
+        
+        combined_results = []
+        
+        # 우선순위 순서대로 검색
+        for priority in sorted(priority_groups.keys()):
+            group_results = await self._parallel_search(
+                query, 
+                priority_groups[priority], 
+                filters
+            )
+            combined_results.extend(group_results)
+            
+            if len(combined_results) >= filters.get('limit', 50):
+                break
+                
+        return combined_results
+    
+    def _process_results(self, results: List[Dict]) -> List[Dict]:
+        """결과 처리 및 정렬"""
+        # 중복 제거
+        seen = set()
+        unique_results = []
+        
+        for result in results:
+            # 고유 식별자 생성
+            identifier = f"{result.get('source', '')}:{result.get('id', result.get('title', ''))}"
+            if identifier not in seen:
+                seen.add(identifier)
+                unique_results.append(result)
+        
+        # 관련도 점수 계산 및 정렬
+        for result in unique_results:
+            result['relevance_score'] = self.relevance_scorer.calculate(result)
+            
+        return sorted(unique_results, key=lambda x: x['relevance_score'], reverse=True)
+
+class RelevanceScorer:
+    """검색 결과 관련도 점수 계산"""
+    
+    def calculate(self, result: Dict) -> float:
+        """관련도 점수 계산"""
+        score = 0.0
+        
+        # 기본 점수
+        if result.get('title'):
+            score += 1.0
+            
+        # 출처별 가중치
+        source_weights = {
+            'Materials Project': 1.5,
+            'PubChem': 1.3,
+            'Crossref': 1.2,
+            'OpenAlex': 1.1
+        }
+        source = result.get('source', '')
+        score *= source_weights.get(source, 1.0)
+        
+        # 최신성 점수
+        if result.get('published_date'):
+            try:
+                pub_date = datetime.fromisoformat(str(result['published_date']))
+                days_old = (datetime.now() - pub_date).days
+                recency_score = max(0, 1 - (days_old / 365))  # 1년 이내면 높은 점수
+                score += recency_score * 0.5
+            except:
+                pass
+                
+        # 인용 수 점수
+        citations = result.get('cited_by_count', 0)
+        if citations > 0:
+            score += min(1.0, citations / 100) * 0.3
+            
+        return score
+
 # ==================== 데이터베이스 통합 매니저 ====================
 class DatabaseIntegrationManager:
     """외부 데이터베이스 통합 관리"""
