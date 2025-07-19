@@ -1,47 +1,38 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import os
 import json
-import asyncio
-import aiohttp
-from typing import Dict, List, Optional, Any
-import logging
-import gspread
-from google.oauth2 import service_account
+import requests
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import openai
+from scipy import stats
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+import hashlib
+import base64
 import io
+import re
+import logging
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from enum import Enum
 
-# xlsxwriter 설치 확인 및 대체 방안
-try:
-    import xlsxwriter
-    XLSX_AVAILABLE = True
-except ImportError:
-    XLSX_AVAILABLE = False
-    st.warning("xlsxwriter가 설치되지 않았습니다. CSV 형식으로만 다운로드 가능합니다.")
+# ==================== 로깅 설정 ====================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ==================== 기본 설정 ====================
-# Streamlit 페이지 설정
+# ==================== Streamlit 페이지 설정 ====================
 st.set_page_config(
     page_title="🧬 고분자 실험 설계 플랫폼",
     page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ==================== 로깅 설정 ====================
-import logging
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
-from enum import Enum
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # ==================== API 상태 타입 정의 ====================
 class APIStatus(Enum):
@@ -64,14 +55,14 @@ class APIResponse:
 
 # ==================== 전역 API 키 매니저 ====================
 class APIKeyManager:
-    """API 키를 중앙에서 관리하는 클래스"""
+    """API 키를 중앙에서 관리하는 매니저"""
     
     def __init__(self):
         # 세션 상태 초기화
-        if 'api_keys_initialized' not in st.session_state:
-            st.session_state.api_keys_initialized = False
         if 'api_keys' not in st.session_state:
             st.session_state.api_keys = {}
+        if 'api_keys_initialized' not in st.session_state:
+            st.session_state.api_keys_initialized = False
             
         # API 구성 정의
         self.api_configs = {
@@ -167,6 +158,43 @@ class APIKeyManager:
         self.api_status = {}
         self.load_keys()
 
+    def initialize_keys(self):
+        """API 키 초기화"""
+        if not st.session_state.api_keys_initialized:
+            # Streamlit secrets에서 로드
+            for key_id, config in self.api_configs.items():
+                if hasattr(st, 'secrets') and config['env_key'] in st.secrets:
+                    st.session_state.api_keys[key_id] = st.secrets[config['env_key']]
+                elif os.getenv(config['env_key']):
+                    st.session_state.api_keys[key_id] = os.getenv(config['env_key'])
+            
+            st.session_state.api_keys_initialized = True
+    
+    def get_key(self, key_id: str) -> Optional[str]:
+        """API 키 반환"""
+        # 세션 상태에서 확인
+        if key_id in st.session_state.api_keys:
+            return st.session_state.api_keys[key_id]
+        
+        # Streamlit secrets에서 확인
+        config = self.api_configs.get(key_id)
+        if config and hasattr(st, 'secrets'):
+            if config['env_key'] in st.secrets:
+                return st.secrets[config['env_key']]
+        
+        # 환경 변수에서 확인
+        if config:
+            return os.getenv(config['env_key'])
+        
+        return None
+    
+    def set_key(self, key_id: str, value: str):
+        """API 키 설정"""
+        st.session_state.api_keys[key_id] = value
+        config = self.api_configs.get(key_id)
+        if config:
+            os.environ[config['env_key']] = value
+    
     def load_keys(self):
         """Streamlit secrets 및 환경변수에서 API 키 로드"""
         for api_id, config in self.required_apis.items():
@@ -239,6 +267,17 @@ class APIKeyManager:
         else:
             return "🔴"
     
+# ==================== 전역 변수 초기화 (API Key Manager 생성 후) ====================
+# API Key Manager를 먼저 생성
+api_key_manager = APIKeyManager()
+api_key_manager.initialize_keys()
+
+# 나머지 전역 변수는 None으로 초기화
+enhanced_ai_orchestrator = None
+database_manager = None
+api_monitor = None
+translation_service = None
+
 
 # ==================== Enhanced 모듈 임포트 시도 ====================
 ENHANCED_FEATURES_AVAILABLE = False
@@ -263,15 +302,229 @@ try:
     import gspread
     from google.oauth2.service_account import Credentials
     from huggingface_hub import InferenceClient
+    import google.generativeai as genai
+    import gspread
+    from google.oauth2.service_account import Credentials
     
-    ENHANCED_FEATURES_AVAILABLE = True
-    logger.info("✅ Enhanced 기능이 활성화되었습니다.")
-    
-except Exception as e:
-    logger.warning(f"⚠️ Enhanced 기능 초기화 실패: {e}")
+
+    try:
+        from groq import Groq
+        import asyncio
+        import aiohttp
+        from huggingface_hub import InferenceClient
+        ENHANCED_FEATURES_AVAILABLE = True
+        logger.info("✅ Enhanced 기능이 활성화되었습니다.")
+    except ImportError as e:
+        logger.warning(f"일부 Enhanced 기능 사용 불가: {e}")
+        
+except ImportError as e:
+    logger.warning(f"Enhanced 기능 비활성화: {e}")
     logger.info("기본 모드로 실행됩니다.")
 
+# ==================== Enhanced AI 엔진 클래스들 ====================
+if ENHANCED_FEATURES_AVAILABLE:
+    
+    class BaseAIEngine:
+        """모든 AI 엔진의 기본 클래스"""
+        
+        def __init__(self, name: str, api_key_id: str):
+            self.name = name
+            self.api_key_id = api_key_id
+            self.api_key = None
+            self.client = None
+            
+        def initialize(self):
+            """API 키 확인 및 클라이언트 초기화"""
+            self.api_key = api_key_manager.get_key(self.api_key_id)
+            if not self.api_key:
+                logger.warning(f"{self.name} API key not found")
+                return False
+            return True
+        
+        async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+            """비동기 생성 (하위 클래스에서 구현)"""
+            raise NotImplementedError
+    
+    class GeminiEngine(BaseAIEngine):
+        """Google Gemini AI 엔진"""
+        
+        def __init__(self):
+            super().__init__("Gemini", "gemini")
+            
+        def initialize(self):
+            if super().initialize():
+                try:
+                    genai.configure(api_key=self.api_key)
+                    self.client = genai.GenerativeModel('gemini-pro')
+                    return True
+                except Exception as e:
+                    logger.error(f"Gemini initialization failed: {e}")
+                    return False
+            return False
+        
+        async def generate_async(self, prompt: str, **kwargs) -> APIResponse:
+            try:
+                response = await asyncio.to_thread(
+                    self.client.generate_content,
+                    prompt
+                )
+                
+                return APIResponse(
+                    success=True,
+                    data=response.text,
+                    api_name=self.name
+                )
+            except Exception as e:
+                return APIResponse(
+                    success=False,
+                    data=None,
+                    error=str(e),
+                    api_name=self.name
+                )
+    
+    # 다른 AI 엔진들도 비슷하게 구현 (간략화)
+    class GrokEngine(BaseAIEngine):
+        def __init__(self):
+            super().__init__("Grok", "grok")
+    
+    class SambaNovaEngine(BaseAIEngine):
+        def __init__(self):
+            super().__init__("SambaNova", "sambanova")
+    
+    class DeepSeekEngine(BaseAIEngine):
+        def __init__(self):
+            super().__init__("DeepSeek", "deepseek")
+    
+    class GroqEngine(BaseAIEngine):
+        def __init__(self):
+            super().__init__("Groq", "groq")
+    
+    class HuggingFaceEngine(BaseAIEngine):
+        def __init__(self):
+            super().__init__("HuggingFace", "huggingface")
+    
+    # ==================== Enhanced AI Orchestrator ====================
+    class EnhancedAIOrchestrator:
+        """6개 AI를 통합 관리하는 오케스트레이터"""
+        
+        def __init__(self):
+            # AI 엔진 초기화
+            self.engines = {
+                'gemini': GeminiEngine(),
+                'grok': GrokEngine(),
+                'sambanova': SambaNovaEngine(),
+                'deepseek': DeepSeekEngine(),
+                'groq': GroqEngine(),
+                'huggingface': HuggingFaceEngine()
+            }
+            
+            # 사용 가능한 엔진 확인
+            self.available_engines = {}
+            self._initialize_engines()
+        
+        def _initialize_engines(self):
+            """사용 가능한 AI 엔진 초기화"""
+            for engine_id, engine in self.engines.items():
+                if engine.initialize():
+                    self.available_engines[engine_id] = engine
+                    logger.info(f"✅ {engine.name} 엔진 활성화")
+                else:
+                    logger.info(f"❌ {engine.name} 엔진 비활성화 (API 키 없음)")
+    
+    # Enhanced 컴포넌트 초기화
+    try:
+        enhanced_ai_orchestrator = EnhancedAIOrchestrator()
+        logger.info("✅ Enhanced AI Orchestrator 초기화 성공")
+    except Exception as e:
+        logger.error(f"Enhanced AI Orchestrator 초기화 실패: {e}")
+        enhanced_ai_orchestrator = None
+
 # ==================== CSS 스타일 정의 ====================
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        padding: 2rem 0;
+    }
+    .info-card {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stButton > button {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 2rem;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==================== 기본 AI Orchestrator (Enhanced가 없을 때) ====================
+class BasicAIOrchestrator:
+    """기본 AI 오케스트레이터"""
+    
+    def __init__(self):
+        self.available_ais = []
+        self._check_available_ais()
+    
+    def _check_available_ais(self):
+        """사용 가능한 AI 확인"""
+        # OpenAI 확인
+        if api_key_manager.get_key('openai'):
+            self.available_ais.append('openai')
+            openai.api_key = api_key_manager.get_key('openai')
+        
+        # Gemini 확인  
+        if api_key_manager.get_key('gemini') and ENHANCED_FEATURES_AVAILABLE:
+            self.available_ais.append('gemini')
+    
+    def generate(self, prompt: str, ai_type: str = None) -> str:
+        """AI 응답 생성"""
+        if not self.available_ais:
+            return "사용 가능한 AI가 없습니다. API 키를 설정해주세요."
+        
+        ai_type = ai_type or self.available_ais[0]
+        
+        try:
+            if ai_type == 'openai':
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
+            
+            elif ai_type == 'gemini' and ENHANCED_FEATURES_AVAILABLE:
+                model = genai.GenerativeModel('gemini-pro')
+                response = model.generate_content(prompt)
+                return response.text
+            
+        except Exception as e:
+            logger.error(f"AI 생성 오류: {e}")
+            return f"AI 응답 생성 중 오류가 발생했습니다: {str(e)}"
+
+# ==================== CSS 스타일 ====================
 st.markdown("""
 <style>
     .main-header {
@@ -325,22 +578,27 @@ class StateManager:
             'current_page': 'home',
             'project_info': {},
             'experiment_design': None,
+            'results_df': None,
             'analysis_results': None,
-            'literature_results': None,
-            'safety_results': None,
-            'community_posts': [],
-            'ai_consultations': [],
-            'platform_stats': {
-                'total_experiments': 0,
-                'ai_consultations': 0,
-                'active_users': 0,
-                'success_rate': 0.0
-            }
+            'show_experiment_design': False,
+            'last_ai_response': None
         }
         
         for key, value in defaults.items():
             if key not in st.session_state:
                 st.session_state[key] = value
+
+# 상태 초기화
+StateManager.initialize()
+
+# ==================== AI Orchestrator 선택 ====================
+# Enhanced가 있으면 사용, 없으면 Basic 사용
+if enhanced_ai_orchestrator and len(enhanced_ai_orchestrator.available_engines) > 0:
+    ai_orchestrator = enhanced_ai_orchestrator
+    logger.info("Enhanced AI Orchestrator 사용")
+else:
+    ai_orchestrator = BasicAIOrchestrator()
+    logger.info("Basic AI Orchestrator 사용")
 
 # ==================== 데이터베이스 매니저 ====================
 class DatabaseManager:
