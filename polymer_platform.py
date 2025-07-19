@@ -6251,6 +6251,42 @@ class BaseAIEngine:
         """각 엔진별 특화 기능 (하위 클래스에서 구현)"""
         return []
 
+class OpenAIEngine(BaseAIEngine):
+    """OpenAI GPT 엔진"""
+    
+    def __init__(self):
+        super().__init__("OpenAI", "openai")
+        self.models = ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo-preview']
+        
+    def initialize(self):
+        # 라이브러리 체크를 initialize 내부에서 수행
+        if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI 라이브러리가 설치되지 않았습니다")
+            self.available = False
+            return False
+            
+        if super().initialize():
+            try:
+                # AsyncOpenAI가 없을 경우를 대비한 처리
+                if OPENAI_AVAILABLE:
+                    from openai import AsyncOpenAI
+                    self.client = AsyncOpenAI(api_key=self.api_key)
+                    self.available = True
+                    return True
+            except Exception as e:
+                logger.error(f"OpenAI 초기화 실패: {e}")
+                self.available = False
+        return False
+    
+    async def generate_async(self, prompt: str, **kwargs) -> AIResponse:
+        if not self.available:
+            return AIResponse(
+                success=False, 
+                content="OpenAI 엔진을 사용할 수 없습니다.", 
+                model=self.name,
+                error="Engine not available"
+            )
+
 class GeminiEngine(BaseAIEngine):
     """Google Gemini AI 엔진"""
     
