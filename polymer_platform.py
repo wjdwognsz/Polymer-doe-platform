@@ -6721,12 +6721,11 @@ class HuggingFaceEngine(BaseAIEngine):
 
 # ==================== 다중 AI 오케스트레이터 ====================
 class MultiAIOrchestrator:
-    """다중 AI 엔진을 통합 관리하는 오케스트레이터"""
+    """확장된 다중 AI 오케스트레이터"""
     
     def __init__(self):
-        # 필수 속성들 초기화
+        """초기화"""
         self.engines = {}
-        self.api_keys = {}
         self.available_engines = {}
         self.active_engines = []
         self.usage_stats = defaultdict(lambda: {'calls': 0, 'tokens': 0, 'errors': 0})
@@ -6776,11 +6775,11 @@ class MultiAIOrchestrator:
             'ensemble': self._ensemble_consensus
         }
         
-        # ========== 여기에 API Manager 연결 추가 ==========
-        # API 매니저 참조 - 세션 상태에서 가져오기
+        # API Manager 참조 - 세션 상태에서 가져오기
         self.api_manager = st.session_state.get('api_manager', None)
         if self.api_manager is None:
             # API Manager가 없으면 새로 생성
+            from polymer_platform import APIManager
             self.api_manager = APIManager()
             st.session_state.api_manager = self.api_manager
             logger.info("MultiAIOrchestrator에서 새 APIManager 인스턴스 생성")
@@ -6792,7 +6791,7 @@ class MultiAIOrchestrator:
         return None
 
     def initialize(self):
-        """AI 엔진들 초기화"""
+        """AI 엔진들 초기화 - 수정된 버전"""
         logger.info("MultiAIOrchestrator 초기화 시작...")
         
         # API Manager가 없으면 초기화 실패
@@ -6800,199 +6799,102 @@ class MultiAIOrchestrator:
             logger.error("API Manager가 없어 초기화할 수 없습니다")
             return False
         
-        # 각 AI 엔진 초기화 시도
-        initialization_results = {
-            'gemini': self._init_gemini(),
-            'groq': self._init_groq(),
-            'grok': self._init_grok(),
-            'sambanova': self._init_sambanova(),
-            'deepseek': self._init_deepseek(),
-            'huggingface': self._init_huggingface()
-        }
-        
-        # Streamlit secrets에서 API 키 로드
+        # Streamlit secrets에서 API 키 로드 및 api_manager에 저장
         if hasattr(st, 'secrets'):
+            key_mapping = {
+                'google_gemini': 'gemini',
+                'xai_grok': 'grok', 
+                'sambanova': 'sambanova',
+                'deepseek': 'deepseek',
+                'groq': 'groq',
+                'huggingface': 'huggingface'
+            }
+            
             for secret_key, engine_key in key_mapping.items():
                 if secret_key in st.secrets and st.secrets[secret_key] != 'your-key':
-                    # api_manager가 전역 변수로 있다면
-                    if 'api_manager' in globals():
-                        api_manager.set_api_key(engine_key, st.secrets[secret_key])
+                    self.api_manager.set_api_key(engine_key, st.secrets[secret_key])
+                    logger.info(f"{engine_key} API 키가 secrets에서 로드됨")
         
         # 각 엔진 설정에 따라 초기화
         engine_configs = {
-            'gemini': GeminiEngine,
-            'grok': GrokEngine,
-            'groq': GroqEngine,
-            'sambanova': SambaNovaEngine,
-            'deepseek': DeepSeekEngine,
-            'huggingface': HuggingFaceEngine
+            'gemini': ('GeminiEngine', 'gemini'),
+            'grok': ('GrokEngine', 'grok'),
+            'groq': ('GroqEngine', 'groq'),
+            'sambanova': ('SambaNovaEngine', 'sambanova'),
+            'deepseek': ('DeepSeekEngine', 'deepseek'),
+            'huggingface': ('HuggingFaceEngine', 'huggingface')
         }
         
-        # 엔진 객체 생성
-        for engine_name, engine_class in engine_configs.items():
+        # 필요한 엔진 클래스 임포트
+        try:
+            from polymer_platform import (
+                GeminiEngine, GrokEngine, GroqEngine, 
+                SambaNovaEngine, DeepSeekEngine, HuggingFaceEngine
+            )
+            
+            engine_classes = {
+                'GeminiEngine': GeminiEngine,
+                'GrokEngine': GrokEngine,
+                'GroqEngine': GroqEngine,
+                'SambaNovaEngine': SambaNovaEngine,
+                'DeepSeekEngine': DeepSeekEngine,
+                'HuggingFaceEngine': HuggingFaceEngine
+            }
+        except ImportError as e:
+            logger.error(f"엔진 클래스 임포트 실패: {str(e)}")
+            return False
+        
+        # 엔진 객체 생성 및 초기화
+        for engine_name, (class_name, api_key_name) in engine_configs.items():
             try:
-                self.engines[engine_name] = engine_class()
+                # API 키 확인
+                api_key = self.api_manager.get_key(api_key_name)
+                if not api_key or api_key == 'your-key':
+                    logger.warning(f"{engine_name} API 키가 설정되지 않았습니다")
+                    continue
+                
+                # 엔진 클래스 가져오기
+                engine_class = engine_classes.get(class_name)
+                if not engine_class:
+                    logger.warning(f"{class_name} 클래스를 찾을 수 없습니다")
+                    continue
+                
+                # 엔진 인스턴스 생성
+                engine = engine_class()
+                self.engines[engine_name] = engine
+                
+                # 엔진 초기화
+                if hasattr(engine, 'initialize') and engine.initialize():
+                    self.available_engines[engine_name] = engine
+                    self.active_engines.append(engine_name)
+                    logger.info(f"✓ {engine_name} 엔진 초기화 성공")
+                else:
+                    logger.warning(f"✗ {engine_name} 엔진 초기화 실패")
+                    
             except Exception as e:
-                logger.warning(f"{engine_name} 엔진 생성 실패: {str(e)}")
-                self.engines[engine_name] = None
+                logger.error(f"{engine_name} 엔진 초기화 중 오류: {str(e)}")
+                continue
         
-        # 각 엔진 초기화
-        for engine_name, engine in self.engines.items():
-            if engine:
-                try:
-                    if engine.initialize():
-                        self.available_engines[engine_name] = engine
-                        self.active_engines.append(engine_name)
-                        logger.info(f"✓ {engine_name} 엔진 초기화 성공")
-                    else:
-                        logger.warning(f"✗ {engine_name} 엔진 초기화 실패")
-                except Exception as e:
-                    logger.error(f"{engine_name} 엔진 초기화 중 오류: {str(e)}")
-        
-        # 최소 1개 이상의 엔진이 활성화되어야 함
-        active_count = len(self.available_engines)
-        if active_count >= 1:
+        # 초기화 성공 여부 확인
+        if self.available_engines:
             self.initialized = True
-            logger.info(f"AI 오케스트레이터 초기화 완료 ({active_count}/{len(engine_configs)} 엔진 활성)")
+            logger.info(f"총 {len(self.available_engines)}개의 AI 엔진이 활성화되었습니다")
             return True
         else:
-            logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(engine_configs)})")
+            logger.error("활성화된 AI 엔진이 없습니다")
             return False
 
-    async def initialize_async(self):
-        """모든 AI 엔진 초기화 (비동기)"""
-        logger.info("AI 오케스트레이터 비동기 초기화 시작...")
-        
-        # 병렬로 모든 엔진 초기화
-        init_tasks = []
-        for engine_name, engine in self.engines.items():
-            if engine:
-                init_tasks.append(self._init_engine(engine_name, engine))
-                
-        results = await asyncio.gather(*init_tasks, return_exceptions=True)
-        
-        # 결과 처리
-        for i, (engine_name, engine) in enumerate(self.engines.items()):
-            if i < len(results) and results[i] is True:
-                self.available_engines[engine_name] = engine
-                self.active_engines.append(engine_name)
-        
-        # 최소 1개 이상의 엔진이 활성화되어야 함
-        active_count = len(self.available_engines)
-        if active_count >= 1:
-            self.initialized = True
-            logger.info(f"AI 오케스트레이터 비동기 초기화 완료 ({active_count}/{len(self.engines)} 엔진 활성)")
-        else:
-            logger.error(f"AI 엔진이 충분하지 않습니다 ({active_count}/{len(self.engines)})")
-
-    async def _init_engine(self, name: str, engine: BaseAIEngine) -> bool:
-        """개별 엔진 초기화"""
-        try:
-            return await asyncio.to_thread(engine.initialize)
-        except Exception as e:
-            logger.error(f"{name} 엔진 초기화 실패: {str(e)}")
-            return False
-
-    async def generate_with_single_ai(self,
-                                     prompt: str,
-                                     engine_id: str = None,
-                                     **kwargs) -> AIResponse:
-        """단일 AI로 응답 생성"""
-        if not self.available_engines:
-            return AIResponse(
-                success=False,
-                content="사용 가능한 AI 엔진이 없습니다.",
-                model="none",
-                error="No available engines"
-            )
-        
-        # 엔진 선택
-        if engine_id and engine_id in self.available_engines:
-            engine = self.available_engines[engine_id]
-        else:
-            # 우선순위가 가장 높은 엔진 선택
-            engine_id = min(
-                self.available_engines.keys(),
-                key=lambda x: self.ai_roles.get(x, {}).get('priority', 99)
-            )
-            engine = self.available_engines[engine_id]
-        
-        # 응답 생성
-        try:
-            response = await engine.generate_async(prompt, **kwargs)
-            
-            # 사용 통계 업데이트
-            self.usage_stats[engine_id]['calls'] += 1
-            if response.success:
-                self.usage_stats[engine_id]['tokens'] += response.tokens_used or 0
-            else:
-                self.usage_stats[engine_id]['errors'] += 1
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"{engine_id} 엔진 호출 실패: {str(e)}")
-            self.usage_stats[engine_id]['errors'] += 1
-            return AIResponse(
-                success=False,
-                content="",
-                model=engine_id,
-                error=str(e)
-            )
-
-    async def generate_with_consensus(self,
-                                    prompt: str,
-                                    strategy: str = 'weighted',
-                                    min_engines: int = 2,
-                                    **kwargs) -> Dict[str, Any]:
-        """다중 AI 합의 기반 응답 생성"""
-        if len(self.available_engines) < min_engines:
-            # 엔진이 부족하면 단일 AI 사용
-            single_response = await self.generate_with_single_ai(prompt, **kwargs)
-            return {
-                'success': single_response.success,
-                'consensus': single_response.content,
-                'confidence': 0.5,
-                'engines_used': 1,
-                'responses': [single_response]
+    def get_engine_status(self) -> Dict[str, Any]:
+        """각 엔진의 상태 반환"""
+        status = {}
+        for name, engine in self.engines.items():
+            status[name] = {
+                'available': name in self.available_engines,
+                'active': name in self.active_engines,
+                'stats': self.usage_stats.get(name, {}),
+                'error': getattr(engine, 'last_error', None) if engine else 'Not initialized'
             }
-        
-        # 병렬로 여러 AI 호출
-        tasks = []
-        engine_ids = list(self.available_engines.keys())[:min_engines]
-        
-        for engine_id in engine_ids:
-            tasks.append(self.generate_with_single_ai(prompt, engine_id, **kwargs))
-        
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # 유효한 응답만 필터링
-        valid_responses = []
-        for resp in responses:
-            if isinstance(resp, AIResponse) and resp.success:
-                valid_responses.append(resp)
-        
-        if not valid_responses:
-            return {
-                'success': False,
-                'consensus': "모든 AI 엔진이 응답에 실패했습니다.",
-                'confidence': 0.0,
-                'engines_used': len(engine_ids),
-                'responses': responses
-            }
-        
-        # 선택한 전략으로 합의 도출
-        consensus_func = self.consensus_strategies.get(strategy, self._weighted_consensus)
-        consensus_result = consensus_func(valid_responses)
-        
-        return {
-            'success': True,
-            'consensus': consensus_result.get('content', ''),
-            'confidence': consensus_result.get('confidence', 0.0),
-            'engines_used': len(valid_responses),
-            'responses': valid_responses,
-            'strategy': strategy
-        }
+        return status
 
     def _majority_consensus(self, responses: List[AIResponse]) -> Dict[str, Any]:
         """다수결 합의"""
@@ -7098,6 +7000,190 @@ class MultiAIOrchestrator:
             'content': merged_content,
             'confidence': confidence
         }
+
+    
+    async def _initialize_systems(self):
+        """시스템 초기화 함수 - 수정된 버전"""
+        try:
+            # 1. 설정 관리자 초기화
+            if 'config_manager' not in st.session_state:
+                from polymer_platform import ConfigManager
+                st.session_state.config_manager = ConfigManager()
+        
+            # 2. API 매니저 초기화 (세션 상태에 저장)
+            if 'api_manager' not in st.session_state:
+                from polymer_platform import APIManager
+                st.session_state.api_manager = APIManager()
+                logger.info("API Manager 초기화 완료")
+        
+            # 3. AI 오케스트레이터 초기화
+            try:
+                from polymer_platform import MultiAIOrchestrator
+                ai_orchestrator = MultiAIOrchestrator()
+            
+                if ai_orchestrator.initialize():
+                    st.session_state.ai_orchestrator = ai_orchestrator
+                    logger.info("AI 오케스트레이터 초기화 성공")
+                
+                    # 상태 확인
+                    if hasattr(ai_orchestrator, 'get_engine_status'):
+                        status = ai_orchestrator.get_engine_status()
+                        logger.info("=== AI 엔진 상태 ===")
+                        for engine, info in status.items():
+                            if info['available']:
+                                logger.info(f"✓ {engine}: 활성")
+                            else:
+                                logger.info(f"✗ {engine}: 비활성 - {info.get('error', 'Unknown')}")
+                else:
+                    logger.error("AI 오케스트레이터 초기화 실패")
+                    st.session_state.ai_orchestrator = None
+                
+            except Exception as e:
+                logger.error(f"AI 오케스트레이터 생성 중 오류: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                st.session_state.ai_orchestrator = None
+        
+            # 4. 데이터베이스 매니저 초기화
+            if 'db_manager' not in st.session_state:
+                from polymer_platform import DatabaseIntegrationManager
+                st.session_state.db_manager = DatabaseIntegrationManager()
+        
+            # 5. 이벤트 버스 시작
+            from polymer_platform import event_bus
+            if not event_bus.running:
+                event_bus.start()
+                logger.info("이벤트 버스 시작")
+        
+            # 6. API 모니터 초기화
+            if 'api_monitor' not in st.session_state:
+                from polymer_platform import api_monitor
+                st.session_state.api_monitor = api_monitor
+        
+            logger.info("시스템 초기화 완료")
+        
+            # API 키 디버깅 정보
+            if 'api_manager' in st.session_state:
+                api_manager = st.session_state.api_manager
+                logger.info("=== API 키 디버깅 정보 ===")
+            
+                if 'api_keys' in st.session_state:
+                    logger.info(f"저장된 API 키 목록: {list(st.session_state.api_keys.keys())}")
+                    logger.info(f"저장된 API 키 개수: {len(st.session_state.api_keys)}")
+                else:
+                    logger.info("API 키가 아직 초기화되지 않았습니다.")
+                
+        except Exception as e:
+            logger.error(f"초기화 오류: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+
+
+
+
+    
+    async def generate_with_single_ai(self,
+                                     prompt: str,
+                                     engine_id: str = None,
+                                     **kwargs) -> AIResponse:
+        """단일 AI로 응답 생성"""
+        if not self.available_engines:
+            return AIResponse(
+                success=False,
+                content="사용 가능한 AI 엔진이 없습니다.",
+                model="none",
+                error="No available engines"
+            )
+        
+        # 엔진 선택
+        if engine_id and engine_id in self.available_engines:
+            engine = self.available_engines[engine_id]
+        else:
+            # 우선순위가 가장 높은 엔진 선택
+            engine_id = min(
+                self.available_engines.keys(),
+                key=lambda x: self.ai_roles.get(x, {}).get('priority', 99)
+            )
+            engine = self.available_engines[engine_id]
+        
+        # 응답 생성
+        try:
+            response = await engine.generate_async(prompt, **kwargs)
+            
+            # 사용 통계 업데이트
+            self.usage_stats[engine_id]['calls'] += 1
+            if response.success:
+                self.usage_stats[engine_id]['tokens'] += response.tokens_used or 0
+            else:
+                self.usage_stats[engine_id]['errors'] += 1
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"{engine_id} 엔진 호출 실패: {str(e)}")
+            self.usage_stats[engine_id]['errors'] += 1
+            return AIResponse(
+                success=False,
+                content="",
+                model=engine_id,
+                error=str(e)
+            )
+
+    async def generate_with_consensus(self,
+                                    prompt: str,
+                                    strategy: str = 'weighted',
+                                    min_engines: int = 2,
+                                    **kwargs) -> Dict[str, Any]:
+        """다중 AI 합의 기반 응답 생성"""
+        if len(self.available_engines) < min_engines:
+            # 엔진이 부족하면 단일 AI 사용
+            single_response = await self.generate_with_single_ai(prompt, **kwargs)
+            return {
+                'success': single_response.success,
+                'consensus': single_response.content,
+                'confidence': 0.5,
+                'engines_used': 1,
+                'responses': [single_response]
+            }
+        
+        # 병렬로 여러 AI 호출
+        tasks = []
+        engine_ids = list(self.available_engines.keys())[:min_engines]
+        
+        for engine_id in engine_ids:
+            tasks.append(self.generate_with_single_ai(prompt, engine_id, **kwargs))
+        
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 유효한 응답만 필터링
+        valid_responses = []
+        for resp in responses:
+            if isinstance(resp, AIResponse) and resp.success:
+                valid_responses.append(resp)
+        
+        if not valid_responses:
+            return {
+                'success': False,
+                'consensus': "모든 AI 엔진이 응답에 실패했습니다.",
+                'confidence': 0.0,
+                'engines_used': len(engine_ids),
+                'responses': responses
+            }
+        
+        # 선택한 전략으로 합의 도출
+        consensus_func = self.consensus_strategies.get(strategy, self._weighted_consensus)
+        consensus_result = consensus_func(valid_responses)
+        
+        return {
+            'success': True,
+            'consensus': consensus_result.get('content', ''),
+            'confidence': consensus_result.get('confidence', 0.0),
+            'engines_used': len(valid_responses),
+            'responses': valid_responses,
+            'strategy': strategy
+        }
+
 
     def get_usage_stats(self) -> Dict[str, Any]:
         """사용 통계 반환"""
