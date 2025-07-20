@@ -10151,31 +10151,125 @@ class ProjectTemplates:
                 'factors': ['두께', '첨가제 함량', '가공온도'],
                 'responses': ['인장강도', '투명도', '산소투과도'],
                 'typical_budget': 500,
-                'typical_timeline': 8
+                'typical_timeline': 8,
+                'description': '식품 포장재, 필름 등의 개발에 적합한 템플릿'
             },
             'automotive': {
                 'name': '자동차 부품',
                 'factors': ['유리섬유 함량', '성형온도', '냉각시간'],
                 'responses': ['충격강도', '치수안정성', '내열성'],
                 'typical_budget': 1000,
-                'typical_timeline': 12
+                'typical_timeline': 12,
+                'description': '자동차 내/외장재 개발에 적합한 템플릿'
             },
             'biomedical': {
                 'name': '의료용 소재',
                 'factors': ['가교도', 'pH', '멸균방법'],
                 'responses': ['생체적합성', '분해속도', '기계적 특성'],
                 'typical_budget': 2000,
-                'typical_timeline': 16
+                'typical_timeline': 16,
+                'description': '의료기기, 생체재료 개발에 적합한 템플릿'
+            },
+            'electronics': {
+                'name': '전자재료',
+                'factors': ['충전제 함량', '경화온도', '경화시간'],
+                'responses': ['절연저항', '유전율', '난연성'],
+                'typical_budget': 1500,
+                'typical_timeline': 10,
+                'description': 'PCB, 절연재료 등 전자부품용 소재 개발'
+            },
+            'coating': {
+                'name': '코팅재료',
+                'factors': ['용매 비율', '건조온도', '코팅두께'],
+                'responses': ['접착력', '내스크래치성', '광택도'],
+                'typical_budget': 800,
+                'typical_timeline': 6,
+                'description': '표면 코팅, 도료 개발에 적합한 템플릿'
             }
         }
     
     def get_template(self, template_id: str) -> Optional[Dict]:
         """템플릿 가져오기"""
-        return self.templates.get(template_id)
+        template = self.templates.get(template_id)
+        if template:
+            # 템플릿 ID 추가
+            return {
+                'id': template_id,
+                **template
+            }
+        return None
+    
+    def get_template_names(self) -> List[str]:
+        """템플릿 이름 목록 반환"""
+        return [template['name'] for template in self.templates.values()]
+    
+    def get_template_list(self) -> List[Dict]:
+        """템플릿 목록을 ID와 함께 반환"""
+        template_list = []
+        for template_id, template_data in self.templates.items():
+            template_list.append({
+                'id': template_id,
+                'name': template_data['name'],
+                'description': template_data.get('description', '')
+            })
+        return template_list
     
     def get_all_templates(self) -> Dict:
-        """모든 템플릿"""
+        """모든 템플릿 반환"""
         return self.templates
+    
+    def get_template_by_name(self, name: str) -> Optional[Dict]:
+        """이름으로 템플릿 찾기"""
+        for template_id, template_data in self.templates.items():
+            if template_data['name'] == name:
+                return {
+                    'id': template_id,
+                    **template_data
+                }
+        return None
+    
+    def add_custom_template(self, template_id: str, template_data: Dict) -> bool:
+        """커스텀 템플릿 추가"""
+        if template_id not in self.templates:
+            self.templates[template_id] = template_data
+            return True
+        return False
+    
+    def update_template(self, template_id: str, template_data: Dict) -> bool:
+        """템플릿 업데이트"""
+        if template_id in self.templates:
+            self.templates[template_id].update(template_data)
+            return True
+        return False
+    
+    def delete_template(self, template_id: str) -> bool:
+        """템플릿 삭제"""
+        if template_id in self.templates:
+            del self.templates[template_id]
+            return True
+        return False
+    
+    def export_template(self, template_id: str) -> Optional[str]:
+        """템플릿을 JSON 문자열로 내보내기"""
+        template = self.get_template(template_id)
+        if template:
+            return json.dumps(template, ensure_ascii=False, indent=2)
+        return None
+    
+    def import_template(self, template_json: str) -> Optional[str]:
+        """JSON 문자열에서 템플릿 가져오기"""
+        try:
+            template_data = json.loads(template_json)
+            template_id = template_data.get('id', f"custom_{len(self.templates)}")
+            
+            # id가 템플릿 데이터에 있으면 제거 (중복 방지)
+            if 'id' in template_data:
+                del template_data['id']
+            
+            self.templates[template_id] = template_data
+            return template_id
+        except json.JSONDecodeError:
+            return None
 
 # ==================== 요인 라이브러리 ====================
 class FactorLibrary:
@@ -11625,7 +11719,7 @@ class ProjectSetupPage:
         self.project_templates = ProjectTemplates()
         self.ai_consultant = None
     
-    def render(self, user_level: UserLevel):  # 이미 user_level을 받고 있으므로 그대로 유지
+    def render(self, user_level: UserLevel):
         st.title("📋 프로젝트 설정")
         
         # AI 컨설턴트 초기화
@@ -11654,6 +11748,8 @@ class ProjectSetupPage:
         with col2:
             # 템플릿 선택
             st.markdown("#### 템플릿 활용")
+            
+            # 템플릿 이름 목록 가져오기
             template_names = self.project_templates.get_template_names()
             
             selected_template = st.selectbox(
@@ -11663,11 +11759,25 @@ class ProjectSetupPage:
             )
             
             if selected_template != "직접 설정":
-                if st.button("템플릿 적용"):
-                    template_data = self.project_templates.get_template(selected_template)
-                    st.session_state.update(template_data)
-                    st.success("템플릿이 적용되었습니다!")
-                    st.rerun()
+                # 선택된 템플릿 정보 표시
+                template = self.project_templates.get_template_by_name(selected_template)
+                if template:
+                    with st.expander("템플릿 상세 정보", expanded=True):
+                        st.markdown(f"**설명**: {template.get('description', '템플릿 설명이 없습니다.')}")
+                        st.markdown(f"**기본 요인**: {', '.join(template.get('factors', []))}")
+                        st.markdown(f"**측정 항목**: {', '.join(template.get('responses', []))}")
+                        st.markdown(f"**예상 예산**: {template.get('typical_budget', 0)}만원")
+                        st.markdown(f"**예상 기간**: {template.get('typical_timeline', 0)}주")
+                    
+                    if st.button("템플릿 적용", type="primary"):
+                        # 템플릿 데이터를 세션 상태에 적용
+                        st.session_state.selected_template = template
+                        st.session_state.project_factors = template.get('factors', [])
+                        st.session_state.project_responses = template.get('responses', [])
+                        st.session_state.project_budget = template.get('typical_budget', 0)
+                        st.session_state.project_timeline = template.get('typical_timeline', 0)
+                        st.success(f"'{selected_template}' 템플릿이 적용되었습니다!")
+                        st.rerun()
         
         # 고분자 선택
         st.markdown("### 2. 고분자 선택")
