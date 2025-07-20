@@ -11179,17 +11179,10 @@ class UserInterfaceSystem:
                     st.session_state.current_page = page_key
                     st.rerun()
             
-            # AI 상태
-            st.markdown("### 🤖 AI 시스템 상태")
-            if hasattr(st.session_state, 'ai_orchestrator'):
-                engine_status = st.session_state.ai_orchestrator.get_engine_status()
-                for engine, status in engine_status.items():
-                    if status['available']:
-                        st.success(f"✅ {engine}")
-                    else:
-                        st.error(f"❌ {engine}")
-            else:
-                st.info("AI 시스템 초기화 중...")
+            # API 설정
+            st.markdown("### ⚙️ API 설정")
+            if st.button("🔑 API 키 관리", use_container_width=True):
+                st.session_state.show_api_settings = True
             
             # 데이터베이스 상태
             st.markdown("### 🗄️ 데이터베이스 상태")
@@ -11222,6 +11215,230 @@ class UserInterfaceSystem:
         # API 설정 모달
         if st.session_state.get('show_api_settings', False):
             self._render_api_settings_modal()
+
+def _render_api_settings_modal(self):
+    """개선된 API 설정 모달 렌더링"""
+    # APIManager 인스턴스 가져오기 (없으면 생성)
+    if 'api_manager' not in st.session_state:
+        st.session_state.api_manager = APIManager()
+    api_manager = st.session_state.api_manager
+    
+    # 모달 창처럼 보이게 하기 위한 컨테이너
+    with st.container():
+        col1, col2, col3 = st.columns([2, 6, 1])
+        with col1:
+            st.markdown("## 🔑 API 키 관리")
+        with col3:
+            if st.button("✖️", key="close_api_modal"):
+                st.session_state.show_api_settings = False
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # API 요약 정보 표시
+        summary = api_manager.get_api_summary()
+        
+        # 요약 메트릭 표시
+        metric_cols = st.columns(len(summary))
+        for i, (category, info) in enumerate(summary.items()):
+            with metric_cols[i]:
+                st.metric(
+                    label=category.upper(),
+                    value=f"{info['configured']}/{info['total']}",
+                    delta=f"{info['configured']/info['total']*100:.0f}%" if info['total'] > 0 else "0%"
+                )
+        
+        st.markdown("---")
+        
+        # 카테고리별 탭
+        category_names = {
+            'ai': '🤖 AI APIs',
+            'database': '📊 데이터베이스',
+            'repository': '📁 저장소',
+            'protocol': '🧪 프로토콜',
+            'storage': '💾 스토리지',
+            'auth': '🔐 인증'
+        }
+        
+        tabs = st.tabs([category_names.get(cat, cat.upper()) for cat in summary.keys()])
+        
+        # 각 탭에서 API 키 설정
+        for tab_index, (category, info) in enumerate(summary.items()):
+            with tabs[tab_index]:
+                self._render_category_apis(api_manager, category, info['apis'])
+        
+        # 하단 도움말
+        with st.expander("❓ API 키 얻는 방법 및 사용 가이드"):
+            self._render_api_help_guide()
+            
+            # API 키 입력 폼
+            with st.form("api_keys_form"):
+                st.markdown("### AI API Keys")
+                
+                # Streamlit secrets에서 기본값 가져오기
+                default_keys = {
+                    'google_gemini': st.secrets.get('google_gemini', ''),
+                    'xai_grok': st.secrets.get('xai_grok', ''),
+                    'sambanova': st.secrets.get('sambanova', ''),
+                    'deepseek': st.secrets.get('deepseek', ''),
+                    'groq': st.secrets.get('groq', ''),
+                    'huggingface': st.secrets.get('huggingface', '')
+                }
+                
+                # 세션 상태에서 키 가져오기 (사용자가 입력한 경우)
+                api_keys = st.session_state.get('api_keys', default_keys)
+                
+                # AI API 키 입력
+                gemini_key = st.text_input(
+                    "Google Gemini API Key",
+                    value=api_keys.get('google_gemini', ''),
+                    type="password",
+                    help="Gemini 2.0을 사용하기 위한 API 키"
+                )
+                
+                grok_key = st.text_input(
+                    "xAI Grok API Key",
+                    value=api_keys.get('xai_grok', ''),
+                    type="password",
+                    help="Grok 3 mini를 사용하기 위한 API 키"
+                )
+                
+                sambanova_key = st.text_input(
+                    "SambaNova API Key",
+                    value=api_keys.get('sambanova', ''),
+                    type="password",
+                    help="SambaNova를 사용하기 위한 API 키"
+                )
+                
+                deepseek_key = st.text_input(
+                    "DeepSeek API Key",
+                    value=api_keys.get('deepseek', ''),
+                    type="password",
+                    help="DeepSeek를 사용하기 위한 API 키"
+                )
+                
+                groq_key = st.text_input(
+                    "Groq API Key",
+                    value=api_keys.get('groq', ''),
+                    type="password",
+                    help="Groq를 사용하기 위한 API 키"
+                )
+                
+                huggingface_key = st.text_input(
+                    "HuggingFace API Key",
+                    value=api_keys.get('huggingface', ''),
+                    type="password",
+                    help="HuggingFace를 사용하기 위한 API 키"
+                )
+                
+                st.markdown("### Repository & Database API Keys")
+                
+                github_key = st.text_input(
+                    "GitHub API Key",
+                    value=api_keys.get('github', st.secrets.get('github', '')),
+                    type="password"
+                )
+                
+                materials_project_key = st.text_input(
+                    "Materials Project API Key",
+                    value=api_keys.get('materials_project', st.secrets.get('materials_project', '')),
+                    type="password"
+                )
+                
+                st.markdown("### Google Services")
+                
+                google_sheets_url = st.text_input(
+                    "Google Sheets URL",
+                    value=api_keys.get('google_sheets_url', st.secrets.get('google_sheets_url', '')),
+                    help="연동할 Google Sheets URL"
+                )
+                
+                # 저장 버튼
+                submitted = st.form_submit_button("💾 저장", type="primary", use_container_width=True)
+                
+                if submitted:
+                    # API 키를 세션 상태에 저장
+                    st.session_state.api_keys = {
+                        'google_gemini': gemini_key,
+                        'xai_grok': grok_key,
+                        'sambanova': sambanova_key,
+                        'deepseek': deepseek_key,
+                        'groq': groq_key,
+                        'huggingface': huggingface_key,
+                        'github': github_key,
+                        'materials_project': materials_project_key,
+                        'google_sheets_url': google_sheets_url
+                    }
+                    
+                    st.success("API 키가 저장되었습니다!")
+                    time.sleep(1)
+                    st.session_state.show_api_settings = False
+                    st.rerun()
+            
+            # 도움말
+            with st.expander("❓ API 키 얻는 방법"):
+                st.markdown("""
+                ### AI API 키 얻기
+                
+                **Google Gemini**
+                1. [Google AI Studio](https://makersuite.google.com/app/apikey) 방문
+                2. 'Get API key' 클릭
+                3. 프로젝트 선택 또는 생성
+                4. API 키 복사
+                
+                **xAI Grok**
+                1. [xAI Platform](https://x.ai) 방문
+                2. 계정 생성 또는 로그인
+                3. API 섹션에서 키 생성
+                
+                **SambaNova**
+                1. [SambaNova Cloud](https://cloud.sambanova.ai) 방문
+                2. 무료 계정 생성
+                3. API Keys 섹션에서 키 생성
+                
+                **DeepSeek**
+                1. [DeepSeek Platform](https://platform.deepseek.com) 방문
+                2. 계정 생성
+                3. API 관리에서 키 생성
+                
+                **Groq**
+                1. [GroqCloud](https://console.groq.com) 방문
+                2. 계정 생성
+                3. API Keys에서 키 생성
+                
+                **HuggingFace**
+                1. [HuggingFace](https://huggingface.co) 방문
+                2. Settings → Access Tokens
+                3. New token 생성
+                
+                ### Database API 키 얻기
+                
+                **Materials Project**
+                1. [Materials Project](https://materialsproject.org) 방문
+                2. 무료 계정 생성
+                3. Dashboard → API → Generate API Key
+                
+                **GitHub**
+                1. GitHub Settings → Developer settings
+                2. Personal access tokens → Generate new token
+                3. 필요한 권한 선택 후 생성
+                """)
+
+
+    # API 키 가져오기 헬퍼 함수
+    def get_api_key(key_name: str) -> str:
+        """API 키 가져오기 (세션 상태 우선, 그 다음 secrets)"""
+        # 세션 상태에서 먼저 확인
+        if 'api_keys' in st.session_state and key_name in st.session_state.api_keys:
+            key = st.session_state.api_keys[key_name]
+            if key:  # 빈 문자열이 아닌 경우
+                return key
+    
+        # secrets에서 확인
+        if key_name in st.secrets:
+            return st.secrets[key_name]
+    
+        return ""
 
 class HomePage:
     def render(self, user_level: UserLevel):  # user_level 인자 추가
