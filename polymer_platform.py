@@ -11034,266 +11034,266 @@ class UserInterfaceSystem:
         if st.session_state.get('show_api_settings', False):
             self._render_api_settings_modal()
 
-def _render_api_settings_modal(self):
-    """개선된 API 설정 모달 렌더링"""
-    # APIManager 인스턴스 가져오기 (없으면 생성)
-    if 'api_manager' not in st.session_state:
-        st.session_state.api_manager = APIManager()
-    api_manager = st.session_state.api_manager
+    def _render_api_settings_modal(self):
+        """개선된 API 설정 모달 렌더링"""
+        # APIManager 인스턴스 가져오기 (없으면 생성)
+        if 'api_manager' not in st.session_state:
+            st.session_state.api_manager = APIManager()
+        api_manager = st.session_state.api_manager
     
-    # 모달 창처럼 보이게 하기 위한 컨테이너
-    with st.container():
-        col1, col2, col3 = st.columns([2, 6, 1])
-        with col1:
-            st.markdown("## 🔑 API 키 관리")
-        with col3:
-            if st.button("✖️", key="close_api_modal"):
-                st.session_state.show_api_settings = False
-                st.rerun()
-        
-        st.markdown("---")
-        
-        # API 요약 정보 표시
-        summary = api_manager.get_api_summary()
-        
-        # 요약 메트릭 표시
-        metric_cols = st.columns(len(summary))
-        for i, (category, info) in enumerate(summary.items()):
-            with metric_cols[i]:
-                st.metric(
-                    label=category.upper(),
-                    value=f"{info['configured']}/{info['total']}",
-                    delta=f"{info['configured']/info['total']*100:.0f}%" if info['total'] > 0 else "0%"
-                )
-        
-        st.markdown("---")
-        
-        # 카테고리별 탭
-        category_names = {
-            'ai': '🤖 AI APIs',
-            'database': '📊 데이터베이스',
-            'repository': '📁 저장소',
-            'protocol': '🧪 프로토콜',
-            'storage': '💾 스토리지',
-            'auth': '🔐 인증'
-        }
-        
-        tabs = st.tabs([category_names.get(cat, cat.upper()) for cat in summary.keys()])
-        
-        # 각 탭에서 API 키 설정
-        for tab_index, (category, info) in enumerate(summary.items()):
-            with tabs[tab_index]:
-                self._render_category_apis(api_manager, category, info['apis'])
-        
-        # 하단 도움말
-        with st.expander("❓ API 키 얻는 방법 및 사용 가이드"):
-            self._render_api_help_guide()
-
-
-def _render_category_apis(self, api_manager: APIManager, category: str, apis: List[Dict]):
-    """카테고리별 API 설정 렌더링"""
-    
-    # 카테고리 설명
-    category_descriptions = {
-        'ai': "AI 모델 API는 텍스트 생성, 분석, 코드 작성 등에 사용됩니다.",
-        'database': "과학 데이터베이스 API는 재료 정보, 화학 구조, 문헌 검색에 사용됩니다.",
-        'repository': "저장소 API는 코드, 데이터셋, 프로토콜 검색에 사용됩니다."
-    }
-    
-    if category in category_descriptions:
-        st.info(category_descriptions[category])
-    
-    # API별 설정
-    for api_info in apis:
-        api_id = api_info['id']
-        api_config = api_manager.api_configs.get(api_id, {})
-        
-        with st.expander(
-            f"{'✅' if api_info['configured'] else '⭕'} {api_info['name']}", 
-            expanded=not api_info['configured']
-        ):
-            # API 설명
-            col1, col2 = st.columns([3, 1])
-            
+        # 모달 창처럼 보이게 하기 위한 컨테이너
+        with st.container():
+            col1, col2, col3 = st.columns([2, 6, 1])
             with col1:
-                # 기능 표시
-                if api_info['features']:
-                    st.markdown("**주요 기능:**")
-                    features_text = " • ".join(api_info['features'])
-                    st.caption(features_text)
-                
-                # Rate limit 정보
-                if 'rate_limit' in api_config:
-                    limits = api_config['rate_limit']
-                    limit_text = []
-                    if 'rpm' in limits:
-                        limit_text.append(f"분당 {limits['rpm']}회")
-                    if 'rpd' in limits:
-                        limit_text.append(f"일일 {limits['rpd']}회")
-                    if limit_text:
-                        st.caption(f"**제한:** {', '.join(limit_text)}")
+                st.markdown("## 🔑 API 키 관리")
+            with col3:
+                if st.button("✖️", key="close_api_modal"):
+                    st.session_state.show_api_settings = False
+                    st.rerun()
+        
+            st.markdown("---")
+        
+            # API 요약 정보 표시
+            summary = api_manager.get_api_summary()
+        
+            # 요약 메트릭 표시
+            metric_cols = st.columns(len(summary))
+            for i, (category, info) in enumerate(summary.items()):
+                with metric_cols[i]:
+                    st.metric(
+                        label=category.upper(),
+                        value=f"{info['configured']}/{info['total']}",
+                        delta=f"{info['configured']/info['total']*100:.0f}%" if info['total'] > 0 else "0%"
+                    )
+        
+            st.markdown("---")
+        
+            # 카테고리별 탭
+            category_names = {
+                'ai': '🤖 AI APIs',
+                'database': '📊 데이터베이스',
+                'repository': '📁 저장소',
+                'protocol': '🧪 프로토콜',
+                'storage': '💾 스토리지',
+                'auth': '🔐 인증'
+            }
+        
+            tabs = st.tabs([category_names.get(cat, cat.upper()) for cat in summary.keys()])
+        
+            # 각 탭에서 API 키 설정
+            for tab_index, (category, info) in enumerate(summary.items()):
+                with tabs[tab_index]:
+                    self._render_category_apis(api_manager, category, info['apis'])
+        
+            # 하단 도움말
+            with st.expander("❓ API 키 얻는 방법 및 사용 가이드"):
+                self._render_api_help_guide()
+
+
+    def _render_category_apis(self, api_manager: APIManager, category: str, apis: List[Dict]):
+        """카테고리별 API 설정 렌더링"""
+    
+        # 카테고리 설명
+        category_descriptions = {
+            'ai': "AI 모델 API는 텍스트 생성, 분석, 코드 작성 등에 사용됩니다.",
+            'database': "과학 데이터베이스 API는 재료 정보, 화학 구조, 문헌 검색에 사용됩니다.",
+            'repository': "저장소 API는 코드, 데이터셋, 프로토콜 검색에 사용됩니다."
+        }
+    
+        if category in category_descriptions:
+            st.info(category_descriptions[category])
+    
+        # API별 설정
+        for api_info in apis:
+            api_id = api_info['id']
+            api_config = api_manager.api_configs.get(api_id, {})
+        
+            with st.expander(
+                f"{'✅' if api_info['configured'] else '⭕'} {api_info['name']}", 
+                expanded=not api_info['configured']
+            ):
+                # API 설명
+                col1, col2 = st.columns([3, 1])
             
-            with col2:
-                # 현재 상태
-                if api_info['configured']:
-                    st.success("설정됨")
-                else:
-                    st.warning("미설정")
-            
-            # API 키 입력
-            current_key = api_manager.get_key(api_id) or ""
-            
-            # 마스킹된 키 표시 (설정된 경우)
-            if current_key:
-                masked_key = current_key[:10] + "..." + current_key[-4:] if len(current_key) > 14 else "***"
-                st.caption(f"현재 키: {masked_key}")
-            
-            # 키 입력 폼
-            with st.form(f"api_key_form_{api_id}"):
-                new_key = st.text_input(
-                    "API Key",
-                    type="password",
-                    placeholder="API 키를 입력하세요",
-                    help=f"{api_info['name']} API 키"
-                )
-                
-                col1, col2, col3 = st.columns([2, 2, 2])
-                
                 with col1:
-                    save_btn = st.form_submit_button(
-                        "💾 저장",
-                        type="primary",
-                        use_container_width=True
-                    )
+                    # 기능 표시
+                    if api_info['features']:
+                        st.markdown("**주요 기능:**")
+                        features_text = " • ".join(api_info['features'])
+                        st.caption(features_text)
                 
+                    # Rate limit 정보
+                    if 'rate_limit' in api_config:
+                        limits = api_config['rate_limit']
+                        limit_text = []
+                        if 'rpm' in limits:
+                            limit_text.append(f"분당 {limits['rpm']}회")
+                        if 'rpd' in limits:
+                            limit_text.append(f"일일 {limits['rpd']}회")
+                        if limit_text:
+                            st.caption(f"**제한:** {', '.join(limit_text)}")
+            
                 with col2:
-                    test_btn = st.form_submit_button(
-                        "🔍 테스트",
-                        use_container_width=True
+                    # 현재 상태
+                    if api_info['configured']:
+                        st.success("설정됨")
+                    else:
+                        st.warning("미설정")
+            
+                # API 키 입력
+                current_key = api_manager.get_key(api_id) or ""
+            
+                # 마스킹된 키 표시 (설정된 경우)
+                if current_key:
+                    masked_key = current_key[:10] + "..." + current_key[-4:] if len(current_key) > 14 else "***"
+                    st.caption(f"현재 키: {masked_key}")
+            
+                # 키 입력 폼
+                with st.form(f"api_key_form_{api_id}"):
+                    new_key = st.text_input(
+                        "API Key",
+                        type="password",
+                        placeholder="API 키를 입력하세요",
+                        help=f"{api_info['name']} API 키"
                     )
                 
-                with col3:
-                    if current_key:
-                        clear_btn = st.form_submit_button(
-                            "🗑️ 삭제",
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                
+                    with col1:
+                        save_btn = st.form_submit_button(
+                            "💾 저장",
+                            type="primary",
                             use_container_width=True
                         )
-                    else:
-                        clear_btn = False
                 
-                # 버튼 처리
-                if save_btn and new_key:
-                    if api_manager.validate_key_format(api_id, new_key):
-                        api_manager.set_key(api_id, new_key)
-                        st.success(f"{api_info['name']} API 키가 저장되었습니다!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("API 키 형식이 올바르지 않습니다.")
+                    with col2:
+                        test_btn = st.form_submit_button(
+                            "🔍 테스트",
+                            use_container_width=True
+                        )
                 
-                if test_btn and (new_key or current_key):
-                    test_key = new_key if new_key else current_key
-                    with st.spinner("연결 테스트 중..."):
-                        # 간단한 형식 검증만 수행 (실제 API 호출은 구현 필요)
-                        if api_manager.validate_key_format(api_id, test_key):
-                            st.success("API 키 형식이 유효합니다!")
+                    with col3:
+                        if current_key:
+                            clear_btn = st.form_submit_button(
+                                "🗑️ 삭제",
+                                use_container_width=True
+                            )
+                        else:
+                            clear_btn = False
+                
+                    # 버튼 처리
+                    if save_btn and new_key:
+                        if api_manager.validate_key_format(api_id, new_key):
+                            api_manager.set_key(api_id, new_key)
+                            st.success(f"{api_info['name']} API 키가 저장되었습니다!")
+                            time.sleep(1)
+                            st.rerun()
                         else:
                             st.error("API 키 형식이 올바르지 않습니다.")
                 
-                if clear_btn:
-                    api_manager.set_key(api_id, "")
-                    st.info(f"{api_info['name']} API 키가 삭제되었습니다.")
-                    time.sleep(1)
-                    st.rerun()
-
-
-def _render_api_help_guide(self):
-    """API 도움말 가이드 렌더링"""
-    st.markdown("""
-    ### 🤖 AI API 키 얻기
-    
-    **Google Gemini**
-    1. [Google AI Studio](https://makersuite.google.com/app/apikey) 방문
-    2. 'Get API key' 클릭하여 새 키 생성
-    3. 프로젝트 선택 후 API 키 복사
-    
-    **xAI Grok**
-    1. [xAI Platform](https://x.ai) 방문
-    2. 계정 생성 및 API 액세스 신청
-    3. 승인 후 API Keys 섹션에서 키 생성
-    
-    **Groq**
-    1. [GroqCloud Console](https://console.groq.com) 방문
-    2. 무료 계정 생성
-    3. API Keys → Create API Key
-    
-    **DeepSeek**
-    1. [DeepSeek Platform](https://platform.deepseek.com) 방문
-    2. 계정 생성 후 API 섹션 접속
-    3. Create API Key 클릭
-    
-    **HuggingFace**
-    1. [HuggingFace](https://huggingface.co) 로그인
-    2. Settings → Access Tokens
-    3. New token 생성 (read 권한)
-    
-    ---
-    
-    ### 📊 데이터베이스 API 키 얻기
-    
-    **Materials Project**
-    1. [Materials Project](https://materialsproject.org) 방문
-    2. 무료 계정 생성
-    3. Dashboard → API → Generate API Key
-    
-    **GitHub**
-    1. GitHub Settings → Developer settings
-    2. Personal access tokens → Tokens (classic)
-    3. Generate new token (repo, read:org 권한 선택)
-    
-    ---
-    
-    ### 💡 사용 팁
-    
-    - **보안**: API 키는 절대 공유하지 마세요
-    - **백업**: 중요한 키는 안전한 곳에 백업하세요
-    - **제한**: 각 API의 사용 제한을 확인하세요
-    - **비용**: 일부 API는 무료 한도 초과 시 과금될 수 있습니다
-    """)
-
-
-# API 상태 대시보드 위젯
-def render_api_status_widget():
-    """API 상태를 간단히 보여주는 위젯"""
-    if 'api_manager' not in st.session_state:
-        st.session_state.api_manager = APIManager()
-    
-    api_manager = st.session_state.api_manager
-    summary = api_manager.get_api_summary()
-    
-    # 전체 설정 상태
-    total_apis = sum(info['total'] for info in summary.values())
-    configured_apis = sum(info['configured'] for info in summary.values())
-    
-    # 상태 표시
-    if configured_apis == 0:
-        st.warning("⚠️ API 키가 설정되지 않았습니다")
-    elif configured_apis < total_apis:
-        st.info(f"ℹ️ {configured_apis}/{total_apis} API 설정됨")
-    else:
-        st.success(f"✅ 모든 API 설정 완료")
-    
-    # 카테고리별 상태
-    with st.expander("API 상태 상세"):
-        for category, info in summary.items():
-            if info['total'] > 0:
-                progress = info['configured'] / info['total']
-                st.progress(progress, text=f"{category.upper()}: {info['configured']}/{info['total']}")
+                    if test_btn and (new_key or current_key):
+                        test_key = new_key if new_key else current_key
+                        with st.spinner("연결 테스트 중..."):
+                            # 간단한 형식 검증만 수행 (실제 API 호출은 구현 필요)
+                            if api_manager.validate_key_format(api_id, test_key):
+                                st.success("API 키 형식이 유효합니다!")
+                            else:
+                                st.error("API 키 형식이 올바르지 않습니다.")
                 
-                # 미설정 API 목록
-                unconfigured = [api['name'] for api in info['apis'] if not api['configured']]
-                if unconfigured:
-                    st.caption(f"미설정: {', '.join(unconfigured)}")
+                    if clear_btn:
+                        api_manager.set_key(api_id, "")
+                        st.info(f"{api_info['name']} API 키가 삭제되었습니다.")
+                        time.sleep(1)
+                        st.rerun()
+
+
+    def _render_api_help_guide(self):
+        """API 도움말 가이드 렌더링"""
+        st.markdown("""
+        ### 🤖 AI API 키 얻기
+    
+        **Google Gemini**
+        1. [Google AI Studio](https://makersuite.google.com/app/apikey) 방문
+        2. 'Get API key' 클릭하여 새 키 생성
+        3. 프로젝트 선택 후 API 키 복사
+    
+        **xAI Grok**
+        1. [xAI Platform](https://x.ai) 방문
+        2. 계정 생성 및 API 액세스 신청
+        3. 승인 후 API Keys 섹션에서 키 생성
+    
+        **Groq**
+        1. [GroqCloud Console](https://console.groq.com) 방문
+        2. 무료 계정 생성
+        3. API Keys → Create API Key
+    
+        **DeepSeek**
+        1. [DeepSeek Platform](https://platform.deepseek.com) 방문
+        2. 계정 생성 후 API 섹션 접속
+        3. Create API Key 클릭
+    
+        **HuggingFace**
+        1. [HuggingFace](https://huggingface.co) 로그인
+        2. Settings → Access Tokens
+        3. New token 생성 (read 권한)
+
+        ---
+    
+        ### 📊 데이터베이스 API 키 얻기
+    
+        **Materials Project**
+        1. [Materials Project](https://materialsproject.org) 방문
+        2. 무료 계정 생성
+        3. Dashboard → API → Generate API Key
+    
+        **GitHub**
+        1. GitHub Settings → Developer settings
+        2. Personal access tokens → Tokens (classic)
+        3. Generate new token (repo, read:org 권한 선택)
+    
+        ---
+    
+        ### 💡 사용 팁
+    
+        - **보안**: API 키는 절대 공유하지 마세요
+        - **백업**: 중요한 키는 안전한 곳에 백업하세요
+        - **제한**: 각 API의 사용 제한을 확인하세요
+        - **비용**: 일부 API는 무료 한도 초과 시 과금될 수 있습니다
+        """)
+
+
+    # API 상태 대시보드 위젯
+    def render_api_status_widget():
+        """API 상태를 간단히 보여주는 위젯"""
+        if 'api_manager' not in st.session_state:
+            st.session_state.api_manager = APIManager()
+    
+        api_manager = st.session_state.api_manager
+        summary = api_manager.get_api_summary()
+    
+        # 전체 설정 상태
+        total_apis = sum(info['total'] for info in summary.values())
+        configured_apis = sum(info['configured'] for info in summary.values())
+    
+        # 상태 표시
+        if configured_apis == 0:
+            st.warning("⚠️ API 키가 설정되지 않았습니다")
+        elif configured_apis < total_apis:
+            st.info(f"ℹ️ {configured_apis}/{total_apis} API 설정됨")
+        else:
+            st.success(f"✅ 모든 API 설정 완료")
+    
+        # 카테고리별 상태
+        with st.expander("API 상태 상세"):
+            for category, info in summary.items():
+                if info['total'] > 0:
+                    progress = info['configured'] / info['total']
+                    st.progress(progress, text=f"{category.upper()}: {info['configured']}/{info['total']}")
+                
+                    # 미설정 API 목록
+                    unconfigured = [api['name'] for api in info['apis'] if not api['configured']]
+                    if unconfigured:
+                        st.caption(f"미설정: {', '.join(unconfigured)}")
 
 class HomePage:
     def render(self, user_level: UserLevel):  # user_level 인자 추가
