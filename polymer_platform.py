@@ -2862,8 +2862,8 @@ class CollaborationManager:
                 logger.info(f"알림: {user_id}에게 새 {collaboration.type.value} 알림")
 
 # ==================== API 키 관리 시스템 (확장) ====================
-class APIKeyManager:
-    """API 키를 중앙에서 관리하는 시스템"""
+class APIManager:
+    """통합 API 키 및 호출 관리 시스템"""
     
     def __init__(self):
         # 세션 상태 초기화
@@ -2871,219 +2871,120 @@ class APIKeyManager:
             st.session_state.api_keys = {}
         if 'api_keys_initialized' not in st.session_state:
             st.session_state.api_keys_initialized = False
-        
-        # API 설정 정의 (완전판)
+            
+        # API 설정 정의 (APIKeyManager에서 가져옴)
         self.api_configs = {
             # AI APIs
-            'gemini': {
+            'google_gemini': {
                 'name': 'Google Gemini',
-                'env_key': 'google_gemini',
-                'required': False,
-                'test_endpoint': 'https://generativelanguage.googleapis.com/v1beta/models',
                 'category': 'ai',
-                'description': 'Google의 최신 AI 모델',
-                'features': ['다중 모달', '긴 컨텍스트', '추론', '창의성', '한국어'],
+                'endpoint': 'https://generativelanguage.googleapis.com/v1beta/models',
+                'features': ['다중 모달', '긴 컨텍스트', '추론'],
                 'rate_limit': {'rpm': 60, 'rpd': 1500},
-                'models': ['gemini-pro', 'gemini-pro-vision']
+                'required': False
             },
-            'grok': {
+            'xai_grok': {
                 'name': 'xAI Grok',
-                'env_key': 'xai_grok',
-                'required': False,
-                'test_endpoint': 'https://api.x.ai/v1/models',
                 'category': 'ai',
-                'description': 'xAI의 Grok 모델',
-                'features': ['실시간 정보', '유머', '창의성', '비판적 사고'],
+                'endpoint': 'https://api.x.ai/v1/models',
+                'features': ['실시간 정보', '창의성'],
                 'rate_limit': {'rpm': 60},
-                'models': ['grok-1', 'grok-2']
+                'required': False
             },
             'sambanova': {
                 'name': 'SambaNova',
-                'env_key': 'sambanova',
-                'required': False,
-                'test_endpoint': 'https://api.sambanova.ai/v1/models',
                 'category': 'ai',
-                'description': 'SambaNova 고성능 AI',
-                'features': ['대규모 모델', '엔터프라이즈', '고속 처리'],
+                'endpoint': 'https://api.sambanova.ai/v1/models',
+                'features': ['대규모 모델', '고속 처리'],
                 'rate_limit': {'rpm': 100},
-                'models': ['samba-1']
+                'required': False
             },
             'deepseek': {
                 'name': 'DeepSeek',
-                'env_key': 'deepseek',
-                'required': False,
-                'test_endpoint': 'https://api.deepseek.com/v1/models',
                 'category': 'ai',
-                'description': '코드 및 수학 특화 AI',
-                'features': ['코드 생성', '수학 문제 해결', '기술 문서', '화학 구조'],
+                'endpoint': 'https://api.deepseek.com/v1/models',
+                'features': ['코드 생성', '수학', '화학'],
                 'rate_limit': {'rpm': 60},
-                'models': ['deepseek-coder', 'deepseek-math']
+                'required': False
             },
             'groq': {
                 'name': 'Groq',
-                'env_key': 'groq',
-                'required': False,
-                'test_endpoint': 'https://api.groq.com/v1/models',
                 'category': 'ai',
-                'description': '초고속 AI 추론',
-                'features': ['빠른 응답', '효율성', '실시간 처리'],
-                'rate_limit': {'rpm': 100, 'tpm': 200000},
-                'models': ['mixtral-8x7b', 'llama2-70b']
+                'endpoint': 'https://api.groq.com/v1/models',
+                'features': ['초고속 추론'],
+                'rate_limit': {'rpm': 100},
+                'required': False
             },
             'huggingface': {
                 'name': 'HuggingFace',
-                'env_key': 'huggingface',
-                'required': False,
-                'test_endpoint': 'https://api-inference.huggingface.co/models',
                 'category': 'ai',
-                'description': '다양한 오픈소스 모델',
-                'features': ['특수 모델', '임베딩', '분류', 'NER', '화학 전용 모델'],
+                'endpoint': 'https://api-inference.huggingface.co/models',
+                'features': ['특수 모델', '화학 전용'],
                 'rate_limit': {'rpm': 300},
-                'models': ['various']
-            },
-            'openai': {
-                'name': 'OpenAI',
-                'env_key': 'openai',
-                'required': False,
-                'test_endpoint': 'https://api.openai.com/v1/models',
-                'category': 'ai',
-                'description': 'GPT 모델을 사용한 고급 언어 처리',
-                'features': ['텍스트 생성', '코드 생성', '분석', '번역'],
-                'rate_limit': {'rpm': 3500, 'tpm': 90000},
-                'models': ['gpt-4', 'gpt-3.5-turbo', 'text-embedding-ada-002']
-            },
-            'anthropic': {
-                'name': 'Anthropic Claude',
-                'env_key': 'anthropic',
-                'required': False,
-                'test_endpoint': 'https://api.anthropic.com/v1/messages',
-                'category': 'ai',
-                'description': 'Claude AI 모델',
-                'features': ['긴 컨텍스트', '안전성', '추론', '코딩'],
-                'rate_limit': {'rpm': 50, 'tpm': 100000},
-                'models': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
+                'required': False
             },
             
             # Database & Repository APIs
             'github': {
                 'name': 'GitHub',
-                'env_key': 'github',
-                'required': False,
-                'test_endpoint': 'https://api.github.com/user',
                 'category': 'repository',
-                'description': '코드 저장소 및 협업',
-                'features': ['코드 검색', '실험 스크립트', '데이터셋', '프로토콜'],
-                'rate_limit': {'rpm': 5000}
+                'endpoint': 'https://api.github.com',
+                'features': ['코드 검색', '프로토콜'],
+                'rate_limit': {'rpm': 5000},
+                'required': False
             },
             'materials_project': {
                 'name': 'Materials Project',
-                'env_key': 'materials_project',
-                'required': False,
-                'test_endpoint': 'https://api.materialsproject.org',
                 'category': 'database',
-                'description': '재료 과학 데이터베이스',
-                'features': ['재료 특성', '계산 데이터', '구조 정보', '상도표'],
-                'rate_limit': {'rpd': 1000}
-            },
-            'materials_commons': {
-                'name': 'Materials Commons',
-                'env_key': 'materials_commons',
-                'required': False,
-                'test_endpoint': 'https://materialscommons.org/api',
-                'category': 'database',
-                'description': '재료 연구 데이터 공유',
-                'features': ['실험 데이터', '워크플로우', '프로세스 정보'],
-                'rate_limit': {'rpm': 60}
-            },
-            'zenodo': {
-                'name': 'Zenodo',
-                'env_key': 'zenodo',
-                'required': False,
-                'test_endpoint': 'https://zenodo.org/api/records',
-                'category': 'repository',
-                'description': '연구 데이터 저장소',
-                'features': ['DOI 발급', '데이터셋', '논문', '버전 관리'],
-                'rate_limit': {'rpm': 60}
-            },
-            'protocols_io': {
-                'name': 'Protocols.io',
-                'env_key': 'protocols_io',
-                'required': False,
-                'test_endpoint': 'https://www.protocols.io/api/v3/protocols',
-                'category': 'protocol',
-                'description': '실험 프로토콜 저장소',
-                'features': ['실험 프로토콜', '재현성', '버전 관리', '협업'],
-                'rate_limit': {'rpm': 60}
-            },
-            'figshare': {
-                'name': 'Figshare',
-                'env_key': 'figshare',
-                'required': False,
-                'test_endpoint': 'https://api.figshare.com/v2/articles',
-                'category': 'repository',
-                'description': '연구 데이터 공유 플랫폼',
-                'features': ['데이터 공유', 'DOI', '시각화', '메타데이터'],
-                'rate_limit': {'rpm': 60}
-            },
-            'polymer_database': {
-                'name': 'PoLyInfo',
-                'env_key': 'polyinfo',
-                'required': False,
-                'test_endpoint': 'https://polymer.nims.go.jp/api',
-                'category': 'database',
-                'description': '고분자 물성 데이터베이스',
-                'features': ['고분자 물성', '화학 구조', '가공 조건'],
-                'rate_limit': {'rpd': 500}
-            },
-            'chemspider': {
-                'name': 'ChemSpider',
-                'env_key': 'chemspider',
-                'required': False,
-                'test_endpoint': 'https://api.rsc.org/compounds/v1',
-                'category': 'database',
-                'description': '화학 구조 데이터베이스',
-                'features': ['화학 구조', '물성 예측', 'InChI/SMILES'],
-                'rate_limit': {'rpm': 15}
+                'endpoint': 'https://api.materialsproject.org',
+                'features': ['재료 특성', '구조 정보'],
+                'rate_limit': {'rpd': 1000},
+                'required': False
             },
             
-            # Google Services
-            'google_sheets': {
-                'name': 'Google Sheets',
-                'env_key': 'google_sheets_url',
-                'required': False,
-                'test_endpoint': None,
-                'category': 'storage',
-                'description': '데이터 저장 및 관리',
-                'features': ['실시간 동기화', '협업', '버전 관리'],
-                'rate_limit': {'rpm': 300}
+            # 기존 APIManager의 엔드포인트도 포함
+            'openalex': {
+                'name': 'OpenAlex',
+                'category': 'database',
+                'endpoint': 'https://api.openalex.org/',
+                'features': ['문헌 검색', '인용 분석'],
+                'rate_limit': {'rpm': 100000},
+                'required': False
             },
-            'google_oauth': {
-                'name': 'Google OAuth',
-                'env_key': 'google_oauth_id',
-                'required': False,
-                'test_endpoint': None,
-                'category': 'auth',
-                'description': 'Google 서비스 인증',
-                'features': ['Sheets API', 'Drive API', '사용자 인증'],
-                'rate_limit': {'rpm': 300}
+            'crossref': {
+                'name': 'Crossref',
+                'category': 'database',
+                'endpoint': 'https://api.crossref.org/',
+                'features': ['DOI 검색', '메타데이터'],
+                'rate_limit': None,  # 무제한
+                'required': False
             },
-            'google_oauth_secret': {
-                'name': 'Google OAuth Secret',
-                'env_key': 'google_oauth_secret',
-                'required': False,
-                'test_endpoint': None,
-                'category': 'auth',
-                'description': 'Google 서비스 인증 비밀키',
-                'features': ['보안 인증'],
-                'rate_limit': {'rpm': 300}
+            'pubchem': {
+                'name': 'PubChem',
+                'category': 'database',
+                'endpoint': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/',
+                'features': ['화학 구조', '물성 데이터'],
+                'rate_limit': {'rpm': 300},  # 5 req/s = 300 rpm
+                'required': False
             }
         }
         
+        # Rate limiters 초기화
         self.rate_limiters = {}
+        
+        # 기존 endpoints 속성 유지 (호환성)
+        self.endpoints = {
+            name: config['endpoint'] 
+            for name, config in self.api_configs.items() 
+            if 'endpoint' in config
+        }
+        
+        # 초기화
         self.initialize_keys()
+        self._init_rate_limiters()
     
     def initialize_keys(self):
-        """API 키 초기화"""
+        """API 키 초기화 - 다양한 소스에서 로드"""
         if not st.session_state.api_keys_initialized:
             # 1. Streamlit secrets에서 로드
             self._load_from_secrets()
@@ -3091,14 +2992,8 @@ class APIKeyManager:
             # 2. 환경 변수에서 로드
             self._load_from_env()
             
-            # 3. 로컬 파일에서 로드 (개발용)
-            self._load_from_file()
-            
-            # 4. 사용자 입력 키 로드
+            # 3. 사용자 입력 키 로드
             self._load_user_keys()
-            
-            # 5. Rate limiter 초기화
-            self._init_rate_limiters()
             
             st.session_state.api_keys_initialized = True
             logger.info("API 키 초기화 완료")
@@ -3106,72 +3001,21 @@ class APIKeyManager:
     def _load_from_secrets(self):
         """Streamlit secrets에서 API 키 로드"""
         try:
-            # 일반 API 키 로드
-            for api_id, config in self.api_configs.items():
-                env_key = config.get('env_key')
-                if env_key and env_key in st.secrets:
-                    st.session_state.api_keys[api_id] = st.secrets[env_key]
-                    logger.info(f"{config['name']} API 키가 secrets에서 로드되었습니다")
-            
-            # 특수 케이스 처리
-            # 1. Google Sheets URL (다른 이름으로 저장되어 있을 수 있음)
-            if 'google_sheets_url' in st.secrets:
-                st.session_state.api_keys['google_sheets'] = st.secrets['google_sheets_url']
-            elif 'private_gsheets_url' in st.secrets:
-                st.session_state.api_keys['google_sheets'] = st.secrets['private_gsheets_url']
-                
-            # 2. Google OAuth (클라이언트 ID와 시크릿)
-            if 'google_oauth_id' in st.secrets:
-                st.session_state.api_keys['google_oauth'] = st.secrets['google_oauth_id']
-            if 'google_oauth_secret' in st.secrets:
-                st.session_state.api_keys['google_oauth_secret'] = st.secrets['google_oauth_secret']
-                
-            # 3. Google Service Account (전체 JSON으로 저장된 경우)
-            if 'gcp_service_account' in st.secrets:
-                st.session_state.google_service_account = st.secrets['gcp_service_account']
-                logger.info("Google Service Account 정보가 로드되었습니다")
-                
-            # 4. Protocols.io (점이 포함된 이름 처리)
-            if 'protocols_io' in st.secrets:
-                st.session_state.api_keys['protocols_io'] = st.secrets['protocols_io']
-            elif 'PROTOCOLS.IO_API_KEY' in st.secrets:
-                st.session_state.api_keys['protocols_io'] = st.secrets['protocols_io']
-                
+            for api_id in self.api_configs:
+                if api_id in st.secrets:
+                    st.session_state.api_keys[api_id] = st.secrets[api_id]
+                    logger.info(f"{self.api_configs[api_id]['name']} API 키가 secrets에서 로드됨")
         except Exception as e:
-            logger.debug(f"Secrets 로드 중 오류 (정상적일 수 있음): {e}")
-
+            logger.debug(f"Secrets 로드 중 오류: {e}")
+    
     def _load_from_env(self):
         """환경 변수에서 API 키 로드"""
-        import os
-        for api_id, config in self.api_configs.items():
-            env_key = config.get('env_key')
-            if env_key:
-                value = os.environ.get(env_key)
-                if value:
-                    st.session_state.api_keys[api_id] = value
-                    logger.info(f"{config['name']} API 키가 환경 변수에서 로드되었습니다")
-
-    def _load_from_file(self):
-        """로컬 파일에서 API 키 로드 (개발용)"""
-        try:
-            import os
-            if os.path.exists('.env'):
-                from dotenv import load_dotenv
-                load_dotenv()
-                self._load_from_env()  # .env 파일 로드 후 환경 변수에서 다시 읽기
-        except ImportError:
-            logger.debug("python-dotenv가 설치되지 않았습니다. 로컬 파일 로드를 건너뜁니다.")
-        except Exception as e:
-            logger.debug(f"로컬 파일 로드 중 오류: {e}")
-    
-    def _init_rate_limiters(self):
-        """Rate limiter 초기화"""
-        for api_id, config in self.api_configs.items():
-            if 'rate_limit' in config:
-                self.rate_limiters[api_id] = RateLimiter(
-                    api_id,
-                    config['rate_limit']
-                )
+        for api_id in self.api_configs:
+            env_key = api_id.upper()
+            value = os.environ.get(env_key)
+            if value:
+                st.session_state.api_keys[api_id] = value
+                logger.info(f"{self.api_configs[api_id]['name']} API 키가 환경 변수에서 로드됨")
     
     def _load_user_keys(self):
         """사용자가 입력한 키 로드"""
@@ -3180,83 +3024,22 @@ class APIKeyManager:
                 if value and key_id not in st.session_state.api_keys:
                     st.session_state.api_keys[key_id] = value
     
-    def validate_key_format(self, key_id: str, key: str) -> bool:
-        """API 키 형식 검증"""
-        if not key or not isinstance(key, str):
-            return False
-        
-        # API별 형식 검증
-        if key_id == 'openai':
-            return key.startswith('sk-') and len(key) > 20
-        elif key_id == 'google_gemini':
-            return key.startswith('AIza') and len(key) > 30
-        elif key_id == 'anthropic':
-            return key.startswith('sk-ant-') and len(key) > 40
-        elif key_id == 'groq':
-            return key.startswith('gsk_') and len(key) > 40
-        elif key_id == 'grok':
-            return len(key) > 20  # xAI Grok 키 형식
-        elif key_id == 'sambanova':
-            return len(key) > 20  # SambaNova 키 형식
-        elif key_id == 'deepseek':
-            return key.startswith('sk-') and len(key) > 20
-        elif key_id == 'huggingface':
-            return key.startswith('hf_') and len(key) > 20
-        elif key_id == 'github':
-            return (key.startswith('ghp_') or key.startswith('github_pat_')) and len(key) > 30
-        elif key_id == 'materials_project':
-            return len(key) > 10  # MP API 키는 다양한 형식
-        elif key_id == 'materials_commons':
-            return len(key) > 10
-        elif key_id == 'zenodo':
-            return len(key) > 20  # Zenodo access token
-        elif key_id == 'protocols_io':
-            return len(key) > 20  # Protocols.io API token
-        elif key_id == 'figshare':
-            return len(key) > 20  # Figshare token
-        elif key_id == 'google_sheets_url':
-            return key.startswith('https://docs.google.com/spreadsheets/') and len(key) > 50
-        elif key_id == 'google_oauth_id':
-            return '.apps.googleusercontent.com' in key  # OAuth 클라이언트 ID
-        elif key_id == 'google_oauth_secret':
-            return len(key) > 20  # OAuth 클라이언트 시크릿
-        else:
-            # 기타 API는 기본 길이만 확인
-            return len(key) > 10
-
-    def test_api_connection(self, key_id: str, key: str) -> Dict[str, Any]:
-        """API 연결 테스트"""
-        config = self.api_configs.get(key_id)
-        if not config:
-            return {'status': 'error', 'message': '알 수 없는 API ID'}
-        
-        try:
-            # 간단한 연결 테스트 (실제로는 각 API별로 구현 필요)
-            test_endpoint = config.get('test_endpoint')
-            if test_endpoint:
-                # 여기서 실제 API 호출 테스트를 수행할 수 있습니다
-                # 지금은 간단한 검증만 수행
-                if self.validate_key_format(key_id, key):
-                    return {
-                        'status': 'success',
-                        'message': f'{config["name"]} API 키가 유효한 형식입니다'
-                    }
-                else:
-                    return {
-                        'status': 'error',
-                        'message': 'API 키 형식이 올바르지 않습니다'
-                    }
-            else:
-                return {
-                    'status': 'success',
-                    'message': 'API 키가 저장되었습니다'
-                }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'연결 테스트 실패: {str(e)}'
-            }
-
+    def _init_rate_limiters(self):
+        """Rate limiter 초기화"""
+        for api_id, config in self.api_configs.items():
+            if config.get('rate_limit'):
+                self.rate_limiters[api_id] = RateLimiter(api_id, config['rate_limit'])
+    
+    def update_api_keys(self):
+        """API 키 업데이트 (기존 메서드와 호환)"""
+        # 이미 initialize_keys에서 처리하므로 다시 호출만
+        self._load_from_secrets()
+        self._load_user_keys()
+    
+    def get_key(self, key_id: str) -> Optional[str]:
+        """API 키 가져오기"""
+        return st.session_state.api_keys.get(key_id)
+    
     def set_key(self, key_id: str, key: str):
         """API 키 설정"""
         st.session_state.api_keys[key_id] = key
@@ -3266,16 +3049,49 @@ class APIKeyManager:
             st.session_state.user_api_keys = {}
         st.session_state.user_api_keys[key_id] = key
         
-        logger.info(f"{self.api_configs[key_id]['name']} API 키가 설정되었습니다")
-
-    def get_key(self, key_id: str) -> Optional[str]:
-        """API 키 가져오기"""
-        return st.session_state.api_keys.get(key_id)
-
+        logger.info(f"{self.api_configs.get(key_id, {}).get('name', key_id)} API 키가 설정됨")
+    
     def is_key_set(self, key_id: str) -> bool:
         """API 키 설정 여부 확인"""
         return key_id in st.session_state.api_keys and bool(st.session_state.api_keys[key_id])
-
+    
+    def get_headers(self, service: str) -> Dict[str, str]:
+        """서비스별 헤더 생성 (기존 메서드와 호환)"""
+        headers = {
+            'User-Agent': 'PolymerDoEPlatform/1.0',
+            'Accept': 'application/json'
+        }
+        
+        # 각 서비스별 인증 헤더 추가
+        if service == 'materials_project' and self.is_key_set('materials_project'):
+            headers['X-API-KEY'] = self.get_key('materials_project')
+        elif service == 'github' and self.is_key_set('github'):
+            headers['Authorization'] = f"token {self.get_key('github')}"
+        elif service == 'huggingface' and self.is_key_set('huggingface'):
+            headers['Authorization'] = f"Bearer {self.get_key('huggingface')}"
+        
+        return headers
+    
+    def validate_key_format(self, key_id: str, key: str) -> bool:
+        """API 키 형식 검증"""
+        if not key or not isinstance(key, str):
+            return False
+        
+        # API별 형식 검증 규칙
+        validation_rules = {
+            'google_gemini': lambda k: k.startswith('AIza') and len(k) > 30,
+            'github': lambda k: (k.startswith('ghp_') or k.startswith('github_pat_')) and len(k) > 30,
+            'huggingface': lambda k: k.startswith('hf_') and len(k) > 20,
+            'groq': lambda k: k.startswith('gsk_') and len(k) > 40,
+            'deepseek': lambda k: k.startswith('sk-') and len(k) > 20
+        }
+        
+        # 특정 검증 규칙이 있으면 적용, 없으면 기본 길이 검사
+        if key_id in validation_rules:
+            return validation_rules[key_id](key)
+        else:
+            return len(key) > 10
+    
     def get_available_apis(self, category: str = None) -> List[str]:
         """사용 가능한 API 목록"""
         available = []
@@ -3285,22 +3101,6 @@ class APIKeyManager:
                     available.append(api_id)
         return available
     
-    def validate_and_set_key(self, key_id: str, key: str) -> Tuple[bool, str]:
-        """API 키 검증 및 설정"""
-        # 형식 검증
-        if not self.validate_key_format(key_id, key):
-            return False, "API 키 형식이 올바르지 않습니다."
-        
-        # 실제 연결 테스트
-        test_result = self.test_api_connection(key_id, key)
-        
-        if test_result['status'] == 'success':
-            self.set_key(key_id, key)
-            return True, test_result['message']
-        else:
-            return False, test_result['message']
-    
-    @retry(max_attempts=3, delay=1.0)
     async def call_api_with_limit(self, api_id: str, api_call: Callable, *args, **kwargs):
         """Rate limiting이 적용된 API 호출"""
         if api_id in self.rate_limiters:
@@ -3311,43 +3111,13 @@ class APIKeyManager:
         except Exception as e:
             logger.error(f"API 호출 실패 ({api_id}): {e}")
             raise
-
-    def get_google_credentials(self):
-        """Google 서비스 인증 정보 가져오기"""
-        credentials = {}
-        
-        # Service Account 정보
-        if hasattr(st.session_state, 'google_service_account'):
-            credentials['service_account'] = st.session_state.google_service_account
-        
-        # OAuth 정보
-        if self.is_key_set('google_oauth'):
-            credentials['client_id'] = self.get_key('google_oauth')
-        if self.is_key_set('google_oauth_secret'):
-            credentials['client_secret'] = self.get_key('google_oauth_secret')
-        
-        # Sheets URL
-        if self.is_key_set('google_sheets'):
-            credentials['sheets_url'] = self.get_key('google_sheets')
-        
-        return credentials
-
+    
     def get_api_summary(self) -> Dict[str, Dict[str, Any]]:
         """API 설정 요약 정보"""
-        summary = {
-            'ai': {'total': 0, 'configured': 0, 'apis': []},
-            'database': {'total': 0, 'configured': 0, 'apis': []},
-            'repository': {'total': 0, 'configured': 0, 'apis': []},
-            'protocol': {'total': 0, 'configured': 0, 'apis': []},
-            'storage': {'total': 0, 'configured': 0, 'apis': []},
-            'auth': {'total': 0, 'configured': 0, 'apis': []}
-        }
+        summary = defaultdict(lambda: {'total': 0, 'configured': 0, 'apis': []})
         
         for api_id, config in self.api_configs.items():
             category = config.get('category', 'other')
-            if category not in summary:
-                summary[category] = {'total': 0, 'configured': 0, 'apis': []}
-            
             summary[category]['total'] += 1
             
             api_info = {
@@ -3362,15 +3132,9 @@ class APIKeyManager:
             
             summary[category]['apis'].append(api_info)
         
-        return summary
+        return dict(summary)
 
-    def set_api_keys(self, api_keys: Dict[str, str]):
-        """여러 API 키를 한 번에 설정"""
-        for key_name, key_value in api_keys.items():
-            if key_value and key_value != 'your-key':  # 실제 키인지 확인
-                self.set_key(key_name, key_value)  # set_api_key가 아니라 set_key 사용!
-
-api_key_manager = None  # 전역 변수 선언
+# api_key_manager = None  # 전역 변수 선언
 
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
