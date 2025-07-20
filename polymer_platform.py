@@ -980,15 +980,15 @@ class ExperimentData:
 
 @dataclass
 class AIResponse:
-    """AI 응답 데이터"""
+    """AI 엔진 응답 데이터 클래스"""
     success: bool
     content: str
     model: str
     tokens_used: int = 0
     response_time: float = 0.0
-    confidence: float = 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    confidence: float = 0.0
     error: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 @dataclass
 class LearningRecord:
@@ -6790,6 +6790,24 @@ class MultiAIOrchestrator:
             return self.api_manager.get_key(service)
         return None
 
+    def _lazy_init_api_manager(self):
+        """API Manager 지연 초기화"""
+        try:
+            # 현재 모듈이 이미 임포트된 경우를 처리
+            import sys
+            if 'polymer_platform' in sys.modules:
+                module = sys.modules['polymer_platform']
+                if hasattr(module, 'APIManager'):
+                    APIManager = module.APIManager
+                    self.api_manager = APIManager()
+                    st.session_state.api_manager = self.api_manager
+                    logger.info("MultiAIOrchestrator에서 새 APIManager 인스턴스 생성")
+            else:
+                # 모듈이 아직 로드되지 않은 경우
+                logger.warning("polymer_platform 모듈이 아직 로드되지 않았습니다")
+        except Exception as e:
+            logger.error(f"API Manager 초기화 실패: {str(e)}")
+    
     def initialize(self):
         """AI 엔진들 초기화 - 수정된 버전"""
         logger.info("MultiAIOrchestrator 초기화 시작...")
@@ -6883,6 +6901,8 @@ class MultiAIOrchestrator:
         else:
             logger.error("활성화된 AI 엔진이 없습니다")
             return False
+
+    
 
     def get_engine_status(self) -> Dict[str, Any]:
         """각 엔진의 상태 반환"""
@@ -7001,88 +7021,7 @@ class MultiAIOrchestrator:
             'confidence': confidence
         }
 
-    
-    async def _initialize_systems(self):
-        """시스템 초기화 함수 - 수정된 버전"""
-        try:
-            # 1. 설정 관리자 초기화
-            if 'config_manager' not in st.session_state:
-                from polymer_platform import ConfigManager
-                st.session_state.config_manager = ConfigManager()
-        
-            # 2. API 매니저 초기화 (세션 상태에 저장)
-            if 'api_manager' not in st.session_state:
-                from polymer_platform import APIManager
-                st.session_state.api_manager = APIManager()
-                logger.info("API Manager 초기화 완료")
-        
-            # 3. AI 오케스트레이터 초기화
-            try:
-                from polymer_platform import MultiAIOrchestrator
-                ai_orchestrator = MultiAIOrchestrator()
-            
-                if ai_orchestrator.initialize():
-                    st.session_state.ai_orchestrator = ai_orchestrator
-                    logger.info("AI 오케스트레이터 초기화 성공")
-                
-                    # 상태 확인
-                    if hasattr(ai_orchestrator, 'get_engine_status'):
-                        status = ai_orchestrator.get_engine_status()
-                        logger.info("=== AI 엔진 상태 ===")
-                        for engine, info in status.items():
-                            if info['available']:
-                                logger.info(f"✓ {engine}: 활성")
-                            else:
-                                logger.info(f"✗ {engine}: 비활성 - {info.get('error', 'Unknown')}")
-                else:
-                    logger.error("AI 오케스트레이터 초기화 실패")
-                    st.session_state.ai_orchestrator = None
-                
-            except Exception as e:
-                logger.error(f"AI 오케스트레이터 생성 중 오류: {str(e)}")
-                import traceback
-                logger.error(traceback.format_exc())
-                st.session_state.ai_orchestrator = None
-        
-            # 4. 데이터베이스 매니저 초기화
-            if 'db_manager' not in st.session_state:
-                from polymer_platform import DatabaseIntegrationManager
-                st.session_state.db_manager = DatabaseIntegrationManager()
-        
-            # 5. 이벤트 버스 시작
-            from polymer_platform import event_bus
-            if not event_bus.running:
-                event_bus.start()
-                logger.info("이벤트 버스 시작")
-        
-            # 6. API 모니터 초기화
-            if 'api_monitor' not in st.session_state:
-                from polymer_platform import api_monitor
-                st.session_state.api_monitor = api_monitor
-        
-            logger.info("시스템 초기화 완료")
-        
-            # API 키 디버깅 정보
-            if 'api_manager' in st.session_state:
-                api_manager = st.session_state.api_manager
-                logger.info("=== API 키 디버깅 정보 ===")
-            
-                if 'api_keys' in st.session_state:
-                    logger.info(f"저장된 API 키 목록: {list(st.session_state.api_keys.keys())}")
-                    logger.info(f"저장된 API 키 개수: {len(st.session_state.api_keys)}")
-                else:
-                    logger.info("API 키가 아직 초기화되지 않았습니다.")
-                
-        except Exception as e:
-            logger.error(f"초기화 오류: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-
-
-
-
-    
+       
     async def generate_with_single_ai(self,
                                      prompt: str,
                                      engine_id: str = None,
@@ -14752,56 +14691,89 @@ class PolymerDOEApp:
                     loop.run_until_complete(self._initialize_systems())
                 finally:
                     loop.close()
+
+
     
     async def _initialize_systems(self):
-        """시스템 초기화 함수 - 수정된 버전"""
-        # global api_manager  # 이 줄 제거
-        
+        """시스템 초기화 함수"""
         try:
             # 1. 설정 관리자 초기화
             if 'config_manager' not in st.session_state:
-                st.session_state.config_manager = ConfigManager()
+                # 현재 모듈에서 ConfigManager 가져오기
+                import sys
+                if 'polymer_platform' in sys.modules:
+                    module = sys.modules['polymer_platform']
+                    if hasattr(module, 'ConfigManager'):
+                        st.session_state.config_manager = module.ConfigManager()
             
-            # 2. API 매니저 초기화 (세션 상태에 저장)
+            # 2. API 매니저 초기화
             if 'api_manager' not in st.session_state:
-                st.session_state.api_manager = APIManager()
+                import sys
+                if 'polymer_platform' in sys.modules:
+                    module = sys.modules['polymer_platform']
+                    if hasattr(module, 'APIManager'):
+                        st.session_state.api_manager = module.APIManager()
+                        logger.info("API Manager 초기화 완료")
             
             # 3. AI 오케스트레이터 초기화
             try:
-                ai_orchestrator = MultiAIOrchestrator()
-                if ai_orchestrator.initialize():
-                    logger.info("AI 오케스트레이터 초기화 성공")
-        
-                    # 상태 확인
-                    if hasattr(ai_orchestrator, 'get_engine_status'):
-                        status = ai_orchestrator.get_engine_status()
-                        logger.info("=== AI 엔진 상태 ===")
-                        for engine, info in status.items():
-                            if info['available']:
-                                logger.info(f"✓ {engine}: 활성")
-                            else:
-                                logger.info(f"✗ {engine}: 비활성 - {info.get('error', 'Unknown')}")
-                else:
-                    logger.error("AI 오케스트레이터 초기화 실패")
-                    ai_orchestrator = None
+                import sys
+                if 'polymer_platform' in sys.modules:
+                    module = sys.modules['polymer_platform']
+                    if hasattr(module, 'MultiAIOrchestrator'):
+                        ai_orchestrator = module.MultiAIOrchestrator()
+                        
+                        if ai_orchestrator.initialize():
+                            st.session_state.ai_orchestrator = ai_orchestrator
+                            logger.info("AI 오케스트레이터 초기화 성공")
+                            
+                            # 상태 확인
+                            if hasattr(ai_orchestrator, 'get_engine_status'):
+                                status = ai_orchestrator.get_engine_status()
+                                logger.info("=== AI 엔진 상태 ===")
+                                for engine, info in status.items():
+                                    if info.get('available'):
+                                        logger.info(f"✓ {engine}: 활성")
+                                    else:
+                                        logger.info(f"✗ {engine}: 비활성 - {info.get('error', 'Unknown')}")
+                        else:
+                            logger.error("AI 오케스트레이터 초기화 실패")
+                            st.session_state.ai_orchestrator = None
+                            
             except Exception as e:
                 logger.error(f"AI 오케스트레이터 생성 중 오류: {str(e)}")
-                ai_orchestrator = None
+                import traceback
+                logger.error(traceback.format_exc())
+                st.session_state.ai_orchestrator = None
             
             # 4. 데이터베이스 매니저 초기화
             if 'db_manager' not in st.session_state:
-                st.session_state.db_manager = DatabaseIntegrationManager()
-                
+                import sys
+                if 'polymer_platform' in sys.modules:
+                    module = sys.modules['polymer_platform']
+                    if hasattr(module, 'DatabaseIntegrationManager'):
+                        st.session_state.db_manager = module.DatabaseIntegrationManager()
+            
             # 5. 이벤트 버스 시작
-            if not event_bus.running:
-                event_bus.start()
-                
+            import sys
+            if 'polymer_platform' in sys.modules:
+                module = sys.modules['polymer_platform']
+                if hasattr(module, 'event_bus'):
+                    event_bus = module.event_bus
+                    if not event_bus.running:
+                        event_bus.start()
+                        logger.info("이벤트 버스 시작")
+            
             # 6. API 모니터 초기화
             if 'api_monitor' not in st.session_state:
-                st.session_state.api_monitor = api_monitor
-                
+                import sys
+                if 'polymer_platform' in sys.modules:
+                    module = sys.modules['polymer_platform']
+                    if hasattr(module, 'api_monitor'):
+                        st.session_state.api_monitor = module.api_monitor
+            
             logger.info("시스템 초기화 완료")
-
+            
             if api_manager:
                 logger.info("=== API 키 디버깅 정보 ===")
     
@@ -14843,9 +14815,9 @@ class PolymerDOEApp:
                 logger.info("=== API 키 디버깅 완료 ===")
         
         except Exception as e:
-            logger.error(f"초기화 오류: {e}")
-            st.error(f"시스템 초기화 중 오류가 발생했습니다: {str(e)}")
-            raise
+            logger.error(f"초기화 오류: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     def run(self):
         """애플리케이션 실행"""
