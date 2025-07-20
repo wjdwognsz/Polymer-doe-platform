@@ -3134,7 +3134,7 @@ class APIManager:
         
         return dict(summary)
 
-# api_key_manager = None  # 전역 변수 선언
+# api_manager = None  # 전역 변수 선언
 
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
@@ -3285,7 +3285,7 @@ class APIMonitor:
         """대시보드용 데이터 준비"""
         dashboard_data = {
             'summary': {
-                'total_apis': len(api_key_manager.api_configs),
+                'total_apis': len(api_manager.api_configs),
                 'online_apis': 0,
                 'total_calls': 0,
                 'total_cost': 0.0,
@@ -3299,7 +3299,7 @@ class APIMonitor:
         }
         
         # API별 데이터 수집
-        for api_name in api_key_manager.api_configs:
+        for api_name in api_manager.api_configs:
             status = self.get_status(api_name)
             metrics = self.get_metrics(api_name)
             
@@ -3372,7 +3372,7 @@ class APIMonitor:
         
         for api_name, api_data in data['apis'].items():
             if api_data['metrics']['total_calls'] > 0:
-                with st.expander(f"{api_key_manager.api_configs[api_name]['name']} ({api_name})"):
+                with st.expander(f"{api_manager.api_configs[api_name]['name']} ({api_name})"):
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -6107,10 +6107,10 @@ class BaseAIEngine:
         
     def initialize(self):
         """엔진 초기화 (수정 버전)"""
-        global api_key_manager
+        global api_manager
         
         # API 키 관리자 확인
-        if api_key_manager is None:
+        if api_manager is None:
             logger.error(f"{self.name}: API 키 관리자가 초기화되지 않았습니다")
             return False
         
@@ -6141,16 +6141,16 @@ class BaseAIEngine:
                     return False
             
             # API 키 관리자에서도 확인 (백업)
-            if not self.api_key and api_key_manager.is_key_set(self.api_key_id):
-                self.api_key = api_key_manager.get_key(self.api_key_id)
+            if not self.api_key and api_manager.is_key_set(self.api_key_id):
+                self.api_key = api_manager.get_key(self.api_key_id)
                 
         except Exception as e:
             logger.error(f"{self.name} API 키 로드 중 오류: {str(e)}")
             return False
         
         # Rate limiter 설정
-        if self.api_key_id in api_key_manager.rate_limiters:
-            self.rate_limiter = api_key_manager.rate_limiters[self.api_key_id]
+        if self.api_key_id in api_manager.rate_limiters:
+            self.rate_limiter = api_manager.rate_limiters[self.api_key_id]
         
         return True
     
@@ -6727,7 +6727,7 @@ class MultiAIOrchestrator:
         # 필수 속성들 초기화
         self.engines = {}
         self.api_keys = {}
-        self.available_engines = {}  # 이 줄이 누락되어 있었습니다!
+        self.available_engines = {}
         self.active_engines = []
         self.usage_stats = defaultdict(lambda: {'calls': 0, 'tokens': 0, 'errors': 0})
         self.rate_limiters = {}
@@ -6775,19 +6775,39 @@ class MultiAIOrchestrator:
             'best_quality': self._best_quality_consensus,
             'ensemble': self._ensemble_consensus
         }
+        
+        # ========== 여기에 API Manager 연결 추가 ==========
+        # API 매니저 참조 - 세션 상태에서 가져오기
+        self.api_manager = st.session_state.get('api_manager', None)
+        if self.api_manager is None:
+            # API Manager가 없으면 새로 생성
+            self.api_manager = APIManager()
+            st.session_state.api_manager = self.api_manager
+            logger.info("MultiAIOrchestrator에서 새 APIManager 인스턴스 생성")
+    
+    def get_api_key(self, service: str):
+        """API 키 가져오기"""
+        if self.api_manager:
+            return self.api_manager.get_key(service)
+        return None
 
     def initialize(self):
-        """모든 AI 엔진 초기화 (수정 버전)"""
-        logger.info("=== API 키 초기화 시작 ===")
+        """AI 엔진들 초기화"""
+        logger.info("MultiAIOrchestrator 초기화 시작...")
         
-        # API 키 매핑 (streamlit secrets → 내부 엔진 이름)
-        key_mapping = {
-            'google_gemini': 'gemini',
-            'xai_grok': 'grok',
-            'groq': 'groq',
-            'sambanova': 'sambanova',
-            'deepseek': 'deepseek',
-            'huggingface': 'huggingface'
+        # API Manager가 없으면 초기화 실패
+        if not self.api_manager:
+            logger.error("API Manager가 없어 초기화할 수 없습니다")
+            return False
+        
+        # 각 AI 엔진 초기화 시도
+        initialization_results = {
+            'gemini': self._init_gemini(),
+            'groq': self._init_groq(),
+            'grok': self._init_grok(),
+            'sambanova': self._init_sambanova(),
+            'deepseek': self._init_deepseek(),
+            'huggingface': self._init_huggingface()
         }
         
         # Streamlit secrets에서 API 키 로드
@@ -7762,9 +7782,9 @@ class BaseDBClient:
     
     async def _get_auth_credentials(self) -> Optional[Dict]:
         """인증 정보 가져오기"""
-        global api_key_manager
+        global api_manager
         
-        if not api_key_manager:
+        if not api_manager:
             return None
         
         # API 키 매핑
@@ -7780,8 +7800,8 @@ class BaseDBClient:
         }
         
         api_key_id = key_mapping.get(self.name)
-        if api_key_id and api_key_manager.is_key_set(api_key_id):
-            key = api_key_manager.get_key(api_key_id)
+        if api_key_id and api_manager.is_key_set(api_key_id):
+            key = api_manager.get_key(api_key_id)
             
             # 각 API별 인증 정보 형식
             if self.name == 'materials_project':
@@ -14649,7 +14669,7 @@ class PolymerDOEApp:
     
     async def _initialize_systems(self):
         """시스템 초기화 함수 - 수정된 버전"""
-        # global api_key_manager  # 이 줄 제거
+        # global api_manager  # 이 줄 제거
         
         try:
             # 1. 설정 관리자 초기화
@@ -14696,7 +14716,7 @@ class PolymerDOEApp:
                 
             logger.info("시스템 초기화 완료")
 
-            if api_key_manager:
+            if api_manager:
                 logger.info("=== API 키 디버깅 정보 ===")
     
                 # api_keys는 st.session_state에 저장됨
@@ -14713,7 +14733,7 @@ class PolymerDOEApp:
                 # 각 키의 존재 여부 확인
                 test_keys = ['gemini', 'grok', 'groq', 'sambanova', 'deepseek', 'huggingface']
                 for key in test_keys:
-                    if api_key_manager.is_key_set(key):
+                    if api_manager.is_key_set(key):
                         logger.info(f"✓ {key} 키 존재")
                     else:
                         logger.info(f"✗ {key} 키 없음")
