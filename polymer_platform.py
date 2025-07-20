@@ -14851,19 +14851,35 @@ class PolymerDOEApp:
     def initialize_session_state(self):
         """세션 상태 초기화"""
         if 'initialized' not in st.session_state:
+            # 기본 설정
             st.session_state.initialized = True
             st.session_state.current_page = 'home'
             
             # user_level이 없으면 초기화
             if 'user_level' not in st.session_state:
                 st.session_state.user_level = UserLevel.BEGINNER
-                
+
+            # API 키 관련
+            st.session_state.api_keys = {}
+            st.session_state.api_keys_initialized = False
+            st.session_state.user_api_keys = {}
+
+            # 프로젝트 관련
             st.session_state.project_info = None
             st.session_state.experiment_design = None
             st.session_state.experimental_data = None
             st.session_state.analysis_results = None
+
+            # UI 관련
+            st.session_state.show_ai_consultation = False
+            st.session_state.show_3d_structure = False
+            st.session_state.manual_edit_mode = False
+
+            # 학습 관련
             st.session_state.learning_progress = {}
             st.session_state.recent_projects = []
+
+            logger.info("세션 상태 초기화 완료")
         
             # AI 및 DB 시스템 초기화 - 동기적으로 실행
             with st.spinner("시스템 초기화 중..."):
