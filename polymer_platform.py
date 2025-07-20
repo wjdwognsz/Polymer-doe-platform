@@ -11731,39 +11731,746 @@ class CollaborationSystem:
 # Polymer-doe-platform - Part 11
 # ==================== 프로젝트 설정 페이지 ====================
 class ProjectSetupPage:
+    """프로젝트 설정 페이지 - 정리 및 기능 강화 버전"""
+    
     def __init__(self):
+        super().__init__()
         self.polymer_database = PolymerDatabase()
         self.project_templates = ProjectTemplates()
-        self.ai_consultant = None
+        self.validation_engine = ValidationEngine() if 'ValidationEngine' in globals() else None
+        
+    def render(self, user_level: UserLevel):
+        """메인 렌더링 메서드"""
+        st.title("📋 프로젝트 설정")
+        
+        # 사용자 레벨별 안내 메시지
+        self._show_level_guide(user_level)
+        
+        # AI 추천 시스템 (초보자/중급자)
+        if user_level in [UserLevel.BEGINNER, UserLevel.INTERMEDIATE]:
+            self._render_ai_consultation_section()
+        
+        # 메인 컨테이너
+        with st.container():
+            # 프로젝트 진행 상태 표시
+            if 'project_progress' in st.session_state:
+                self._render_progress_bar()
+            
+            # 섹션별 렌더링
+            self._render_basic_info_section()
+            self._render_template_section()
+            self._render_polymer_selection_section(user_level)
+            self._render_target_properties_section()
+            self._render_constraints_section()
+            self._render_equipment_section()
+            
+            # AI 추천 섹션
+            if hasattr(st.session_state, 'ai_orchestrator'):
+                self._render_ai_recommendations_section()
+            
+            # 최종 저장 및 검증
+            self._render_save_section(user_level)
+    
+    def _show_level_guide(self, user_level: UserLevel):
+        """사용자 레벨별 가이드 표시"""
+        guides = {
+            UserLevel.BEGINNER: """
+            🌱 **초보자 가이드**
+            - AI가 단계별로 프로젝트 설정을 도와드립니다
+            - 각 섹션마다 상세한 설명이 제공됩니다
+            - 템플릿을 활용하면 더 쉽게 시작할 수 있습니다
+            """,
+            UserLevel.INTERMEDIATE: """
+            🌿 **중급자 가이드**
+            - 템플릿을 수정하여 맞춤형 프로젝트를 만들 수 있습니다
+            - AI 추천을 참고하되 직접 조정이 가능합니다
+            """,
+            UserLevel.ADVANCED: """
+            🌳 **고급자 모드**
+            - 모든 설정을 자유롭게 구성할 수 있습니다
+            - 고급 제약조건과 최적화 옵션이 활성화됩니다
+            """,
+            UserLevel.EXPERT: """
+            🎓 **전문가 모드**
+            - 실험 설계의 모든 파라미터에 접근 가능합니다
+            - 커스텀 템플릿 생성 및 공유가 가능합니다
+            """,
+        }
+        
+        if user_level in guides:
+            with st.expander("📖 사용 가이드", expanded=user_level == UserLevel.BEGINNER):
+                st.info(guides[user_level])
+    
+    def _render_ai_consultation_section(self):
+        """AI 상담 섹션"""
+        if st.button("🤖 AI 프로젝트 설계 도우미", type="primary", use_container_width=True):
+            st.session_state.show_ai_consultation = True
+        
+        if st.session_state.get('show_ai_consultation', False):
+            with st.container():
+                st.markdown("### 🤖 AI 프로젝트 설계 도우미")
+                
+                ai_input = st.text_area(
+                    "프로젝트 목표를 자유롭게 설명해주세요",
+                    placeholder="예: PLA 필름의 기계적 강도를 높이면서 투명도를 유지하고 싶습니다. "
+                                "생분해성은 유지하면서 인장강도를 30% 이상 향상시키는 것이 목표입니다.",
+                    height=100
+                )
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    if st.button("AI 분석 시작", disabled=not ai_input):
+                        self._process_ai_consultation(ai_input)
+                with col2:
+                    if st.button("닫기"):
+                        st.session_state.show_ai_consultation = False
+                        st.rerun()
+    
+    def _render_basic_info_section(self):
+        """기본 정보 섹션"""
+        st.markdown("### 1. 기본 정보")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            project_name = st.text_input(
+                "프로젝트 이름 *",
+                value=st.session_state.get('project_name', ''),
+                placeholder="예: PET 필름 기계적 특성 최적화",
+                help="프로젝트를 구분할 수 있는 명확한 이름",
+                key="project_name_input"
+            )
+            
+            # 실시간 검증
+            if project_name:
+                if len(project_name) < 5:
+                    st.warning("프로젝트 이름이 너무 짧습니다 (5자 이상)")
+                else:
+                    st.success("✓")
+        
+        with col2:
+            priority_levels = {
+                "높음": {"icon": "🔴", "days": 7},
+                "중간": {"icon": "🟡", "days": 14},
+                "낮음": {"icon": "🟢", "days": 30}
+            }
+            
+            priority = st.selectbox(
+                "우선순위",
+                options=list(priority_levels.keys()),
+                format_func=lambda x: f"{priority_levels[x]['icon']} {x} (목표: {priority_levels[x]['days']}일)"
+            )
+        
+        # 연구 목적
+        objective = st.text_area(
+            "연구 목적 *",
+            value=st.session_state.get('project_objective', ''),
+            placeholder="이 실험을 통해 달성하고자 하는 목표를 구체적으로 작성하세요.",
+            height=100,
+            help="구체적인 목표가 있을수록 AI가 더 정확한 설계를 제안할 수 있습니다.",
+            key="project_objective_input"
+        )
+        
+        # 문자 수 표시
+        if objective:
+            st.caption(f"입력된 글자 수: {len(objective)}자")
+    
+    def _render_template_section(self):
+        """템플릿 선택 섹션"""
+        st.markdown("### 📑 템플릿 활용")
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            template_names = self.project_templates.get_template_names()
+            selected_template = st.selectbox(
+                "프로젝트 템플릿",
+                ["직접 설정"] + template_names,
+                help="유사한 프로젝트 템플릿을 선택하면 빠르게 시작할 수 있습니다."
+            )
+        
+        with col2:
+            if st.button("🔍 템플릿 검색", help="키워드로 템플릿 검색"):
+                st.session_state.show_template_search = True
+        
+        if selected_template != "직접 설정":
+            template = self.project_templates.get_template_by_name(selected_template)
+            if template:
+                with st.expander("📋 템플릿 상세 정보", expanded=True):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("**기본 정보**")
+                        st.markdown(f"- 설명: {template.get('description', 'N/A')}")
+                        st.markdown(f"- 예산: {template.get('typical_budget', 0):,}만원")
+                        st.markdown(f"- 기간: {template.get('typical_timeline', 0)}주")
+                    
+                    with col2:
+                        st.markdown("**실험 요인**")
+                        for factor in template.get('factors', []):
+                            st.markdown(f"- {factor}")
+                    
+                    with col3:
+                        st.markdown("**측정 항목**")
+                        for response in template.get('responses', []):
+                            st.markdown(f"- {response}")
+                    
+                    # 템플릿 적용 버튼
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    with col2:
+                        if st.button("✅ 템플릿 적용", type="primary", use_container_width=True):
+                            self._apply_template(template)
+                            st.success(f"'{selected_template}' 템플릿이 적용되었습니다!")
+                            st.rerun()
+    
+    def _render_polymer_selection_section(self, user_level: UserLevel):
+        """고분자 선택 섹션"""
+        st.markdown("### 2. 고분자 선택")
+        
+        # 고분자 검색 기능 (고급 사용자)
+        if user_level in [UserLevel.ADVANCED, UserLevel.EXPERT]:
+            search_col1, search_col2 = st.columns([4, 1])
+            with search_col1:
+                polymer_search = st.text_input(
+                    "🔍 고분자 검색",
+                    placeholder="고분자 이름, 화학식, CAS 번호로 검색",
+                    key="polymer_search"
+                )
+            with search_col2:
+                if st.button("검색", key="search_polymer_btn"):
+                    # 검색 로직 구현
+                    pass
+        
+        # 카테고리 선택
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            polymer_categories = list(POLYMER_CATEGORIES['base_types'].keys())
+            selected_category = st.selectbox(
+                "고분자 카테고리",
+                polymer_categories,
+                format_func=lambda x: POLYMER_CATEGORIES['base_types'][x]['name'],
+                key="polymer_category_select"
+            )
+        
+        with col2:
+            category_info = POLYMER_CATEGORIES['base_types'][selected_category]
+            st.info(f"💡 {category_info['description']}")
+        
+        # 고분자 선택 및 정보 표시
+        polymer_examples = category_info['examples']
+        
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            selected_polymer = st.selectbox(
+                "고분자 종류",
+                polymer_examples,
+                key="polymer_type_select"
+            )
+            
+            # 커스텀 고분자 옵션 (전문가)
+            if user_level == UserLevel.EXPERT:
+                if st.checkbox("커스텀 고분자 입력"):
+                    custom_polymer = st.text_input("고분자 이름")
+                    if custom_polymer:
+                        selected_polymer = custom_polymer
+        
+        with col2:
+            if selected_polymer:
+                # get_polymer_info 대신 get_polymer 사용
+                polymer_info = self.polymer_database.get_polymer(selected_polymer)
+                
+                if polymer_info:
+                    # 정보 카드 스타일로 표시
+                    st.markdown(f"""
+                    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px;">
+                        <h4>{polymer_info['name']}</h4>
+                        <p><strong>화학식:</strong> {polymer_info.get('formula', 'N/A')}</p>
+                        <p><strong>카테고리:</strong> {polymer_info.get('category', 'N/A')}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # 주요 특성 메트릭
+                    if 'properties' in polymer_info:
+                        props = polymer_info['properties']
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.metric("Tg (°C)", f"{props.get('Tg', 'N/A')}")
+                        with col_b:
+                            st.metric("Tm (°C)", f"{props.get('Tm', 'N/A')}")
+                else:
+                    st.info("고분자 정보를 불러오는 중...")
+        
+        with col3:
+            # 추가 작업 버튼들
+            if st.button("📊 물성 비교"):
+                st.session_state.show_property_comparison = True
+            
+            if st.button("🔬 3D 구조"):
+                st.session_state.show_3d_structure = True
+            
+            if user_level in [UserLevel.ADVANCED, UserLevel.EXPERT]:
+                if st.button("📚 문헌 검색"):
+                    st.session_state.show_literature_search = True
+        
+        # 고분자 비교 모달 (선택 시)
+        if st.session_state.get('show_property_comparison', False):
+            self._render_polymer_comparison_modal(selected_polymer)
+    
+    def _render_target_properties_section(self):
+        """목표 특성 섹션"""
+        st.markdown("### 3. 목표 특성")
+        
+        # 현재 선택된 고분자 정보 가져오기
+        selected_polymer = st.session_state.get('polymer_type_select', '')
+        category_info = None
+        
+        if selected_polymer:
+            # 카테고리 정보에서 typical_properties 가져오기
+            selected_category = st.session_state.get('polymer_category_select', '')
+            if selected_category:
+                category_info = POLYMER_CATEGORIES['base_types'].get(selected_category, {})
+        
+        # 기본 특성 목록
+        default_properties = [
+            "인장강도", "신장률", "탄성계수", "충격강도",
+            "열변형온도", "유리전이온도", "용융온도",
+            "투명도", "표면조도", "밀도", "흡수율"
+        ]
+        
+        # 카테고리별 추천 특성
+        typical_properties = category_info.get('typical_properties', default_properties) if category_info else default_properties
+        
+        # 특성 선택
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            selected_properties = st.multiselect(
+                "개선하고자 하는 특성 (복수 선택 가능)",
+                typical_properties,
+                default=typical_properties[:2] if len(typical_properties) >= 2 else typical_properties,
+                help="실험을 통해 최적화하고자 하는 특성들을 선택하세요.",
+                key="target_properties_select"
+            )
+        
+        with col2:
+            if st.button("➕ 특성 추가"):
+                st.session_state.show_custom_property = True
+        
+        # 커스텀 특성 추가 (표시 시)
+        if st.session_state.get('show_custom_property', False):
+            with st.container():
+                custom_property = st.text_input("커스텀 특성 이름")
+                if st.button("추가", key="add_custom_property"):
+                    if custom_property and custom_property not in selected_properties:
+                        selected_properties.append(custom_property)
+                        st.session_state.show_custom_property = False
+                        st.rerun()
+        
+        # 선택된 특성별 목표 설정
+        if selected_properties:
+            st.markdown("#### 특성별 목표 설정")
+            
+            property_targets = {}
+            
+            for i, prop in enumerate(selected_properties):
+                with st.expander(f"{i+1}. {prop}", expanded=(i < 2)):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        target_type = st.selectbox(
+                            "목표 유형",
+                            ["최대화", "최소화", "목표값", "범위내"],
+                            key=f"target_type_{prop}"
+                        )
+                    
+                    with col2:
+                        importance = st.slider(
+                            "중요도",
+                            1, 10, 5,
+                            help="이 특성의 상대적 중요도",
+                            key=f"importance_{prop}"
+                        )
+                    
+                    with col3:
+                        if target_type == "목표값":
+                            target_value = st.number_input(
+                                "목표값",
+                                key=f"target_value_{prop}"
+                            )
+                        elif target_type == "범위내":
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                min_value = st.number_input("최소", key=f"min_{prop}")
+                            with col_b:
+                                max_value = st.number_input("최대", key=f"max_{prop}")
+                    
+                    # 현재값 입력 (선택사항)
+                    current_value = st.number_input(
+                        "현재값 (선택사항)",
+                        key=f"current_{prop}",
+                        help="비교를 위한 현재 측정값"
+                    )
+                    
+                    property_targets[prop] = {
+                        'type': target_type,
+                        'importance': importance,
+                        'current': current_value
+                    }
+            
+            st.session_state.property_targets = property_targets
+    
+    def _render_constraints_section(self):
+        """제약 조건 섹션"""
+        st.markdown("### 4. 제약 조건")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            budget = st.number_input(
+                "예산 (만원)",
+                min_value=10,
+                max_value=10000,
+                value=st.session_state.get('project_budget', 500),
+                step=50,
+                help="실험에 사용할 수 있는 총 예산",
+                key="budget_input"
+            )
+            
+            # 예산 경고
+            if budget < 100:
+                st.warning("⚠️ 예산이 적어 실험 수가 제한될 수 있습니다")
+        
+        with col2:
+            timeline = st.number_input(
+                "기간 (주)",
+                min_value=1,
+                max_value=52,
+                value=st.session_state.get('project_timeline', 4),
+                help="실험 완료까지의 목표 기간",
+                key="timeline_input"
+            )
+            
+            # 일정 계산
+            end_date = datetime.now() + timedelta(weeks=timeline)
+            st.caption(f"완료 예정: {end_date.strftime('%Y-%m-%d')}")
+        
+        with col3:
+            max_experiments = st.number_input(
+                "최대 실험 수",
+                min_value=5,
+                max_value=1000,
+                value=50,
+                help="수행 가능한 최대 실험 횟수",
+                key="max_experiments_input"
+            )
+            
+            # 실험당 예상 비용
+            if budget > 0 and max_experiments > 0:
+                cost_per_exp = budget / max_experiments
+                st.caption(f"실험당 약 {cost_per_exp:.1f}만원")
+        
+        # 추가 제약사항
+        with st.expander("🔧 고급 제약사항", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**환경 조건**")
+                temp_range = st.slider(
+                    "가능한 온도 범위 (°C)",
+                    -50, 300, (20, 200),
+                    key="temp_range"
+                )
+                
+                humidity_control = st.checkbox(
+                    "습도 제어 필요",
+                    key="humidity_control"
+                )
+            
+            with col2:
+                st.markdown("**안전 제약**")
+                safety_level = st.select_slider(
+                    "안전 등급",
+                    ["일반", "주의", "위험", "고위험"],
+                    value="주의",
+                    key="safety_level"
+                )
+                
+                clean_room = st.checkbox(
+                    "클린룸 필요",
+                    key="clean_room"
+                )
+    
+    def _render_equipment_section(self):
+        """장비 선택 섹션"""
+        st.markdown("### 5. 사용 가능한 장비")
+        
+        # 장비 카테고리
+        equipment_categories = {
+            "가공 장비": {
+                "items": ["사출성형기", "압출기", "핫프레스", "스핀코터", "3D 프린터", "캘린더", "블로우성형기"],
+                "icon": "🏭"
+            },
+            "측정 장비": {
+                "items": ["만능시험기", "충격시험기", "경도계", "유변물성측정기", "마모시험기"],
+                "icon": "📏"
+            },
+            "열분석": {
+                "items": ["DSC", "TGA", "DMA", "TMA", "열전도도측정기", "HDT/VST"],
+                "icon": "🔥"
+            },
+            "구조분석": {
+                "items": ["FTIR", "XRD", "SEM", "TEM", "AFM", "라만분광기"],
+                "icon": "🔬"
+            },
+            "분자량분석": {
+                "items": ["GPC", "점도계", "질량분석기", "NMR"],
+                "icon": "⚗️"
+            }
+        }
+        
+        # 빠른 선택 옵션
+        quick_select = st.checkbox("🚀 빠른 선택: 기본 장비 세트 사용")
+        
+        if quick_select:
+            # 기본 장비 세트
+            default_equipment = [
+                "사출성형기", "만능시험기", "DSC", "FTIR", "GPC"
+            ]
+            st.info(f"선택된 기본 장비: {', '.join(default_equipment)}")
+            selected_equipment = default_equipment
+        else:
+            # 수동 선택
+            selected_equipment = []
+            
+            # 검색 기능
+            search_term = st.text_input(
+                "🔍 장비 검색",
+                placeholder="장비명으로 검색",
+                key="equipment_search"
+            )
+            
+            # 카테고리별 표시
+            for category, info in equipment_categories.items():
+                with st.expander(f"{info['icon']} {category} ({len(info['items'])}종)"):
+                    # 필터링
+                    items = info['items']
+                    if search_term:
+                        items = [item for item in items if search_term.lower() in item.lower()]
+                    
+                    # 체크박스 그리드
+                    cols = st.columns(3)
+                    for i, item in enumerate(items):
+                        with cols[i % 3]:
+                            if st.checkbox(item, key=f"equip_{item}"):
+                                selected_equipment.append(item)
+        
+        # 선택된 장비 요약
+        if selected_equipment:
+            st.success(f"✅ {len(selected_equipment)}개 장비 선택됨")
+            
+            # 장비별 가용성 체크 (시뮬레이션)
+            with st.expander("장비 가용성 확인", expanded=False):
+                for equip in selected_equipment:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(equip)
+                    with col2:
+                        # 랜덤 가용성 (실제로는 DB 조회)
+                        import random
+                        if random.random() > 0.2:
+                            st.success("가능")
+                        else:
+                            st.warning("예약필요")
+        
+        st.session_state.selected_equipment = selected_equipment
+    
+    def _render_ai_recommendations_section(self):
+        """AI 추천 섹션"""
+        st.markdown("### 6. AI 추천사항")
+        
+        # AI 추천 트리거
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            ai_models = {
+                'gemini': '🌟 Google Gemini',
+                'grok': '🚀 xAI Grok',
+                'multi': '🎯 다중 AI 합의'
+            }
+            
+            selected_ai = st.selectbox(
+                "AI 모델 선택",
+                options=list(ai_models.keys()),
+                format_func=lambda x: ai_models[x],
+                key="ai_model_select"
+            )
+        
+        with col2:
+            analysis_depth = st.select_slider(
+                "분석 깊이",
+                ["빠른", "표준", "심층"],
+                value="표준",
+                key="analysis_depth"
+            )
+        
+        with col3:
+            if st.button("🤖 AI 분석", type="primary", key="ai_analyze_btn"):
+                self._run_ai_analysis(selected_ai, analysis_depth)
+        
+        # AI 추천 결과 표시
+        if 'ai_recommendations' in st.session_state:
+            self._display_ai_recommendations()
+    
+    def _render_save_section(self, user_level: UserLevel):
+        """저장 및 검증 섹션"""
+        st.markdown("---")
+        
+        # 입력 완성도 체크
+        completion = self._check_project_completion()
+        
+        # 진행률 표시
+        progress_bar = st.progress(completion['percentage'] / 100)
+        st.caption(f"프로젝트 설정 완성도: {completion['percentage']}%")
+        
+        # 누락 항목 표시
+        if completion['missing']:
+            with st.expander("⚠️ 누락된 항목", expanded=True):
+                for item in completion['missing']:
+                    st.warning(f"• {item}")
+        
+        # 저장 버튼
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            # 검증 옵션 (고급 사용자)
+            if user_level in [UserLevel.ADVANCED, UserLevel.EXPERT]:
+                validate_before_save = st.checkbox(
+                    "저장 전 검증 수행",
+                    value=True,
+                    key="validate_before_save"
+                )
+            else:
+                validate_before_save = True
+            
+            # 저장 버튼
+            save_disabled = completion['percentage'] < 70  # 70% 미만이면 비활성화
+            
+            if st.button(
+                "💾 프로젝트 저장 및 다음 단계",
+                type="primary",
+                use_container_width=True,
+                disabled=save_disabled,
+                key="save_project_btn"
+            ):
+                if validate_before_save:
+                    validation_result = self._validate_project_settings()
+                    if validation_result['valid']:
+                        self._save_project()
+                        st.success("✅ 프로젝트가 저장되었습니다!")
+                        st.session_state.current_page = 'experiment_design'
+                        st.rerun()
+                    else:
+                        st.error("검증 실패: " + validation_result['message'])
+                else:
+                    self._save_project()
+                    st.session_state.current_page = 'experiment_design'
+                    st.rerun()
+        
+        # 추가 옵션
+        with st.expander("💾 저장 옵션", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📥 템플릿으로 저장"):
+                    self._save_as_template()
+            
+            with col2:
+                if st.button("📤 프로젝트 내보내기"):
+                    self._export_project()
+    
+    # ===== 헬퍼 메서드들 =====
+    
+    def _process_ai_consultation(self, user_input: str):
+        """AI 상담 처리"""
+        with st.spinner("AI가 프로젝트를 분석하고 있습니다..."):
+            try:
+                # 새 이벤트 루프 생성 및 실행
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                recommendations = loop.run_until_complete(
+                    self._get_ai_recommendations({
+                        'user_input': user_input,
+                        'user_level': st.session_state.get('user_level', UserLevel.BEGINNER)
+                    })
+                )
+                
+                if recommendations and recommendations != "AI 시스템이 초기화되지 않았습니다.":
+                    st.session_state.ai_consultation_result = recommendations
+                    
+                    # 결과 표시
+                    with st.container():
+                        st.markdown("### 🤖 AI 분석 결과")
+                        st.markdown(recommendations)
+                        
+                        # 자동 적용 옵션
+                        if st.button("✅ AI 제안 적용"):
+                            self._apply_ai_suggestions(recommendations)
+                else:
+                    st.warning("AI 분석을 수행할 수 없습니다. API 키를 확인해주세요.")
+                    
+            except Exception as e:
+                logger.error(f"AI 상담 처리 오류: {str(e)}")
+                st.error("AI 분석 중 오류가 발생했습니다.")
+            finally:
+                loop.close()
     
     async def _get_ai_recommendations(self, project_data: Dict) -> str:
-        """AI 추천사항 생성 - 수정된 버전"""
-        if not hasattr(st.session_state, 'ai_orchestrator'):
+        """AI 추천사항 생성 - 통합 메서드"""
+        if not hasattr(st.session_state, 'ai_orchestrator') or st.session_state.ai_orchestrator is None:
             return "AI 시스템이 초기화되지 않았습니다."
         
         ai_orchestrator = st.session_state.ai_orchestrator
         
-        prompt = f"""
-        다음 고분자 실험 프로젝트에 대한 추천사항을 제공해주세요:
-        
-        - 고분자: {project_data['polymer']}
-        - 목표 특성: {', '.join(project_data['properties'])}
-        - 예산: {project_data['budget']}만원
-        - 기간: {project_data['timeline']}주
-        - 사용 가능 장비: {', '.join(project_data['equipment'][:5])}  # 상위 5개만
-        
-        다음 내용을 포함해서 추천해주세요:
-        1. 권장 실험 설계 유형
-        2. 주요 고려 요인 (3-5개)
-        3. 예상되는 도전 과제
-        4. 성공 확률을 높이는 팁
-        """
+        # 사용자 입력 기반 프롬프트
+        if 'user_input' in project_data:
+            prompt = f"""
+            사용자의 고분자 실험 프로젝트 설명:
+            {project_data['user_input']}
+            
+            위 내용을 바탕으로 다음을 추천해주세요:
+            1. 적합한 고분자 종류
+            2. 주요 실험 요인 (3-5개)
+            3. 측정해야 할 특성
+            4. 예상되는 도전 과제
+            5. 권장 실험 설계 방법
+            """
+        else:
+            # 구조화된 데이터 기반 프롬프트
+            prompt = f"""
+            다음 고분자 실험 프로젝트에 대한 추천사항을 제공해주세요:
+            
+            - 고분자: {project_data.get('polymer', 'N/A')}
+            - 목표 특성: {', '.join(project_data.get('properties', []))}
+            - 예산: {project_data.get('budget', 0)}만원
+            - 기간: {project_data.get('timeline', 0)}주
+            - 사용 가능 장비: {', '.join(project_data.get('equipment', [])[:5])}
+            
+            다음 내용을 포함해서 추천해주세요:
+            1. 권장 실험 설계 유형
+            2. 주요 고려 요인 (3-5개)
+            3. 예상되는 도전 과제
+            4. 성공 확률을 높이는 팁
+            5. 참고할 만한 유사 연구 사례
+            """
         
         try:
-            # generate_with_single_ai 메서드 사용
+            # AI 응답 생성
             response = await ai_orchestrator.generate_with_single_ai(
                 prompt=prompt,
-                engine_id='gemini',  # Google Gemini 사용
+                engine_id='gemini',
                 temperature=0.7
             )
             
@@ -11776,270 +12483,332 @@ class ProjectSetupPage:
             logger.error(f"AI 추천 생성 오류: {str(e)}")
             return "추천사항을 생성할 수 없습니다."
     
-    def render(self, user_level: UserLevel):
-        st.title("📋 프로젝트 설정")
+    def _apply_template(self, template: Dict):
+        """템플릿 적용"""
+        st.session_state.selected_template = template
+        st.session_state.project_factors = template.get('factors', [])
+        st.session_state.project_responses = template.get('responses', [])
+        st.session_state.project_budget = template.get('typical_budget', 0)
+        st.session_state.project_timeline = template.get('typical_timeline', 0)
         
-        # AI 컨설턴트 초기화
-        if self.ai_consultant is None and hasattr(st.session_state, 'ai_orchestrator'):
-            self.ai_consultant = st.session_state.ai_orchestrator
-        
-        # 프로젝트 기본 정보
-        st.markdown("### 1. 기본 정보")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            project_name = st.text_input(
-                "프로젝트 이름",
-                placeholder="예: PET 필름 기계적 특성 최적화",
-                help="프로젝트를 구분할 수 있는 명확한 이름을 입력하세요."
+        # 추가 정보도 세션에 저장
+        if 'equipment' in template:
+            st.session_state.selected_equipment = template['equipment']
+        if 'constraints' in template:
+            st.session_state.project_constraints = template['constraints']
+    
+    def _render_polymer_comparison_modal(self, selected_polymer: str):
+        """고분자 비교 모달"""
+        with st.container():
+            st.markdown("### 📊 고분자 특성 비교")
+            
+            # 비교할 고분자 선택
+            all_polymers = self.polymer_database.get_all_polymers()
+            polymer_names = [p['name'] for p in all_polymers if p['name'] != selected_polymer]
+            
+            compare_polymers = st.multiselect(
+                "비교할 고분자 선택",
+                polymer_names,
+                max_selections=3,
+                default=polymer_names[:2] if len(polymer_names) >= 2 else polymer_names
             )
             
-            objective = st.text_area(
-                "연구 목적",
-                placeholder="이 실험을 통해 달성하고자 하는 목표를 구체적으로 작성하세요.",
-                height=100,
-                help="구체적인 목표가 있을수록 AI가 더 정확한 설계를 제안할 수 있습니다."
-            )
-        
-        with col2:
-            # 템플릿 선택
-            st.markdown("#### 템플릿 활용")
+            if compare_polymers:
+                # 비교 차트 생성
+                self._create_comparison_chart([selected_polymer] + compare_polymers)
             
-            # 템플릿 이름 목록 가져오기
-            template_names = self.project_templates.get_template_names()
-            
-            selected_template = st.selectbox(
-                "프로젝트 템플릿",
-                ["직접 설정"] + template_names,
-                help="유사한 프로젝트 템플릿을 선택하면 빠르게 시작할 수 있습니다."
-            )
-            
-            if selected_template != "직접 설정":
-                # 선택된 템플릿 정보 표시
-                template = self.project_templates.get_template_by_name(selected_template)
-                if template:
-                    with st.expander("템플릿 상세 정보", expanded=True):
-                        st.markdown(f"**설명**: {template.get('description', '템플릿 설명이 없습니다.')}")
-                        st.markdown(f"**기본 요인**: {', '.join(template.get('factors', []))}")
-                        st.markdown(f"**측정 항목**: {', '.join(template.get('responses', []))}")
-                        st.markdown(f"**예상 예산**: {template.get('typical_budget', 0)}만원")
-                        st.markdown(f"**예상 기간**: {template.get('typical_timeline', 0)}주")
-                    
-                    if st.button("템플릿 적용", type="primary"):
-                        # 템플릿 데이터를 세션 상태에 적용
-                        st.session_state.selected_template = template
-                        st.session_state.project_factors = template.get('factors', [])
-                        st.session_state.project_responses = template.get('responses', [])
-                        st.session_state.project_budget = template.get('typical_budget', 0)
-                        st.session_state.project_timeline = template.get('typical_timeline', 0)
-                        st.success(f"'{selected_template}' 템플릿이 적용되었습니다!")
-                        st.rerun()
-        
-        # 고분자 선택
-        st.markdown("### 2. 고분자 선택")
-        
-        # AI 추천 시스템
-        if user_level == UserLevel.BEGINNER:
-            st.info("""
-            💡 **초보자 가이드**: 연구하고자 하는 고분자를 선택하세요. 
-            각 고분자의 특성과 일반적인 용도가 함께 표시됩니다.
-            """)
-        
-        # 고분자 카테고리 선택
-        polymer_categories = list(POLYMER_CATEGORIES['base_types'].keys())
-        selected_category = st.selectbox(
-            "고분자 카테고리",
-            polymer_categories,
-            format_func=lambda x: POLYMER_CATEGORIES['base_types'][x]['name']
-        )
-        
-        # 구체적 고분자 선택
-        category_info = POLYMER_CATEGORIES['base_types'][selected_category]
-        polymer_examples = category_info['examples']
-        
-        col1, col2, col3 = st.columns([2, 2, 1])
-        
-        with col1:
-            selected_polymer = st.selectbox(
-                "고분자 종류",
-                polymer_examples,
-                help=category_info['description']
-            )
-        
-        with col2:
-            # 고분자 정보 표시
-            if selected_polymer:
-                polymer_info = self.polymer_database.get_polymer(selected_polymer)
-                if polymer_info:
-                    st.markdown(f"**{polymer_info['name']}**")
-                    st.markdown(f"화학식: {polymer_info.get('formula', 'N/A')}")
-                    
-                    # 주요 특성 표시
-                    if 'properties' in polymer_info:
-                        props = polymer_info['properties']
-                        st.metric("Tg (°C)", props.get('Tg', 'N/A'))
-                        st.metric("Tm (°C)", props.get('Tm', 'N/A'))
-        
-        with col3:
-            # 3D 구조 표시 버튼
-            if st.button("3D 구조 보기"):
-                st.session_state.show_3d_structure = True
-        
-        # 타겟 특성 선택
-        st.markdown("### 3. 목표 특성")
-        
-        typical_properties = category_info.get('typical_properties', [])
-        
-        selected_properties = st.multiselect(
-            "개선하고자 하는 특성",
-            typical_properties,
-            default=typical_properties[:2] if len(typical_properties) >= 2 else typical_properties,
-            help="실험을 통해 최적화하고자 하는 특성들을 선택하세요."
-        )
-        
-        # 제약 조건
-        st.markdown("### 4. 제약 조건")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            budget = st.number_input(
-                "예산 (만원)",
-                min_value=10,
-                max_value=10000,
-                value=500,
-                step=50,
-                help="실험에 사용할 수 있는 총 예산"
-            )
-        
-        with col2:
-            timeline = st.number_input(
-                "기간 (주)",
-                min_value=1,
-                max_value=52,
-                value=4,
-                help="실험 완료까지의 목표 기간"
-            )
-        
-        with col3:
-            max_experiments = st.number_input(
-                "최대 실험 수",
-                min_value=5,
-                max_value=1000,
-                value=50,
-                help="수행 가능한 최대 실험 횟수"
-            )
-        
-        # 사용 가능한 장비
-        st.markdown("### 5. 사용 가능한 장비")
-        
-        equipment_categories = {
-            "가공 장비": ["사출성형기", "압출기", "핫프레스", "스핀코터", "3D 프린터"],
-            "측정 장비": ["만능시험기", "충격시험기", "경도계", "유변물성측정기"],
-            "열분석": ["DSC", "TGA", "DMA", "TMA", "열전도도측정기"],
-            "구조분석": ["FTIR", "XRD", "SEM", "TEM", "AFM"],
-            "분자량분석": ["GPC", "점도계", "질량분석기"]
-        }
-        
-        selected_equipment = []
-        
-        for category, items in equipment_categories.items():
-            with st.expander(f"{category} ({len(items)}종)"):
-                for item in items:
-                    if st.checkbox(item, key=f"equip_{item}"):
-                        selected_equipment.append(item)
-        
-        # AI 추천
-        st.markdown("### 6. AI 추천사항")
-        
-        if st.button("AI 추천 받기", type="primary"):
-            with st.spinner("AI가 프로젝트를 분석 중입니다..."):
-                # asyncio.run 대신 st.session_state에서 이벤트 루프 사용
-                try:
-                    # 새 이벤트 루프 생성
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    
-                    recommendations = loop.run_until_complete(
-                        self._get_ai_recommendations(
-                            {
-                                'polymer': selected_polymer,
-                                'properties': selected_properties,
-                                'budget': budget,
-                                'timeline': timeline,
-                                'equipment': selected_equipment
-                            }
-                        )
-                    )
-                finally:
-                    loop.close()
-                
-                if recommendations:
-                    st.success("AI 추천사항이 생성되었습니다!")
-                    
-                    # 추천 내용 표시
-                    with st.expander("🤖 AI 추천사항", expanded=True):
-                        st.markdown(recommendations)
-                        
-                        # 추천사항 저장 옵션
-                        if st.button("추천사항 프로젝트에 적용"):
-                            st.session_state.ai_recommendations = recommendations
-                            st.info("AI 추천사항이 프로젝트에 저장되었습니다.")
-        
-        # 저장 버튼
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
-        with col2:
-            if st.button("프로젝트 저장 및 다음 단계", type="primary", use_container_width=True):
-                # 프로젝트 정보 저장
-                project_info = {
-                    'name': project_name,
-                    'objective': objective,
-                    'polymer_type': selected_polymer,
-                    'polymer_category': selected_category,
-                    'target_properties': selected_properties,
-                    'budget': budget,
-                    'timeline': timeline,
-                    'max_experiments': max_experiments,
-                    'equipment': selected_equipment,
-                    'created_at': datetime.now(),
-                    'user_level': user_level.name
-                }
-                
-                st.session_state.project_info = project_info
-                st.session_state.current_page = 'experiment_design'
-                st.success("프로젝트가 저장되었습니다!")
+            if st.button("닫기", key="close_comparison"):
+                st.session_state.show_property_comparison = False
                 st.rerun()
     
-    async def _get_ai_recommendations(self, project_data: Dict) -> str:
-        """AI 추천사항 생성"""
-        if not hasattr(st.session_state, 'ai_orchestrator'):
-            return "AI 시스템이 초기화되지 않았습니다."
+    def _check_project_completion(self) -> Dict:
+        """프로젝트 완성도 체크"""
+        required_fields = {
+            'project_name_input': '프로젝트 이름',
+            'project_objective_input': '연구 목적',
+            'polymer_type_select': '고분자 종류',
+            'target_properties_select': '목표 특성',
+            'budget_input': '예산',
+            'timeline_input': '기간'
+        }
         
-        prompt = f"""
-        다음 고분자 실험 프로젝트에 대한 추천사항을 제공해주세요:
+        missing = []
+        completed = 0
         
-        - 고분자: {project_data['polymer']}
-        - 목표 특성: {', '.join(project_data['properties'])}
-        - 예산: {project_data['budget']}만원
-        - 기간: {project_data['timeline']}주
-        - 사용 가능 장비: {', '.join(project_data['equipment'][:5])}  # 상위 5개만
+        for field, name in required_fields.items():
+            value = st.session_state.get(field)
+            if value:
+                completed += 1
+            else:
+                missing.append(name)
         
-        다음 내용을 포함해서 추천해주세요:
-        1. 권장 실험 설계 유형
-        2. 주요 고려 요인 (3-5개)
-        3. 예상되는 도전 과제
-        4. 성공 확률을 높이는 팁
-        """
+        # 장비 선택 체크
+        if not st.session_state.get('selected_equipment', []):
+            missing.append('사용 가능한 장비')
+        else:
+            completed += 1
         
-        response = await st.session_state.ai_orchestrator.query_single(
-            'google_gemini',
-            prompt,
-            temperature=0.7
+        total = len(required_fields) + 1  # 장비 포함
+        percentage = int((completed / total) * 100)
+        
+        return {
+            'percentage': percentage,
+            'missing': missing,
+            'completed': completed,
+            'total': total
+        }
+    
+    def _validate_project_settings(self) -> Dict[str, Any]:
+        """프로젝트 설정 검증"""
+        validation_result = {'valid': True, 'warnings': [], 'errors': []}
+        
+        # 필수 항목 체크
+        if not st.session_state.get('project_name_input'):
+            validation_result['errors'].append("프로젝트 이름이 필요합니다")
+            validation_result['valid'] = False
+        
+        # 예산/기간 검증
+        budget = st.session_state.get('budget_input', 0)
+        timeline = st.session_state.get('timeline_input', 0)
+        max_experiments = st.session_state.get('max_experiments_input', 0)
+        
+        if budget > 0 and max_experiments > 0:
+            cost_per_exp = budget / max_experiments
+            if cost_per_exp < 10:
+                validation_result['warnings'].append("실험당 예산이 너무 적습니다")
+        
+        if timeline < 2:
+            validation_result['warnings'].append("실험 기간이 너무 짧을 수 있습니다")
+        
+        # 장비 호환성 체크
+        selected_equipment = st.session_state.get('selected_equipment', [])
+        target_properties = st.session_state.get('target_properties_select', [])
+        
+        # 간단한 호환성 체크 (실제로는 더 복잡한 로직 필요)
+        if '인장강도' in target_properties and '만능시험기' not in selected_equipment:
+            validation_result['warnings'].append("인장강도 측정을 위해 만능시험기가 필요합니다")
+        
+        # 최종 메시지 생성
+        if validation_result['errors']:
+            validation_result['message'] = "; ".join(validation_result['errors'])
+        elif validation_result['warnings']:
+            validation_result['message'] = "경고: " + "; ".join(validation_result['warnings'])
+        else:
+            validation_result['message'] = "모든 설정이 유효합니다"
+        
+        return validation_result
+    
+    def _save_project(self):
+        """프로젝트 저장"""
+        project_info = {
+            'id': generate_unique_id('PROJECT'),
+            'name': st.session_state.get('project_name_input', ''),
+            'objective': st.session_state.get('project_objective_input', ''),
+            'polymer_type': st.session_state.get('polymer_type_select', ''),
+            'polymer_category': st.session_state.get('polymer_category_select', ''),
+            'target_properties': st.session_state.get('target_properties_select', []),
+            'property_targets': st.session_state.get('property_targets', {}),
+            'budget': st.session_state.get('budget_input', 0),
+            'timeline': st.session_state.get('timeline_input', 0),
+            'max_experiments': st.session_state.get('max_experiments_input', 0),
+            'equipment': st.session_state.get('selected_equipment', []),
+            'constraints': {
+                'temperature_range': st.session_state.get('temp_range', (20, 200)),
+                'humidity_control': st.session_state.get('humidity_control', False),
+                'safety_level': st.session_state.get('safety_level', '주의'),
+                'clean_room': st.session_state.get('clean_room', False)
+            },
+            'created_at': datetime.now(),
+            'updated_at': datetime.now(),
+            'user_level': st.session_state.get('user_level', UserLevel.BEGINNER).name,
+            'ai_recommendations': st.session_state.get('ai_recommendations', None),
+            'template_used': st.session_state.get('selected_template', None)
+        }
+        
+        # 세션에 저장
+        st.session_state.project_info = project_info
+        
+        # DB에 저장 (구현 필요 시)
+        if hasattr(st.session_state, 'db_manager'):
+            try:
+                project_obj = ProjectInfo(
+                    id=project_info['id'],
+                    name=project_info['name'],
+                    description=project_info['objective'],
+                    polymer_type=project_info['polymer_type'],
+                    objectives=project_info['target_properties'],
+                    constraints=project_info['constraints'],
+                    created_at=project_info['created_at'],
+                    updated_at=project_info['updated_at'],
+                    owner=st.session_state.get('user_id', 'default_user')
+                )
+                
+                st.session_state.db_manager.save_project(project_obj)
+                logger.info(f"프로젝트 저장 완료: {project_info['id']}")
+            except Exception as e:
+                logger.error(f"프로젝트 DB 저장 실패: {str(e)}")
+    
+    def _run_ai_analysis(self, ai_model: str, depth: str):
+        """AI 분석 실행"""
+        with st.spinner(f"AI 분석 중... (모델: {ai_model}, 깊이: {depth})"):
+            # 현재 프로젝트 데이터 수집
+            project_data = {
+                'polymer': st.session_state.get('polymer_type_select', ''),
+                'properties': st.session_state.get('target_properties_select', []),
+                'budget': st.session_state.get('budget_input', 0),
+                'timeline': st.session_state.get('timeline_input', 0),
+                'equipment': st.session_state.get('selected_equipment', [])
+            }
+            
+            # AI 분석 실행
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                recommendations = loop.run_until_complete(
+                    self._get_ai_recommendations(project_data)
+                )
+                
+                st.session_state.ai_recommendations = recommendations
+                st.success("AI 분석 완료!")
+                
+            except Exception as e:
+                logger.error(f"AI 분석 오류: {str(e)}")
+                st.error("AI 분석 중 오류가 발생했습니다.")
+            finally:
+                loop.close()
+    
+    def _display_ai_recommendations(self):
+        """AI 추천 결과 표시"""
+        recommendations = st.session_state.get('ai_recommendations', '')
+        
+        if recommendations:
+            with st.container():
+                # 추천 내용을 섹션별로 파싱 (간단한 예시)
+                st.markdown("### 🤖 AI 추천 결과")
+                
+                # 전체 내용 표시
+                with st.expander("전체 추천사항", expanded=True):
+                    st.markdown(recommendations)
+                
+                # 액션 버튼
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("📋 추천사항 적용"):
+                        st.info("AI 추천사항을 프로젝트에 반영합니다.")
+                        # 실제 적용 로직 구현
+                
+                with col2:
+                    if st.button("🔄 다시 분석"):
+                        st.session_state.ai_recommendations = None
+                        st.rerun()
+                
+                with col3:
+                    if st.button("💾 추천사항 저장"):
+                        # 추천사항 저장 로직
+                        st.success("추천사항이 저장되었습니다.")
+    
+    def _save_as_template(self):
+        """현재 설정을 템플릿으로 저장"""
+        template_name = st.text_input("템플릿 이름")
+        template_description = st.text_area("템플릿 설명")
+        
+        if st.button("템플릿 저장", key="save_template_confirm"):
+            template_data = {
+                'name': template_name,
+                'description': template_description,
+                'factors': st.session_state.get('project_factors', []),
+                'responses': st.session_state.get('target_properties_select', []),
+                'typical_budget': st.session_state.get('budget_input', 0),
+                'typical_timeline': st.session_state.get('timeline_input', 0),
+                'equipment': st.session_state.get('selected_equipment', []),
+                'polymer_type': st.session_state.get('polymer_type_select', '')
+            }
+            
+            # 템플릿 저장 (실제 구현 필요)
+            st.success(f"템플릿 '{template_name}'이 저장되었습니다!")
+    
+    def _export_project(self):
+        """프로젝트 내보내기"""
+        export_format = st.radio("내보내기 형식", ["JSON", "Excel", "PDF"])
+        
+        if st.button("내보내기", key="export_confirm"):
+            # 프로젝트 데이터 수집
+            project_data = {
+                'project_info': st.session_state.get('project_info', {}),
+                'equipment': st.session_state.get('selected_equipment', []),
+                'constraints': {
+                    'temperature_range': st.session_state.get('temp_range', (20, 200)),
+                    'humidity_control': st.session_state.get('humidity_control', False),
+                    'safety_level': st.session_state.get('safety_level', '주의'),
+                    'clean_room': st.session_state.get('clean_room', False)
+                }
+            }
+            
+            if export_format == "JSON":
+                # JSON 다운로드
+                json_str = json.dumps(project_data, ensure_ascii=False, indent=2, default=str)
+                st.download_button(
+                    label="📥 JSON 다운로드",
+                    data=json_str,
+                    file_name=f"project_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
+            elif export_format == "Excel":
+                # Excel 생성 (구현 필요)
+                st.info("Excel 내보내기 기능은 준비 중입니다.")
+            elif export_format == "PDF":
+                # PDF 생성 (구현 필요)
+                st.info("PDF 내보내기 기능은 준비 중입니다.")
+
+    def _create_comparison_chart(self, polymers: List[str]):
+        """고분자 비교 차트 생성 (예시)"""
+        import plotly.graph_objects as go
+        
+        # 더미 데이터 (실제로는 DB에서 가져와야 함)
+        properties = ['Tg (°C)', 'Tm (°C)', '인장강도 (MPa)', '신장률 (%)']
+        
+        fig = go.Figure()
+        
+        for polymer in polymers:
+            # 실제로는 각 고분자의 실제 데이터를 사용
+            values = [60 + np.random.randint(-20, 20), 
+                     180 + np.random.randint(-30, 30),
+                     65 + np.random.randint(-15, 15),
+                     300 + np.random.randint(-100, 100)]
+            
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=properties,
+                fill='toself',
+                name=polymer
+            ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 400]
+                )),
+            showlegend=True
         )
         
-        return response.get('response', '추천사항을 생성할 수 없습니다.')
+        st.plotly_chart(fig, use_container_width=True)
+
+    def _apply_ai_suggestions(self, recommendations: str):
+        """AI 제안사항 적용 (구현 필요)"""
+        st.info("AI 제안사항을 프로젝트에 적용하는 기능은 개발 중입니다.")
+        # 실제로는 recommendations를 파싱하여 각 필드에 자동으로 채워넣는 로직 구현
+
+# ==================== ValidationEngine 클래스 (선택적) ====================
+class ValidationEngine:
+    """프로젝트 검증 엔진"""
+    
+    def validate_project(self, project_data: Dict) -> Dict[str, Any]:
+        """프로젝트 데이터 검증"""
+        # 검증 로직 구현
+        return {'valid': True, 'errors': [], 'warnings': []}
 
 # ==================== 실험 설계 페이지 ====================
 class ExperimentDesignPage:
