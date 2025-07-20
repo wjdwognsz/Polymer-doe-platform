@@ -14658,7 +14658,7 @@ class PolymerDOEApp:
             
             # 2. API 키 관리자 초기화 (전역 변수)
             if api_key_manager is None:
-                api_key_manager = APIKeyManager()
+                api_key_manager = APIManager()
             
             # 3. AI 오케스트레이터 초기화
             try:
