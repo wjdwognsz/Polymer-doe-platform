@@ -11058,7 +11058,7 @@ class UserInterfaceSystem:
                 "현재 레벨",
                 options=list(level_names.keys()),
                 format_func=lambda x: level_names[x],
-                key='user_level_selector_main',  # 고유한 키로 변경
+                key='ui_sidebar_level_selector',  # 고유한 키로 변경
                 index=list(level_names.keys()).index(current_level)
             )
             
@@ -11066,8 +11066,7 @@ class UserInterfaceSystem:
             if selected_level != current_level:
                 st.session_state.user_level = selected_level
                 self.current_user_level = selected_level
-            else:
-                self.current_user_level = selected_level
+                st.rerun()
             
             # 네비게이션 메뉴
             st.markdown("### 📍 네비게이션")
@@ -11853,7 +11852,7 @@ class ProjectSetupPage:
         with col2:
             # 고분자 정보 표시
             if selected_polymer:
-                polymer_info = self.polymer_database.get_polymer_info(selected_polymer)
+                polymer_info = self.polymer_database.get_polymer(selected_polymer)
                 if polymer_info:
                     st.markdown(f"**{polymer_info['name']}**")
                     st.markdown(f"화학식: {polymer_info.get('formula', 'N/A')}")
