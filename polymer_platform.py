@@ -915,7 +915,7 @@ class ProjectInfo:
     polymer_type: str
     polymer_system: Dict[str, Any]
     objectives: List[str]
-    constraints: List[str, Any]
+    constraints: Dist[str, Any]
     created_at: datetime
     updated_at: datetime
     owner: str
