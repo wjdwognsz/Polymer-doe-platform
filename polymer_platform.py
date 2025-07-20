@@ -14833,7 +14833,42 @@ class PolymerDOEApp:
     def __init__(self):
         self._setup_page_config()
         self._apply_custom_css()
-        
+
+    def run(self):
+        """애플리케이션 실행"""
+        try:
+            # 세션 상태 초기화 (한 번만 실행)
+            self.initialize_session_state()
+            
+            # 초기화가 완료될 때까지 대기
+            if not st.session_state.get('init_complete', False):
+                with st.spinner("시스템을 초기화하고 있습니다. 잠시만 기다려주세요..."):
+                    # 비동기 함수를 동기적으로 실행
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(self._initialize_systems())
+                        st.session_state.init_complete = True
+                    except Exception as e:
+                        st.error(f"초기화 실패: {str(e)}")
+                        logger.error(f"초기화 실패: {str(e)}")
+                        return
+                    finally:
+                        loop.close()
+            
+            # UI 시스템 생성 및 렌더링
+            ui_system = UserInterfaceSystem()
+            ui_system.render()
+            
+        except Exception as e:
+            logger.error(f"애플리케이션 실행 오류: {e}")
+            st.error("애플리케이션 실행 중 오류가 발생했습니다.")
+            
+            # 디버그 정보 표시
+            with st.expander("디버그 정보"):
+                st.code(str(e))
+                st.code(traceback.format_exc())
+    
     def _setup_page_config(self):
         """페이지 설정"""
         st.set_page_config(
@@ -15019,44 +15054,7 @@ class PolymerDOEApp:
             import traceback
             logger.error(traceback.format_exc())
     
-    def run(self):
-        """애플리케이션 실행"""
-        try:
-            # 시스템 초기화 (self를 사용하여 클래스 메서드 호출)
-            self._initialize_systems()
-            
-            # UI 시스템 생성 및 렌더링
-            ui_system = UserInterfaceSystem()
-            ui_system.render()
-            
-        except Exception as e:
-            logger.error(f"애플리케이션 실행 오류: {e}")
-            st.error("애플리케이션 실행 중 오류가 발생했습니다.")
-            
-            # 디버그 정보 표시
-            with st.expander("디버그 정보"):
-                st.code(str(e))
-                st.code(traceback.format_exc())
-        
-        # 초기화 대기
-        if not st.session_state.get('init_complete', False):
-            with st.spinner("시스템을 초기화하고 있습니다. 잠시만 기다려주세요..."):
-                # 비동기 함수를 동기적으로 실행
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self._initialize_systems())
-                    st.session_state.init_complete = True
-                except Exception as e:
-                    st.error(f"초기화 실패: {str(e)}")
-                    return
-                finally:
-                    loop.close()
-        
-        # UI 시스템 생성 및 렌더링
-        ui_system = UserInterfaceSystem()
-        ui_system.render()
-    
+   
     def _apply_custom_css(self):
         """커스텀 CSS 적용"""
         st.markdown("""
