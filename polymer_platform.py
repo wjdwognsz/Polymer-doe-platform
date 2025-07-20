@@ -14647,18 +14647,18 @@ class PolymerDOEApp:
                 finally:
                     loop.close()
     
-    def _initialize_systems(self):
-        """시스템 초기화 함수 (클래스 메서드)"""
-        global api_key_manager
+    async def _initialize_systems(self):
+        """시스템 초기화 함수 - 수정된 버전"""
+        # global api_key_manager  # 이 줄 제거
         
         try:
             # 1. 설정 관리자 초기화
             if 'config_manager' not in st.session_state:
                 st.session_state.config_manager = ConfigManager()
             
-            # 2. API 키 관리자 초기화 (전역 변수)
-            if api_key_manager is None:
-                api_key_manager = APIManager()
+            # 2. API 매니저 초기화 (세션 상태에 저장)
+            if 'api_manager' not in st.session_state:
+                st.session_state.api_manager = APIManager()
             
             # 3. AI 오케스트레이터 초기화
             try:
