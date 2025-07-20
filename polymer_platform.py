@@ -14917,14 +14917,15 @@ class PolymerDOEApp:
             logger.info("세션 상태 초기화 완료")
         
             # AI 및 DB 시스템 초기화 - 동기적으로 실행
-            with st.spinner("시스템 초기화 중..."):
-                # 새 이벤트 루프에서 비동기 함수 실행
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self._initialize_systems())
-                finally:
-                    loop.close()
+            if not st.session_state.get('init_complete', False):
+                with st.spinner("시스템 초기화 중..."):
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(self._initialize_systems())
+                        st.session_state.init_complete = True
+                    finally:
+                        loop.close()
 
 
     
