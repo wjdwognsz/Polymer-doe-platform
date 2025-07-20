@@ -915,7 +915,7 @@ class ProjectInfo:
     polymer_type: str
     polymer_system: Dict[str, Any]
     objectives: List[str]
-    constraints: List[str]
+    constraints: List[str, Any]
     created_at: datetime
     updated_at: datetime
     owner: str
@@ -1129,11 +1129,13 @@ def validate_input(value: Any,
     
     return True, None
 
-def generate_unique_id(prefix: str = "") -> str:
+def generate_unique_id(prefix: str = "PROJ") -> str:
     """고유 ID 생성"""
+    from datetime import datetime
+    import random
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"{prefix}_{timestamp}_{random_str}" if prefix else f"{timestamp}_{random_str}"
+    random_suffix = ''.join(random.choices('0123456789ABCDEF', k=4))
+    return f"{prefix}_{timestamp}_{random_suffix}"
 
 def safe_float_conversion(value: Any, default: float = 0.0) -> float:
     """안전한 float 변환"""
@@ -10185,6 +10187,22 @@ class ProjectTemplates:
                 'typical_budget': 800,
                 'typical_timeline': 6,
                 'description': '표면 코팅, 도료 개발에 적합한 템플릿'
+            },
+            "기계적 특성 최적화": {
+                "description": "고분자의 인장강도, 충격강도 등 기계적 특성 개선",
+                "factors": ["가공온도", "압력", "첨가제 함량", "가공시간"],
+                "responses": ["인장강도", "충격강도", "신장률", "탄성계수"],
+                "typical_budget": 500,
+                "typical_timeline": 4,
+                "equipment": ["사출성형기", "만능시험기", "충격시험기"]
+            },
+            "열적 특성 개선": {
+                "description": "내열성, 열안정성 향상을 위한 실험",
+                "factors": ["열안정제 종류", "열안정제 함량", "가공온도", "냉각속도"],
+                "responses": ["열변형온도", "유리전이온도", "용융온도", "열분해온도"],
+                "typical_budget": 400,
+                "typical_timeline": 3,
+                "equipment": ["DSC", "TGA", "HDT 시험기"]
             }
         }
     
