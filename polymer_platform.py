@@ -3375,13 +3375,12 @@ api_key_manager = None  # 전역 변수 선언
 # Polymer-doe-platform - Part 4
 # ==================== Rate Limiter ====================
 class RateLimiter:
-    """API 호출 속도 제한기"""
-    
+    """API 호출 속도 제한 관리"""
     def __init__(self, api_id: str, limits: Dict[str, int]):
         self.api_id = api_id
         self.limits = limits  # {'rpm': 60, 'rpd': 1000}
         self.calls = defaultdict(list)
-    
+        
     async def acquire(self):
         """호출 권한 획득"""
         now = time.time()
@@ -3409,13 +3408,6 @@ class RateLimiter:
                 raise Exception(f"일일 API 한도 초과")
             
             self.calls['day'].append(now)
-            
-        # 토큰 제한 (tpm)
-       if 'tpm' in self.limits:
-           # 토큰 수는 별도로 추적 필요
-           pass
-        
-    return True
     
     def _record_request(self):
         """요청 기록"""
