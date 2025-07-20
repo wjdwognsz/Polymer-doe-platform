@@ -11058,7 +11058,7 @@ class UserInterfaceSystem:
                 "현재 레벨",
                 options=list(level_names.keys()),
                 format_func=lambda x: level_names[x],
-                key='sidebar_user_level_selector',  # 고유한 키로 변경
+                key='user_level_selector_main',  # 고유한 키로 변경
                 index=list(level_names.keys()).index(current_level)
             )
             
