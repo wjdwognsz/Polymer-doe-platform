@@ -11719,6 +11719,46 @@ class ProjectSetupPage:
         self.project_templates = ProjectTemplates()
         self.ai_consultant = None
     
+    async def _get_ai_recommendations(self, project_data: Dict) -> str:
+        """AI 추천사항 생성 - 수정된 버전"""
+        if not hasattr(st.session_state, 'ai_orchestrator'):
+            return "AI 시스템이 초기화되지 않았습니다."
+        
+        ai_orchestrator = st.session_state.ai_orchestrator
+        
+        prompt = f"""
+        다음 고분자 실험 프로젝트에 대한 추천사항을 제공해주세요:
+        
+        - 고분자: {project_data['polymer']}
+        - 목표 특성: {', '.join(project_data['properties'])}
+        - 예산: {project_data['budget']}만원
+        - 기간: {project_data['timeline']}주
+        - 사용 가능 장비: {', '.join(project_data['equipment'][:5])}  # 상위 5개만
+        
+        다음 내용을 포함해서 추천해주세요:
+        1. 권장 실험 설계 유형
+        2. 주요 고려 요인 (3-5개)
+        3. 예상되는 도전 과제
+        4. 성공 확률을 높이는 팁
+        """
+        
+        try:
+            # generate_with_single_ai 메서드 사용
+            response = await ai_orchestrator.generate_with_single_ai(
+                prompt=prompt,
+                engine_id='gemini',  # Google Gemini 사용
+                temperature=0.7
+            )
+            
+            if response.success:
+                return response.content
+            else:
+                return f"AI 응답 실패: {response.error}"
+                
+        except Exception as e:
+            logger.error(f"AI 추천 생성 오류: {str(e)}")
+            return "추천사항을 생성할 수 없습니다."
+    
     def render(self, user_level: UserLevel):
         st.title("📋 프로젝트 설정")
         
@@ -11898,17 +11938,25 @@ class ProjectSetupPage:
         
         if st.button("AI 추천 받기", type="primary"):
             with st.spinner("AI가 프로젝트를 분석 중입니다..."):
-                recommendations = asyncio.run(
-                    self._get_ai_recommendations(
-                        {
-                            'polymer': selected_polymer,
-                            'properties': selected_properties,
-                            'budget': budget,
-                            'timeline': timeline,
-                            'equipment': selected_equipment
-                        }
+                # asyncio.run 대신 st.session_state에서 이벤트 루프 사용
+                try:
+                    # 새 이벤트 루프 생성
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    recommendations = loop.run_until_complete(
+                        self._get_ai_recommendations(
+                            {
+                                'polymer': selected_polymer,
+                                'properties': selected_properties,
+                                'budget': budget,
+                                'timeline': timeline,
+                                'equipment': selected_equipment
+                            }
+                        )
                     )
-                )
+                finally:
+                    loop.close()
                 
                 if recommendations:
                     st.success("AI 추천사항이 생성되었습니다!")
@@ -11916,6 +11964,11 @@ class ProjectSetupPage:
                     # 추천 내용 표시
                     with st.expander("🤖 AI 추천사항", expanded=True):
                         st.markdown(recommendations)
+                        
+                        # 추천사항 저장 옵션
+                        if st.button("추천사항 프로젝트에 적용"):
+                            st.session_state.ai_recommendations = recommendations
+                            st.info("AI 추천사항이 프로젝트에 저장되었습니다.")
         
         # 저장 버튼
         col1, col2, col3 = st.columns([1, 1, 1])
