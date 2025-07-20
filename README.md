@@ -1,17 +1,17 @@
 🧬 고분자 실험 설계 플랫폼 - 통합 실행 가이드
-📋 체크리스트
-1. 필수 패키지 설치
-bashpip install streamlit pandas numpy plotly google-generativeai asyncio
-2. 디렉토리 구조
-polymer-doe-platform/
-├── polymer_platform.py      # 메인 애플리케이션
-├── project_setup_page.py    # 프로젝트 설정 페이지 (제공된 코드)
-├── .streamlit/
-│   └── secrets.toml        # API 키 설정
-└── projects/               # 프로젝트 저장 폴더 (자동 생성)
+# 📋 체크리스트
+# 1. 필수 패키지 설치
+- pip install streamlit pandas numpy plotly google-generativeai asyncio
+# 2. 디렉토리 구조 (github)
+- polymer-doe-platform/
+    - polymer_platform.py      # 메인 애플리케이션
+    - project_setup_page.py    # 프로젝트 설정 페이지 (제공된 코드)
+    - .streamlit/
+        - secrets.toml        # API 키 설정
+    - projects/               # 프로젝트 저장 폴더 (자동 생성)
 3. secrets.toml 설정
 .streamlit/secrets.toml 파일 생성:
-toml# AI API Keys
+# AI API Keys
 google_gemini = "your-gemini-api-key"
 xai_grok = ""  # 선택사항
 sambanova = ""  # 선택사항
