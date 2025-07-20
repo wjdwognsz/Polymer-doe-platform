@@ -10924,7 +10924,8 @@ class UserInterfaceSystem:
             'learning_center': LearningCenterPage(),
             'collaboration': CollaborationPage()
         }
-        self.current_user_level = UserLevel.BEGINNER
+        # 세션 상태에서 사용자 레벨 가져오기 (중복 방지)
+        self.current_user_level = st.session_state.get('user_level', UserLevel.BEGINNER)
         self.help_system = HelpSystem()
         self.tutorial_system = TutorialSystem()
         
@@ -10938,7 +10939,7 @@ class UserInterfaceSystem:
         if page in self.pages:
             self.pages[page].render(self.current_user_level)
         
-        # 도움말 시스템 - 수정된 부분
+        # 도움말 시스템
         if self.current_user_level in [UserLevel.BEGINNER, UserLevel.INTERMEDIATE]:
             self.help_system.show_contextual_help(page, self.current_user_level)
     
@@ -10947,7 +10948,7 @@ class UserInterfaceSystem:
         with st.sidebar:
             st.title("🧬 고분자 실험 설계 플랫폼")
             
-            # 사용자 레벨 선택
+            # 사용자 레벨 선택 - 고유한 키 사용
             st.markdown("### 👤 사용자 레벨")
             level_names = {
                 UserLevel.BEGINNER: "🌱 초보자",
@@ -10956,15 +10957,25 @@ class UserInterfaceSystem:
                 UserLevel.EXPERT: "🎓 전문가"
             }
             
+            # 세션 상태에서 현재 레벨 가져오기
+            current_level = st.session_state.get('user_level', UserLevel.BEGINNER)
+            
             selected_level = st.selectbox(
                 "현재 레벨",
                 options=list(level_names.keys()),
                 format_func=lambda x: level_names[x],
-                key='user_level'
+                key='sidebar_user_level_selector',  # 고유한 키로 변경
+                index=list(level_names.keys()).index(current_level)
             )
-            self.current_user_level = selected_level
             
-            # 네비게이션
+            # 레벨이 변경되면 세션 상태 업데이트
+            if selected_level != current_level:
+                st.session_state.user_level = selected_level
+                self.current_user_level = selected_level
+            else:
+                self.current_user_level = selected_level
+            
+            # 네비게이션 메뉴
             st.markdown("### 📍 네비게이션")
             page_names = {
                 'home': "🏠 홈",
@@ -10977,9 +10988,14 @@ class UserInterfaceSystem:
             }
             
             for page_key, page_name in page_names.items():
-                if st.button(page_name, key=f"nav_{page_key}"):
+                if st.button(page_name, key=f"nav_{page_key}", use_container_width=True):
                     st.session_state.current_page = page_key
                     st.rerun()
+            
+            # 추가 정보
+            st.markdown("---")
+            st.markdown("### ℹ️ 정보")
+            st.info(f"현재 레벨: {level_names[self.current_user_level]}")
             
             # API 설정
             st.markdown("### ⚙️ API 설정")
@@ -14674,7 +14690,11 @@ class PolymerDOEApp:
         if 'initialized' not in st.session_state:
             st.session_state.initialized = True
             st.session_state.current_page = 'home'
-            st.session_state.user_level = UserLevel.BEGINNER
+            
+            # user_level이 없으면 초기화
+            if 'user_level' not in st.session_state:
+                st.session_state.user_level = UserLevel.BEGINNER
+                
             st.session_state.project_info = None
             st.session_state.experiment_design = None
             st.session_state.experimental_data = None
@@ -14774,7 +14794,8 @@ class PolymerDOEApp:
             
             logger.info("시스템 초기화 완료")
             
-            if api_manager:
+            if 'api_manager' in st.session_state:
+                api_manager = st.session_state.api_manager
                 logger.info("=== API 키 디버깅 정보 ===")
     
                 # api_keys는 st.session_state에 저장됨
