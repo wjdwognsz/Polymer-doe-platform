@@ -3379,42 +3379,43 @@ class RateLimiter:
     
     def __init__(self, api_id: str, limits: Dict[str, int]):
         self.api_id = api_id
-        self.limits = limits  # {'rpm': 60, 'rpd': 1500, 'tpm': 10000}
-        self.calls = defaultdict(lambda: deque(maxlen=10000))
-        self.lock = threading.Lock()
+        self.limits = limits  # {'rpm': 60, 'rpd': 1000}
+        self.calls = defaultdict(list)
     
     async def acquire(self):
         """호출 권한 획득"""
-        while not self._can_make_request():
-            await asyncio.sleep(0.1)
+        now = time.time()
         
-        self._record_request()
-    
-    def _can_make_request(self) -> bool:
-        """요청 가능 여부 확인"""
-        now = datetime.now()
-        
-        with self.lock:
-            # 분당 제한 (rpm)
-            if 'rpm' in self.limits:
-                minute_ago = now - timedelta(minutes=1)
-                recent_calls = [t for t in self.calls['minute'] if t > minute_ago]
-                if len(recent_calls) >= self.limits['rpm']:
-                    return False
+        # 분당 제한 확인
+        if 'rpm' in self.limits:
+            minute_ago = now - 60
+            self.calls['minute'] = [t for t in self.calls['minute'] if t > minute_ago]
             
-            # 일일 제한 (rpd)
-            if 'rpd' in self.limits:
-                day_ago = now - timedelta(days=1)
-                recent_calls = [t for t in self.calls['day'] if t > day_ago]
-                if len(recent_calls) >= self.limits['rpd']:
-                    return False
+            if len(self.calls['minute']) >= self.limits['rpm']:
+                wait_time = 60 - (now - self.calls['minute'][0])
+                await asyncio.sleep(wait_time)
+                return await self.acquire()
             
-            # 토큰 제한 (tpm)
-            if 'tpm' in self.limits:
-                # 토큰 수는 별도로 추적 필요
-                pass
+            self.calls['minute'].append(now)
         
-        return True
+        # 일당 제한 확인
+        if 'rpd' in self.limits:
+            day_ago = now - 86400
+            self.calls['day'] = [t for t in self.calls['day'] if t > day_ago]
+            
+            if len(self.calls['day']) >= self.limits['rpd']:
+                wait_time = 86400 - (now - self.calls['day'][0])
+                logger.warning(f"{self.api_id} 일일 한도 도달. {wait_time/3600:.1f}시간 대기 필요")
+                raise Exception(f"일일 API 한도 초과")
+            
+            self.calls['day'].append(now)
+            
+        # 토큰 제한 (tpm)
+       if 'tpm' in self.limits:
+           # 토큰 수는 별도로 추적 필요
+           pass
+        
+    return True
     
     def _record_request(self):
         """요청 기록"""
@@ -11270,175 +11271,212 @@ def _render_api_settings_modal(self):
         # 하단 도움말
         with st.expander("❓ API 키 얻는 방법 및 사용 가이드"):
             self._render_api_help_guide()
+
+
+def _render_category_apis(self, api_manager: APIManager, category: str, apis: List[Dict]):
+    """카테고리별 API 설정 렌더링"""
+    
+    # 카테고리 설명
+    category_descriptions = {
+        'ai': "AI 모델 API는 텍스트 생성, 분석, 코드 작성 등에 사용됩니다.",
+        'database': "과학 데이터베이스 API는 재료 정보, 화학 구조, 문헌 검색에 사용됩니다.",
+        'repository': "저장소 API는 코드, 데이터셋, 프로토콜 검색에 사용됩니다."
+    }
+    
+    if category in category_descriptions:
+        st.info(category_descriptions[category])
+    
+    # API별 설정
+    for api_info in apis:
+        api_id = api_info['id']
+        api_config = api_manager.api_configs.get(api_id, {})
+        
+        with st.expander(
+            f"{'✅' if api_info['configured'] else '⭕'} {api_info['name']}", 
+            expanded=not api_info['configured']
+        ):
+            # API 설명
+            col1, col2 = st.columns([3, 1])
             
-            # API 키 입력 폼
-            with st.form("api_keys_form"):
-                st.markdown("### AI API Keys")
+            with col1:
+                # 기능 표시
+                if api_info['features']:
+                    st.markdown("**주요 기능:**")
+                    features_text = " • ".join(api_info['features'])
+                    st.caption(features_text)
                 
-                # Streamlit secrets에서 기본값 가져오기
-                default_keys = {
-                    'google_gemini': st.secrets.get('google_gemini', ''),
-                    'xai_grok': st.secrets.get('xai_grok', ''),
-                    'sambanova': st.secrets.get('sambanova', ''),
-                    'deepseek': st.secrets.get('deepseek', ''),
-                    'groq': st.secrets.get('groq', ''),
-                    'huggingface': st.secrets.get('huggingface', '')
-                }
-                
-                # 세션 상태에서 키 가져오기 (사용자가 입력한 경우)
-                api_keys = st.session_state.get('api_keys', default_keys)
-                
-                # AI API 키 입력
-                gemini_key = st.text_input(
-                    "Google Gemini API Key",
-                    value=api_keys.get('google_gemini', ''),
+                # Rate limit 정보
+                if 'rate_limit' in api_config:
+                    limits = api_config['rate_limit']
+                    limit_text = []
+                    if 'rpm' in limits:
+                        limit_text.append(f"분당 {limits['rpm']}회")
+                    if 'rpd' in limits:
+                        limit_text.append(f"일일 {limits['rpd']}회")
+                    if limit_text:
+                        st.caption(f"**제한:** {', '.join(limit_text)}")
+            
+            with col2:
+                # 현재 상태
+                if api_info['configured']:
+                    st.success("설정됨")
+                else:
+                    st.warning("미설정")
+            
+            # API 키 입력
+            current_key = api_manager.get_key(api_id) or ""
+            
+            # 마스킹된 키 표시 (설정된 경우)
+            if current_key:
+                masked_key = current_key[:10] + "..." + current_key[-4:] if len(current_key) > 14 else "***"
+                st.caption(f"현재 키: {masked_key}")
+            
+            # 키 입력 폼
+            with st.form(f"api_key_form_{api_id}"):
+                new_key = st.text_input(
+                    "API Key",
                     type="password",
-                    help="Gemini 2.0을 사용하기 위한 API 키"
+                    placeholder="API 키를 입력하세요",
+                    help=f"{api_info['name']} API 키"
                 )
                 
-                grok_key = st.text_input(
-                    "xAI Grok API Key",
-                    value=api_keys.get('xai_grok', ''),
-                    type="password",
-                    help="Grok 3 mini를 사용하기 위한 API 키"
-                )
+                col1, col2, col3 = st.columns([2, 2, 2])
                 
-                sambanova_key = st.text_input(
-                    "SambaNova API Key",
-                    value=api_keys.get('sambanova', ''),
-                    type="password",
-                    help="SambaNova를 사용하기 위한 API 키"
-                )
+                with col1:
+                    save_btn = st.form_submit_button(
+                        "💾 저장",
+                        type="primary",
+                        use_container_width=True
+                    )
                 
-                deepseek_key = st.text_input(
-                    "DeepSeek API Key",
-                    value=api_keys.get('deepseek', ''),
-                    type="password",
-                    help="DeepSeek를 사용하기 위한 API 키"
-                )
+                with col2:
+                    test_btn = st.form_submit_button(
+                        "🔍 테스트",
+                        use_container_width=True
+                    )
                 
-                groq_key = st.text_input(
-                    "Groq API Key",
-                    value=api_keys.get('groq', ''),
-                    type="password",
-                    help="Groq를 사용하기 위한 API 키"
-                )
+                with col3:
+                    if current_key:
+                        clear_btn = st.form_submit_button(
+                            "🗑️ 삭제",
+                            use_container_width=True
+                        )
+                    else:
+                        clear_btn = False
                 
-                huggingface_key = st.text_input(
-                    "HuggingFace API Key",
-                    value=api_keys.get('huggingface', ''),
-                    type="password",
-                    help="HuggingFace를 사용하기 위한 API 키"
-                )
+                # 버튼 처리
+                if save_btn and new_key:
+                    if api_manager.validate_key_format(api_id, new_key):
+                        api_manager.set_key(api_id, new_key)
+                        st.success(f"{api_info['name']} API 키가 저장되었습니다!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("API 키 형식이 올바르지 않습니다.")
                 
-                st.markdown("### Repository & Database API Keys")
+                if test_btn and (new_key or current_key):
+                    test_key = new_key if new_key else current_key
+                    with st.spinner("연결 테스트 중..."):
+                        # 간단한 형식 검증만 수행 (실제 API 호출은 구현 필요)
+                        if api_manager.validate_key_format(api_id, test_key):
+                            st.success("API 키 형식이 유효합니다!")
+                        else:
+                            st.error("API 키 형식이 올바르지 않습니다.")
                 
-                github_key = st.text_input(
-                    "GitHub API Key",
-                    value=api_keys.get('github', st.secrets.get('github', '')),
-                    type="password"
-                )
-                
-                materials_project_key = st.text_input(
-                    "Materials Project API Key",
-                    value=api_keys.get('materials_project', st.secrets.get('materials_project', '')),
-                    type="password"
-                )
-                
-                st.markdown("### Google Services")
-                
-                google_sheets_url = st.text_input(
-                    "Google Sheets URL",
-                    value=api_keys.get('google_sheets_url', st.secrets.get('google_sheets_url', '')),
-                    help="연동할 Google Sheets URL"
-                )
-                
-                # 저장 버튼
-                submitted = st.form_submit_button("💾 저장", type="primary", use_container_width=True)
-                
-                if submitted:
-                    # API 키를 세션 상태에 저장
-                    st.session_state.api_keys = {
-                        'google_gemini': gemini_key,
-                        'xai_grok': grok_key,
-                        'sambanova': sambanova_key,
-                        'deepseek': deepseek_key,
-                        'groq': groq_key,
-                        'huggingface': huggingface_key,
-                        'github': github_key,
-                        'materials_project': materials_project_key,
-                        'google_sheets_url': google_sheets_url
-                    }
-                    
-                    st.success("API 키가 저장되었습니다!")
+                if clear_btn:
+                    api_manager.set_key(api_id, "")
+                    st.info(f"{api_info['name']} API 키가 삭제되었습니다.")
                     time.sleep(1)
-                    st.session_state.show_api_settings = False
                     st.rerun()
-            
-            # 도움말
-            with st.expander("❓ API 키 얻는 방법"):
-                st.markdown("""
-                ### AI API 키 얻기
-                
-                **Google Gemini**
-                1. [Google AI Studio](https://makersuite.google.com/app/apikey) 방문
-                2. 'Get API key' 클릭
-                3. 프로젝트 선택 또는 생성
-                4. API 키 복사
-                
-                **xAI Grok**
-                1. [xAI Platform](https://x.ai) 방문
-                2. 계정 생성 또는 로그인
-                3. API 섹션에서 키 생성
-                
-                **SambaNova**
-                1. [SambaNova Cloud](https://cloud.sambanova.ai) 방문
-                2. 무료 계정 생성
-                3. API Keys 섹션에서 키 생성
-                
-                **DeepSeek**
-                1. [DeepSeek Platform](https://platform.deepseek.com) 방문
-                2. 계정 생성
-                3. API 관리에서 키 생성
-                
-                **Groq**
-                1. [GroqCloud](https://console.groq.com) 방문
-                2. 계정 생성
-                3. API Keys에서 키 생성
-                
-                **HuggingFace**
-                1. [HuggingFace](https://huggingface.co) 방문
-                2. Settings → Access Tokens
-                3. New token 생성
-                
-                ### Database API 키 얻기
-                
-                **Materials Project**
-                1. [Materials Project](https://materialsproject.org) 방문
-                2. 무료 계정 생성
-                3. Dashboard → API → Generate API Key
-                
-                **GitHub**
-                1. GitHub Settings → Developer settings
-                2. Personal access tokens → Generate new token
-                3. 필요한 권한 선택 후 생성
-                """)
 
 
-    # API 키 가져오기 헬퍼 함수
-    def get_api_key(key_name: str) -> str:
-        """API 키 가져오기 (세션 상태 우선, 그 다음 secrets)"""
-        # 세션 상태에서 먼저 확인
-        if 'api_keys' in st.session_state and key_name in st.session_state.api_keys:
-            key = st.session_state.api_keys[key_name]
-            if key:  # 빈 문자열이 아닌 경우
-                return key
+def _render_api_help_guide(self):
+    """API 도움말 가이드 렌더링"""
+    st.markdown("""
+    ### 🤖 AI API 키 얻기
     
-        # secrets에서 확인
-        if key_name in st.secrets:
-            return st.secrets[key_name]
+    **Google Gemini**
+    1. [Google AI Studio](https://makersuite.google.com/app/apikey) 방문
+    2. 'Get API key' 클릭하여 새 키 생성
+    3. 프로젝트 선택 후 API 키 복사
     
-        return ""
+    **xAI Grok**
+    1. [xAI Platform](https://x.ai) 방문
+    2. 계정 생성 및 API 액세스 신청
+    3. 승인 후 API Keys 섹션에서 키 생성
+    
+    **Groq**
+    1. [GroqCloud Console](https://console.groq.com) 방문
+    2. 무료 계정 생성
+    3. API Keys → Create API Key
+    
+    **DeepSeek**
+    1. [DeepSeek Platform](https://platform.deepseek.com) 방문
+    2. 계정 생성 후 API 섹션 접속
+    3. Create API Key 클릭
+    
+    **HuggingFace**
+    1. [HuggingFace](https://huggingface.co) 로그인
+    2. Settings → Access Tokens
+    3. New token 생성 (read 권한)
+    
+    ---
+    
+    ### 📊 데이터베이스 API 키 얻기
+    
+    **Materials Project**
+    1. [Materials Project](https://materialsproject.org) 방문
+    2. 무료 계정 생성
+    3. Dashboard → API → Generate API Key
+    
+    **GitHub**
+    1. GitHub Settings → Developer settings
+    2. Personal access tokens → Tokens (classic)
+    3. Generate new token (repo, read:org 권한 선택)
+    
+    ---
+    
+    ### 💡 사용 팁
+    
+    - **보안**: API 키는 절대 공유하지 마세요
+    - **백업**: 중요한 키는 안전한 곳에 백업하세요
+    - **제한**: 각 API의 사용 제한을 확인하세요
+    - **비용**: 일부 API는 무료 한도 초과 시 과금될 수 있습니다
+    """)
+
+
+# API 상태 대시보드 위젯
+def render_api_status_widget():
+    """API 상태를 간단히 보여주는 위젯"""
+    if 'api_manager' not in st.session_state:
+        st.session_state.api_manager = APIManager()
+    
+    api_manager = st.session_state.api_manager
+    summary = api_manager.get_api_summary()
+    
+    # 전체 설정 상태
+    total_apis = sum(info['total'] for info in summary.values())
+    configured_apis = sum(info['configured'] for info in summary.values())
+    
+    # 상태 표시
+    if configured_apis == 0:
+        st.warning("⚠️ API 키가 설정되지 않았습니다")
+    elif configured_apis < total_apis:
+        st.info(f"ℹ️ {configured_apis}/{total_apis} API 설정됨")
+    else:
+        st.success(f"✅ 모든 API 설정 완료")
+    
+    # 카테고리별 상태
+    with st.expander("API 상태 상세"):
+        for category, info in summary.items():
+            if info['total'] > 0:
+                progress = info['configured'] / info['total']
+                st.progress(progress, text=f"{category.upper()}: {info['configured']}/{info['total']}")
+                
+                # 미설정 API 목록
+                unconfigured = [api['name'] for api in info['apis'] if not api['configured']]
+                if unconfigured:
+                    st.caption(f"미설정: {', '.join(unconfigured)}")
 
 class HomePage:
     def render(self, user_level: UserLevel):  # user_level 인자 추가
