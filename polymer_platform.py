@@ -10148,46 +10148,6 @@ class ProjectTemplates:
     
     def __init__(self):
         self.templates = {
-            'packaging': {
-                'name': '포장재 개발',
-                'factors': ['두께', '첨가제 함량', '가공온도'],
-                'responses': ['인장강도', '투명도', '산소투과도'],
-                'typical_budget': 500,
-                'typical_timeline': 8,
-                'description': '식품 포장재, 필름 등의 개발에 적합한 템플릿'
-            },
-            'automotive': {
-                'name': '자동차 부품',
-                'factors': ['유리섬유 함량', '성형온도', '냉각시간'],
-                'responses': ['충격강도', '치수안정성', '내열성'],
-                'typical_budget': 1000,
-                'typical_timeline': 12,
-                'description': '자동차 내/외장재 개발에 적합한 템플릿'
-            },
-            'biomedical': {
-                'name': '의료용 소재',
-                'factors': ['가교도', 'pH', '멸균방법'],
-                'responses': ['생체적합성', '분해속도', '기계적 특성'],
-                'typical_budget': 2000,
-                'typical_timeline': 16,
-                'description': '의료기기, 생체재료 개발에 적합한 템플릿'
-            },
-            'electronics': {
-                'name': '전자재료',
-                'factors': ['충전제 함량', '경화온도', '경화시간'],
-                'responses': ['절연저항', '유전율', '난연성'],
-                'typical_budget': 1500,
-                'typical_timeline': 10,
-                'description': 'PCB, 절연재료 등 전자부품용 소재 개발'
-            },
-            'coating': {
-                'name': '코팅재료',
-                'factors': ['용매 비율', '건조온도', '코팅두께'],
-                'responses': ['접착력', '내스크래치성', '광택도'],
-                'typical_budget': 800,
-                'typical_timeline': 6,
-                'description': '표면 코팅, 도료 개발에 적합한 템플릿'
-            },
             "기계적 특성 최적화": {
                 "description": "고분자의 인장강도, 충격강도 등 기계적 특성 개선",
                 "factors": ["가공온도", "압력", "첨가제 함량", "가공시간"],
